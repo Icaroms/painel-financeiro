@@ -1,0 +1,5 @@
+# Normaliza as quebras de linha dos arquivos de texto:
+# no repositório (GitHub) ficam sempre no padrão LF;
+# no Windows, o Git converte automaticamente para CRLF ao baixar.
+# Assim o projeto fica igual em qualquer computador.
+* text=auto
