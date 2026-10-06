@@ -1,0 +1,13 @@
+{
+  "name": "painel-financeiro",
+  "version": "0.1.0",
+  "description": "App pessoal que avalia cada gasto no momento do registro.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
