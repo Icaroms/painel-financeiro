@@ -90,3 +90,35 @@ export function mesDaData(data) {
   }
   return data.slice(0, 7);
 }
+
+/**
+ * Quantos dias tem um mês: "2026-11" → 30, "2028-02" → 29.
+ *
+ * Truque: o dia 0 de um mês é o último dia do mês anterior.
+ * Date.UTC(ano, mes, 0), com o mês começando em 0, cai no último dia
+ * do mês que queremos.
+ *
+ * @param {string} mes "AAAA-MM".
+ * @returns {number}
+ */
+export function diasNoMes(mes) {
+  if (!ehMesValido(mes)) {
+    throw new TypeError(`Mês inválido: "${mes}". Use o formato AAAA-MM.`);
+  }
+  const ano = Number(mes.slice(0, 4));
+  const numeroMes = Number(mes.slice(5, 7));
+  return new Date(Date.UTC(ano, numeroMes, 0)).getUTCDate();
+}
+
+/**
+ * Dia do mês de uma data: "2026-11-03" → 3.
+ *
+ * @param {string} data "AAAA-MM-DD".
+ * @returns {number}
+ */
+export function diaDaData(data) {
+  if (!ehDataValida(data)) {
+    throw new TypeError(`Data inválida: "${data}". Use o formato AAAA-MM-DD.`);
+  }
+  return Number(data.slice(8, 10));
+}
