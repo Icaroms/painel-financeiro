@@ -1,0 +1,14 @@
+# Dependências do Node (se um dia instalarmos alguma)
+node_modules/
+
+# Dados financeiros reais: NUNCA vão para o GitHub
+dados-reais/
+backup-*.json
+
+# Arquivos automáticos do Windows e do macOS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Configurações locais de editor
+.vscode/
