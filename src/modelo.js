@@ -5,6 +5,7 @@
  * - Categoria:  onde o gasto se encaixa (iFood, Uber...) e quanto pode ir para ela no mês.
  * - Fixo:       conta que se repete todo mês (assinatura, parcela, mensalidade).
  * - Lançamento: um gasto registrado.
+ * - Mês:        o saldo com que o mês começa e os ajustes de valor de fixos naquele mês.
  *
  * Todo registro nasce com quatro campos de controle, pensados para a
  * sincronização entre aparelhos numa fase futura:
@@ -223,6 +224,73 @@ export function criarLancamento(
 }
 
 /* ------------------------------------------------------------------ */
+/* Mês                                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Cria o registro de um mês.
+ *
+ * @param {object} dados
+ * @param {string} dados.mes                  "AAAA-MM".
+ * @param {number} dados.saldoInicialCentavos Saldo no começo do mês. Pode ser
+ *                                            negativo (mês que já começa no vermelho).
+ * @param {object} [opcoes]                   { agora, gerarId }
+ */
+export function criarMes({ mes, saldoInicialCentavos }, opcoes = {}) {
+  if (!Number.isSafeInteger(saldoInicialCentavos)) {
+    throw new ErroValidacao(
+      'saldoInicialCentavos',
+      'O saldo inicial deve ser um número inteiro de centavos (ex.: 150000 para R$ 1.500,00).',
+    );
+  }
+
+  return {
+    ...criarBase(opcoes),
+    mes: exigirMes(mes, 'mes', 'O mês'),
+    saldoInicialCentavos,
+    // Valor de um fixo só neste mês, por id do fixo: { "id-do-fixo": 25000 }.
+    // Ex.: o dentista, que custa um valor diferente a cada mês.
+    ajustesFixos: {},
+  };
+}
+
+/**
+ * Define o valor de um fixo apenas neste mês, sem mudar os outros meses.
+ * Para mudar o valor em todos os meses, use ajustarValorFixo.
+ *
+ * @param {object} registroMes Mês criado por criarMes.
+ * @param {object} fixo
+ * @param {number} valorCentavos
+ * @param {object} [opcoes]    { agora }
+ */
+export function ajustarFixoNoMes(registroMes, fixo, valorCentavos, { agora = new Date() } = {}) {
+  if (!fixoAtivoNoMes(fixo, registroMes.mes)) {
+    throw new ErroValidacao('fixo', `O fixo "${fixo.nome}" não está ativo em ${registroMes.mes}.`);
+  }
+
+  return {
+    ...registroMes,
+    ajustesFixos: {
+      ...registroMes.ajustesFixos,
+      [fixo.id]: exigirCentavos(valorCentavos, 'valorCentavos', 'O valor do fixo', { permitirZero: true }),
+    },
+    atualizadoEm: agora.toISOString(),
+  };
+}
+
+/**
+ * Valor que um fixo cobra num mês: o ajuste daquele mês, se existir;
+ * senão, o valor padrão do fixo.
+ *
+ * @param {object} fixo
+ * @param {object} registroMes
+ * @returns {number} Centavos.
+ */
+export function valorDoFixoNoMes(fixo, registroMes) {
+  return registroMes.ajustesFixos[fixo.id] ?? fixo.valorCentavos;
+}
+
+/* ------------------------------------------------------------------ */
 /* Exclusão suave (vale para qualquer entidade)                       */
 /* ------------------------------------------------------------------ */
 
@@ -230,7 +298,7 @@ export function criarLancamento(
  * Marca um registro como excluído, sem apagá-lo.
  * Se ele já estava excluído, devolve o mesmo registro sem mudanças.
  *
- * @param {object} registro Categoria, fixo ou lançamento.
+ * @param {object} registro Categoria, fixo, lançamento ou mês.
  * @param {object} [opcoes] { agora }
  */
 export function excluirRegistro(registro, { agora = new Date() } = {}) {

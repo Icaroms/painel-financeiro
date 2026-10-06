@@ -6,7 +6,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hojeLocal, ehDataValida, ehMesValido, mesDaData } from '../src/datas.js';
+import {
+  hojeLocal,
+  ehDataValida,
+  ehMesValido,
+  mesDaData,
+  diasNoMes,
+  diaDaData,
+} from '../src/datas.js';
 
 describe('hojeLocal', () => {
   it('formata a data no fuso local, com zeros à esquerda', () => {
@@ -63,5 +70,29 @@ describe('mesDaData', () => {
 
   it('lança erro para data inválida', () => {
     assert.throws(() => mesDaData('2026-02-30'), TypeError);
+  });
+});
+
+describe('diasNoMes', () => {
+  it('conta os dias de cada tipo de mês', () => {
+    assert.equal(diasNoMes('2026-11'), 30);
+    assert.equal(diasNoMes('2026-12'), 31);
+    assert.equal(diasNoMes('2026-02'), 28);
+    assert.equal(diasNoMes('2028-02'), 29); // bissexto
+  });
+
+  it('lança erro para mês inválido', () => {
+    assert.throws(() => diasNoMes('2026-13'), TypeError);
+  });
+});
+
+describe('diaDaData', () => {
+  it('extrai o dia como número', () => {
+    assert.equal(diaDaData('2026-11-03'), 3);
+    assert.equal(diaDaData('2026-11-30'), 30);
+  });
+
+  it('lança erro para data inválida', () => {
+    assert.throws(() => diaDaData('2026-11-31'), TypeError);
   });
 });

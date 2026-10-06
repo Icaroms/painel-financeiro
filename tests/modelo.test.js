@@ -15,6 +15,9 @@ import {
   fixoAtivoNoMes,
   ajustarValorFixo,
   criarLancamento,
+  criarMes,
+  ajustarFixoNoMes,
+  valorDoFixoNoMes,
   excluirRegistro,
 } from '../src/modelo.js';
 
@@ -229,6 +232,62 @@ describe('criarLancamento', () => {
     assert.throws(
       () => criarLancamento({ ...DADOS, categoriaId: '' }, OPCOES),
       { name: 'ErroValidacao', campo: 'categoriaId' },
+    );
+  });
+});
+
+describe('criarMes', () => {
+  it('cria o mês com saldo inicial e sem ajustes', () => {
+    const novembro = criarMes({ mes: '2026-11', saldoInicialCentavos: 150000 }, OPCOES);
+    assert.equal(novembro.mes, '2026-11');
+    assert.equal(novembro.saldoInicialCentavos, 150000);
+    assert.deepEqual(novembro.ajustesFixos, {});
+  });
+
+  it('aceita saldo inicial negativo', () => {
+    const mes = criarMes({ mes: '2026-11', saldoInicialCentavos: -5000 }, OPCOES);
+    assert.equal(mes.saldoInicialCentavos, -5000);
+  });
+
+  it('rejeita mês inválido', () => {
+    assert.throws(
+      () => criarMes({ mes: '2026-13', saldoInicialCentavos: 0 }, OPCOES),
+      { name: 'ErroValidacao', campo: 'mes' },
+    );
+  });
+
+  it('rejeita saldo com casas decimais', () => {
+    assert.throws(
+      () => criarMes({ mes: '2026-11', saldoInicialCentavos: 1500.5 }, OPCOES),
+      { name: 'ErroValidacao', campo: 'saldoInicialCentavos' },
+    );
+  });
+});
+
+describe('ajuste de fixo num mês só', () => {
+  const fixo = criarFixo({ ...FIXO_VALIDO, nome: 'Consulta', valorCentavos: 0 }, { ...OPCOES, gerarId: () => 'fixo-consulta' });
+  const novembro = criarMes({ mes: '2026-11', saldoInicialCentavos: 150000 }, OPCOES);
+
+  it('sem ajuste, vale o valor padrão do fixo', () => {
+    assert.equal(valorDoFixoNoMes(fixo, novembro), 0);
+  });
+
+  it('com ajuste, vale o valor do mês, sem mudar o fixo', () => {
+    const ajustado = ajustarFixoNoMes(novembro, fixo, 25000, { agora: DEPOIS });
+    assert.equal(valorDoFixoNoMes(fixo, ajustado), 25000);
+    assert.equal(fixo.valorCentavos, 0);           // o fixo continua igual
+    assert.deepEqual(novembro.ajustesFixos, {});    // o mês original também
+    assert.equal(ajustado.atualizadoEm, '2026-11-10T13:00:00.000Z');
+  });
+
+  it('rejeita ajuste de fixo que não está ativo no mês', () => {
+    const encerrado = criarFixo(
+      { ...FIXO_VALIDO, nome: 'Fone (parcelado)', mesInicial: '2026-08', mesFinal: '2026-10' },
+      OPCOES,
+    );
+    assert.throws(
+      () => ajustarFixoNoMes(novembro, encerrado, 1000),
+      { name: 'ErroValidacao', campo: 'fixo' },
     );
   });
 });
