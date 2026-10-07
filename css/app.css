@@ -63,7 +63,8 @@ body {
   min-height: 100dvh;
   margin: 0 auto;
   /* env(safe-area-inset-*): espaço do entalhe e da barra de gestos do iPhone */
-  padding: calc(24px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+  /* embaixo: espaço para a barra de abas (64px) e para a barra de gestos do iPhone */
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(88px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -229,15 +230,6 @@ body {
 }
 
 /* ---------- Backup ---------- */
-.backup {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--linha);
-}
-.backup h2 { margin: 0; font-size: 15px; font-weight: 600; }
-.backup p { margin: 0; font-size: 13px; line-height: 1.4; }
 .backup-botoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
 
 .botao-secundario {
@@ -253,3 +245,205 @@ body {
   cursor: pointer;
 }
 .botao-secundario:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+
+/* O atributo hidden sempre vence, mesmo em elementos com display definido acima. */
+[hidden] { display: none !important; }
+
+/* ---------- Vista Configurar ---------- */
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--painel);
+  border: 1px solid var(--linha);
+  border-radius: 20px;
+}
+.cartao h2 { margin: 0; font-family: var(--fonte-numero); font-size: 20px; font-weight: 600; }
+.explicacao { margin: 0; font-size: 14px; line-height: 1.4; }
+
+.form-config { display: flex; flex-direction: column; gap: 12px; }
+
+.campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 14px; }
+.campo input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: var(--fonte-texto);
+  font-size: 16px; /* 16px ou mais evita o zoom automático do Safari */
+}
+.campo input:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.campo input[aria-invalid="true"] { border-color: var(--vermelho); }
+
+/* Campo de dinheiro: "R$" fixo à esquerda, número com largura fixa */
+.campo-dinheiro { position: relative; display: block; }
+.campo-dinheiro > span {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--secundario);
+  font-family: var(--fonte-numero);
+  font-size: 16px;
+  pointer-events: none;
+}
+.campo-dinheiro input { padding-left: 40px; font-family: var(--fonte-numero); font-variant-numeric: tabular-nums; }
+
+.erro { min-height: 0; color: var(--vermelho); font-size: 13px; }
+.erro:empty { display: none; }
+
+.resumo-dinheiro { margin: 0; font-size: 15px; }
+.resumo-dinheiro strong { font-family: var(--fonte-numero); font-size: 18px; font-weight: 600; }
+
+.botao-principal {
+  min-height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: var(--texto);
+  color: var(--fundo);
+  font-family: var(--fonte-numero);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.botao-principal:focus-visible { outline: 2px solid var(--texto); outline-offset: 3px; }
+
+/* Alerta do saldo sugerido: usa a luz âmbar, como um aviso do painel */
+.alerta {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--amarelo);
+  border-radius: 14px;
+  --cor: var(--amarelo);
+}
+.alerta .luz { margin-top: 2px; box-shadow: 0 0 0 4px var(--painel), 0 0 0 5px var(--amarelo); }
+.alerta p { margin: 0; font-size: 15px; line-height: 1.4; }
+
+/* Lista de categorias: cada linha é um pequeno formulário */
+.lista-categorias, .lista-formas { margin: 0; padding: 0; list-style: none; }
+.lista-categorias { display: flex; flex-direction: column; gap: 10px; }
+.linha-categoria {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--linha);
+}
+.linha-categoria .acoes { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.linha-categoria .erro { grid-column: 1 / -1; }
+
+.botao-pequeno {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--linha);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--texto);
+  font-family: var(--fonte-texto);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.botao-pequeno:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.botao-pequeno.perigo { color: var(--vermelho); }
+
+/* Formulário de "adicionar" no fim de cada cartão */
+.nova-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.nova-linha .erro { grid-column: 1 / -1; }
+#form-nova-categoria { grid-template-columns: minmax(0, 1fr) 132px; }
+#form-nova-categoria .botao-secundario { grid-column: 1 / -1; }
+.campo-curto { width: 132px; }
+
+/* Formas de pagamento como etiquetas com botão de remover */
+.lista-formas { display: flex; flex-wrap: wrap; gap: 8px; }
+.forma {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 4px 0 14px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.forma button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--secundario);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.forma button:focus-visible { outline: 2px solid var(--texto); }
+
+.backup .botao-texto { align-self: flex-start; font-size: 13px; }
+
+/* ---------- Mensagem flutuante (vista Configurar) ---------- */
+.mensagem {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(400px, calc(100% - 40px));
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--texto);
+  color: var(--fundo);
+  font-size: 15px;
+  line-height: 1.35;
+  z-index: 2;
+}
+
+/* ---------- Abas ---------- */
+.abas {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 20px calc(8px + env(safe-area-inset-bottom));
+  background: var(--fundo);
+  border-top: 1px solid var(--linha);
+  z-index: 1;
+}
+.aba {
+  position: relative;
+  flex: 1 1 0;
+  max-width: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 14px;
+  color: var(--secundario);
+  font-family: var(--fonte-numero);
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.aba[aria-current="page"] { background: var(--painel); color: var(--texto); box-shadow: inset 0 0 0 1px var(--linha); }
+.aba:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+/* Ponto âmbar: há um saldo sugerido esperando confirmação */
+.ponto {
+  position: absolute;
+  top: 10px;
+  right: calc(50% - 56px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amarelo);
+}

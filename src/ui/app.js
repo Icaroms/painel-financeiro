@@ -1,5 +1,10 @@
 /**
- * Tela de lançamento: liga o HTML (index.html) às regras do app.
+ * Tela de lançamento e navegação: liga o HTML (index.html) às regras do app.
+ *
+ * O app tem duas vistas, trocadas pelo endereço:
+ * - #lancar (padrão): lançar gasto com o veredito ao vivo (este arquivo);
+ * - #configurar: dinheiro do mês, categorias, pagamentos e backup
+ *   (a parte da configuração fica em ./configurar.js).
  *
  * Este arquivo só cuida da TELA: lê o que a pessoa digitou ou escolheu,
  * pede o resultado ao painel (src/painel.js) e copia os textos e
@@ -18,10 +23,12 @@ import { marcasDaEscala } from '../mostrador.js';
 import { criarDadosDeExemplo } from '../dados-exemplo.js';
 import { calcularPainel, tituloDoMes } from '../painel.js';
 import { buscarMes, dadosDoMes, virarMes } from '../meses.js';
+import { categoriasAtivas } from '../configuracao.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
 import { entregarArquivo } from './arquivos.js';
+import { iniciarConfigurar } from './configurar.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -59,6 +66,11 @@ const el = {
   botaoLancar: elemento('botao-lancar'),
   rodapeTexto: elemento('rodape-texto'),
   botaoRestaurar: elemento('botao-restaurar'),
+  telaConfigurar: elemento('tela-configurar'),
+  configMensagem: elemento('config-mensagem'),
+  abaLancar: elemento('aba-lancar'),
+  abaConfigurar: elemento('aba-configurar'),
+  pontoConfigurar: elemento('ponto-configurar'),
   botaoExportar: elemento('botao-exportar'),
   botaoImportar: elemento('botao-importar'),
   arquivoBackup: elemento('arquivo-backup'),
@@ -109,7 +121,7 @@ function prepararMesAtual(dadosAtuais, hoje) {
       aviso:
         `${tituloDoMes(mesAtual)} começou com ${formatarCentavos(criado.saldoInicialCentavos)}, ` +
         `o que sobrou de ${tituloDoMes(mesBase).toLowerCase()}. ` +
-        'A confirmação desse saldo chega com a tela de configuração.',
+        'Confira e confirme o saldo em Configurar.',
     };
   } catch (erro) {
     if (!(erro instanceof ErroValidacao)) throw erro;
@@ -240,14 +252,32 @@ function montarMarcas() {
   }
 }
 
-/** Cria os chips de categoria e de pagamento a partir dos dados. */
+/**
+ * Cria os chips de categoria e de pagamento a partir dos dados.
+ * Mantém a escolha atual quando ela ainda existe; senão, marca a primeira.
+ */
 function montarChips() {
+  const categoriaEscolhida = el.formulario.elements.categoria?.value;
+  const pagamentoEscolhido = el.formulario.elements.pagamento?.value;
+
+  const categorias = categoriasAtivas(dados);
+  const manterCategoria = categorias.some((c) => c.id === categoriaEscolhida);
   el.chipsCategoria.replaceChildren(
-    ...dados.categorias.map((c, i) => criarChip('categoria', c.id, c.nome, i === 0)),
+    ...categorias.map((c, i) =>
+      criarChip('categoria', c.id, c.nome, manterCategoria ? c.id === categoriaEscolhida : i === 0)),
   );
+
+  const manterPagamento = dados.formasPagamento.includes(pagamentoEscolhido);
   el.chipsPagamento.replaceChildren(
-    ...dados.formasPagamento.map((f, i) => criarChip('pagamento', f, f, i === 0)),
+    ...dados.formasPagamento.map((f, i) =>
+      criarChip('pagamento', f, f, manterPagamento ? f === pagamentoEscolhido : i === 0)),
   );
+}
+
+/** Mostra o ponto âmbar na aba Configurar quando o saldo do mês espera confirmação. */
+function atualizarPonto() {
+  const registro = buscarMes(dados, mesDaData(hojeLocal()));
+  el.pontoConfigurar.hidden = !registro || registro.saldoConfirmado;
 }
 
 /* ------------------------------------------------------------------ */
@@ -264,6 +294,7 @@ function atualizar() {
     if (virada?.mudou) {
       dados = virada.dados;
       el.rodapeTexto.textContent = virada.aviso;
+      atualizarPonto();
       gravar(dados); // sem esperar: a tela não precisa aguardar a gravação
     }
   }
@@ -330,9 +361,11 @@ el.botaoRestaurar.addEventListener('click', async () => {
   el.valor.value = '';
   montarChips();
   atualizar();
+  atualizarPonto();
+  configurar.renderizar();
 
   const gravou = await gravar(dados);
-  el.rodapeTexto.textContent = gravou ? 'Exemplo restaurado.' : avisoSemGravacao();
+  avisar(gravou ? 'Exemplo restaurado.' : avisoSemGravacao());
 });
 
 /* ------------------------------------------------------------------ */
@@ -343,12 +376,12 @@ el.botaoExportar.addEventListener('click', async () => {
   const nome = nomeDoArquivoBackup();
   try {
     const resultado = await entregarArquivo(nome, gerarBackup(dados));
-    el.rodapeTexto.textContent = resultado === 'cancelado'
+    avisar(resultado === 'cancelado'
       ? 'Exportação cancelada.'
-      : `Backup exportado: ${nome}`;
+      : `Backup exportado: ${nome}`);
   } catch (erro) {
     console.error(erro);
-    el.rodapeTexto.textContent = 'Não foi possível exportar o backup.';
+    avisar('Não foi possível exportar o backup.');
   }
 });
 
@@ -363,7 +396,7 @@ el.arquivoBackup.addEventListener('change', async () => {
   if (!arquivo) return; // a pessoa fechou a janela sem escolher
 
   if (arquivo.size > TAMANHO_MAXIMO_BACKUP) {
-    el.rodapeTexto.textContent = 'Arquivo grande demais para ser um backup do app.';
+    avisar('Arquivo grande demais para ser um backup do app.');
     return;
   }
 
@@ -372,14 +405,14 @@ el.arquivoBackup.addEventListener('change', async () => {
     lido = lerBackup(await arquivo.text());
   } catch (erro) {
     if (!(erro instanceof ErroValidacao)) throw erro;
-    el.rodapeTexto.textContent = erro.message;
+    avisar(erro.message);
     return;
   }
 
   // O backup pode ser de um mês anterior: o mês de hoje é criado na hora.
   const virada = prepararMesAtual(lido.dados, hojeLocal());
   if (virada === null) {
-    el.rodapeTexto.textContent = 'Este backup só tem meses posteriores a hoje. Confira a data do aparelho.';
+    avisar('Este backup só tem meses posteriores a hoje. Confira a data do aparelho.');
     return;
   }
 
@@ -392,7 +425,7 @@ el.arquivoBackup.addEventListener('change', async () => {
       'Os dados atuais deste aparelho serão substituídos.',
   );
   if (!confirmou) {
-    el.rodapeTexto.textContent = 'Importação cancelada.';
+    avisar('Importação cancelada.');
     return;
   }
 
@@ -400,15 +433,78 @@ el.arquivoBackup.addEventListener('change', async () => {
   el.valor.value = '';
   montarChips();
   atualizar();
+  atualizarPonto();
+  configurar.renderizar();
 
   // A pessoa confirmou a troca: grava mesmo se os dados antigos estavam
   // ilegíveis. Importar um backup é justamente o jeito de recuperar o app.
   gravacaoDisponivel = true;
   const gravou = await gravar(dados);
-  el.rodapeTexto.textContent = gravou
+  avisar(gravou
     ? `Backup importado: ${lido.resumo.lancamentos} lançamento(s).`
-    : avisoSemGravacao();
+    : avisoSemGravacao());
 });
+
+/* ------------------------------------------------------------------ */
+/* Vista Configurar e mensagens                                       */
+/* ------------------------------------------------------------------ */
+
+let temporizadorMensagem = null;
+
+/**
+ * Mostra uma mensagem da vista Configurar. Ela fica presa acima das abas
+ * (para ser vista de qualquer ponto da página) e some depois de 6 segundos.
+ *
+ * @param {string} texto
+ */
+function avisar(texto) {
+  clearTimeout(temporizadorMensagem);
+  el.configMensagem.textContent = texto;
+  el.configMensagem.hidden = !texto;
+  temporizadorMensagem = setTimeout(() => {
+    el.configMensagem.hidden = true;
+  }, 6000);
+}
+
+const configurar = iniciarConfigurar({
+  obterDados: () => dados,
+  aplicarMudanca: async (novos, mensagem) => {
+    dados = novos;
+    montarChips();
+    atualizar();
+    atualizarPonto();
+    const gravou = await gravar(dados);
+    avisar(gravou ? mensagem : avisoSemGravacao());
+  },
+});
+
+/* ------------------------------------------------------------------ */
+/* Navegação entre as vistas                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Mostra a vista indicada no endereço: #configurar ou, para qualquer
+ * outro valor, a vista de lançamento. Usar o endereço permite voltar
+ * com o botão "voltar" do navegador e abrir direto numa vista.
+ */
+function mostrarVista() {
+  const vista = location.hash === '#configurar' ? 'configurar' : 'lancar';
+
+  el.tela.hidden = vista !== 'lancar';
+  el.telaConfigurar.hidden = vista !== 'configurar';
+  el.configMensagem.hidden = true;
+
+  // aria-current marca a aba ativa (para o estilo e para leitores de tela).
+  el.abaLancar.toggleAttribute('aria-current', vista === 'lancar');
+  el.abaConfigurar.toggleAttribute('aria-current', vista === 'configurar');
+  if (vista === 'lancar') el.abaLancar.setAttribute('aria-current', 'page');
+  if (vista === 'configurar') el.abaConfigurar.setAttribute('aria-current', 'page');
+
+  if (vista === 'configurar') configurar.renderizar();
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener('hashchange', mostrarVista);
 
 /* ------------------------------------------------------------------ */
 /* Início                                                             */
@@ -421,6 +517,8 @@ dados = carregado.dados;
 montarMarcas();
 montarChips();
 atualizar();
+atualizarPonto();
+mostrarVista();
 el.rodapeTexto.textContent = carregado.aviso;
 
 // Sem esperar: o pedido roda em segundo plano e não atrasa a tela.

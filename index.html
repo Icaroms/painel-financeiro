@@ -18,6 +18,7 @@
   <script type="module" src="src/ui/app.js"></script>
 </head>
 <body>
+  <!-- Vista "Lançar": a tela principal. As vistas trocam pelo endereço (#lancar / #configurar). -->
   <main class="tela" id="tela" data-cor="neutro">
 
     <header class="cabecalho">
@@ -86,20 +87,112 @@
     <footer class="rodape secundario">
       <!-- aria-live: leitores de tela anunciam as mensagens do rodapé -->
       <span id="rodape-texto" aria-live="polite"></span>
-      <button type="button" class="botao-texto" id="botao-restaurar">Restaurar exemplo</button>
     </footer>
 
-    <section class="backup" aria-labelledby="titulo-backup">
+  </main>
+
+  <!-- Vista "Configurar" -->
+  <main class="tela tela-configurar" id="tela-configurar" hidden>
+
+    <header class="cabecalho">
+      <h1>Configurar</h1>
+      <p class="secundario" id="config-subtitulo"></p>
+    </header>
+
+    <section class="cartao" aria-labelledby="titulo-dinheiro">
+      <h2 id="titulo-dinheiro">Dinheiro do mês</h2>
+
+      <!-- Aparece quando o saldo foi só sugerido pela virada do mês -->
+      <div class="alerta" id="alerta-saldo" hidden>
+        <span class="luz" aria-hidden="true"></span>
+        <p id="alerta-saldo-texto"></p>
+      </div>
+
+      <form class="form-config" id="form-mes" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Saldo na conta no início do mês</span>
+          <span class="campo-dinheiro">
+            <span aria-hidden="true">R$</span>
+            <input id="saldo-inicial" name="saldo" inputmode="decimal" placeholder="0,00" aria-describedby="erro-saldo">
+          </span>
+          <span class="erro" id="erro-saldo"></span>
+        </label>
+
+        <label class="campo">
+          <span class="secundario">Renda prevista no mês (salário e outras entradas)</span>
+          <span class="campo-dinheiro">
+            <span aria-hidden="true">R$</span>
+            <input id="renda-prevista" name="renda" inputmode="decimal" placeholder="0,00" aria-describedby="erro-renda">
+          </span>
+          <span class="erro" id="erro-renda"></span>
+        </label>
+
+        <p class="resumo-dinheiro" id="resumo-dinheiro"></p>
+        <button type="submit" class="botao-principal" id="botao-salvar-mes">Salvar</button>
+      </form>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-categorias">
+      <h2 id="titulo-categorias">Categorias e orçamentos</h2>
+      <p class="secundario explicacao">Orçamento zero deixa a categoria sem limite: nela, vale só o saldo do mês.</p>
+
+      <ul class="lista-categorias" id="lista-categorias"></ul>
+
+      <form class="nova-linha" id="form-nova-categoria" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Nova categoria</span>
+          <input name="nome" placeholder="Ex.: Farmácia" maxlength="40">
+        </label>
+        <label class="campo campo-curto">
+          <span class="secundario">Orçamento</span>
+          <span class="campo-dinheiro">
+            <span aria-hidden="true">R$</span>
+            <input name="orcamento" inputmode="decimal" placeholder="0,00">
+          </span>
+        </label>
+        <button type="submit" class="botao-secundario">Adicionar</button>
+        <span class="erro" id="erro-nova-categoria"></span>
+      </form>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-pagamentos">
+      <h2 id="titulo-pagamentos">Formas de pagamento</h2>
+
+      <ul class="lista-formas" id="lista-formas"></ul>
+
+      <form class="nova-linha" id="form-nova-forma" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Nova forma de pagamento</span>
+          <input name="nome" placeholder="Ex.: Cartão Nubank" maxlength="16">
+        </label>
+        <button type="submit" class="botao-secundario">Adicionar</button>
+        <span class="erro" id="erro-nova-forma"></span>
+      </form>
+    </section>
+
+    <section class="cartao backup" aria-labelledby="titulo-backup">
       <h2 id="titulo-backup">Backup</h2>
-      <p class="secundario">Os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
+      <p class="secundario explicacao">Os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
       <div class="backup-botoes">
         <button type="button" class="botao-secundario" id="botao-exportar">Exportar backup</button>
         <button type="button" class="botao-secundario" id="botao-importar">Importar backup</button>
       </div>
       <!-- Campo de arquivo escondido: o botão "Importar backup" abre a escolha do arquivo -->
       <input type="file" id="arquivo-backup" accept=".json,application/json" hidden>
+      <button type="button" class="botao-texto" id="botao-restaurar">Restaurar exemplo</button>
     </section>
 
   </main>
+
+  <!-- Mensagens da vista Configurar: ficam presas acima das abas para serem vistas de qualquer ponto da página -->
+  <p class="mensagem" id="config-mensagem" aria-live="polite" hidden></p>
+
+  <nav class="abas" aria-label="Seções do app">
+    <a href="#lancar" class="aba" id="aba-lancar">Lançar</a>
+    <a href="#configurar" class="aba" id="aba-configurar">
+      Configurar
+      <span class="ponto" id="ponto-configurar" hidden></span>
+    </a>
+  </nav>
 </body>
 </html>
