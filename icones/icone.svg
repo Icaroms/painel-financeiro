@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ícone do Painel Financeiro: o mostrador do app sobre o azul-ardósia do tema escuro.
+       O desenho fica no centro (zona segura), para o ícone funcionar também recortado em círculo. -->
+  <rect width="512" height="512" fill="#16212B"/>
+  <g transform="translate(256 300)">
+    <path d="M -150 0 A 150 150 0 0 1 150 0" fill="none" stroke="#2E4050" stroke-width="30"/>
+    <path d="M -150 0 A 150 150 0 0 1 150 0" fill="none" stroke="#45C08A" stroke-width="30" stroke-dasharray="165 472"/>
+    <polygon points="0,-128 -15,-104 15,-104" fill="#E8E4DA"/>
+    <line x1="0" y1="0" x2="-78" y2="-92" stroke="#E8E4DA" stroke-width="14" stroke-linecap="round"/>
+    <circle r="22" fill="#E8E4DA"/>
+    <circle r="9" fill="#16212B"/>
+  </g>
+</svg>
