@@ -5,16 +5,19 @@
  * pede o resultado ao painel (src/painel.js) e copia os textos e
  * posições para o HTML. Nenhuma conta de dinheiro é feita aqui.
  *
- * Nesta versão, os dados são de EXEMPLO e ficam só na memória:
- * recarregar a página volta tudo ao começo. Gravar no aparelho
- * (IndexedDB) é uma tarefa futura.
+ * Os dados ficam gravados no próprio aparelho (IndexedDB, em ./banco.js):
+ * fechar e abrir a página mantém os lançamentos. Enquanto a configuração
+ * do mês não existe, o conteúdo inicial ainda é o EXEMPLO fictício.
  */
 
-import { hojeLocal } from '../datas.js';
+import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
+import { ErroValidacao } from '../erros.js';
 import { marcasDaEscala } from '../mostrador.js';
 import { criarDadosDeExemplo } from '../dados-exemplo.js';
 import { calcularPainel } from '../painel.js';
+import { empacotar, desempacotar } from '../persistencia.js';
+import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -58,7 +61,96 @@ const el = {
 /* Estado da tela                                                     */
 /* ------------------------------------------------------------------ */
 
-let dados = criarDadosDeExemplo(hojeLocal());
+/** Os dados em uso. São carregados do aparelho no início (veja "Início"). */
+let dados = null;
+
+/**
+ * Fica false quando o armazenamento não pode ser usado (navegador sem
+ * IndexedDB, modo anônimo restrito ou dados gravados ilegíveis). Aí o app
+ * funciona só na memória e NÃO grava nada por cima do que existe.
+ */
+let gravacaoDisponivel = true;
+
+/* ------------------------------------------------------------------ */
+/* Gravação no aparelho                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Carrega os dados do aparelho.
+ *
+ * - Primeiro acesso (nada gravado): cria o exemplo e grava.
+ * - Mês virou: recria o exemplo para o mês novo. Isso é provisório:
+ *   por enquanto só existe dado de exemplo. A virada de mês de verdade
+ *   (com saldo inicial e fixos) entra na tarefa de configuração do mês.
+ * - Dados gravados ilegíveis: usa o exemplo só na memória e não grava
+ *   nada, para não apagar o que está lá.
+ *
+ * @returns {Promise<{ dados: object, aviso: string }>}
+ */
+async function carregarDados() {
+  const hoje = hojeLocal();
+
+  let pacote;
+  try {
+    pacote = await lerPacote();
+  } catch (erro) {
+    console.error(erro);
+    gravacaoDisponivel = false;
+    return {
+      dados: criarDadosDeExemplo(hoje),
+      aviso: 'Este navegador não permitiu gravar dados: os lançamentos ficam só nesta sessão.',
+    };
+  }
+
+  if (pacote === undefined) {
+    const novos = criarDadosDeExemplo(hoje);
+    const gravou = await gravar(novos);
+    return { dados: novos, aviso: gravou ? 'Primeiro acesso: dados de exemplo criados.' : avisoSemGravacao() };
+  }
+
+  let salvos;
+  try {
+    salvos = desempacotar(pacote);
+  } catch (erro) {
+    if (!(erro instanceof ErroValidacao)) throw erro;
+    console.error(erro);
+    gravacaoDisponivel = false;
+    return {
+      dados: criarDadosDeExemplo(hoje),
+      aviso: `${erro.message} Nada foi apagado; nesta sessão os lançamentos não serão gravados.`,
+    };
+  }
+
+  if (salvos.registroMes.mes !== mesDaData(hoje)) {
+    const novos = criarDadosDeExemplo(hoje);
+    const gravou = await gravar(novos);
+    return { dados: novos, aviso: gravou ? 'Mês novo: o exemplo foi recriado para este mês.' : avisoSemGravacao() };
+  }
+
+  return { dados: salvos, aviso: '' };
+}
+
+/**
+ * Grava os dados no aparelho.
+ * @param {object} dadosParaGravar
+ * @returns {Promise<boolean>} true se gravou.
+ */
+async function gravar(dadosParaGravar) {
+  if (!gravacaoDisponivel) return false;
+  try {
+    await gravarPacote(empacotar(dadosParaGravar));
+    return true;
+  } catch (erro) {
+    console.error(erro);
+    gravacaoDisponivel = false;
+    return false;
+  }
+}
+
+/** Texto mostrado quando uma gravação falha. */
+function avisoSemGravacao() {
+  return 'Não foi possível gravar no aparelho: os lançamentos ficam só nesta sessão.';
+}
 
 /* ------------------------------------------------------------------ */
 /* Montagem (feita uma vez, ou ao restaurar o exemplo)                */
@@ -152,8 +244,8 @@ el.formulario.addEventListener('input', () => {
   atualizar();
 });
 
-// Lançar: grava o gasto (na memória, por enquanto) e limpa o valor.
-el.formulario.addEventListener('submit', (evento) => {
+// Lançar: guarda o gasto, grava no aparelho e limpa o valor.
+el.formulario.addEventListener('submit', async (evento) => {
   evento.preventDefault(); // impede o navegador de recarregar a página
 
   const painel = atualizar();
@@ -164,22 +256,36 @@ el.formulario.addEventListener('submit', (evento) => {
   const categoria = dados.categorias.find((c) => c.id === painel.lancamento.categoriaId);
   el.valor.value = '';
   atualizar();
-  el.rodapeTexto.textContent = `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)} em ${categoria.nome}.`;
   el.valor.focus();
+
+  const gravou = await gravar(dados);
+  el.rodapeTexto.textContent = gravou
+    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)} em ${categoria.nome}.`
+    : avisoSemGravacao();
 });
 
-el.botaoRestaurar.addEventListener('click', () => {
+el.botaoRestaurar.addEventListener('click', async () => {
   dados = criarDadosDeExemplo(hojeLocal());
   el.valor.value = '';
   montarChips();
   atualizar();
-  el.rodapeTexto.textContent = 'Exemplo restaurado.';
+
+  const gravou = await gravar(dados);
+  el.rodapeTexto.textContent = gravou ? 'Exemplo restaurado.' : avisoSemGravacao();
 });
 
 /* ------------------------------------------------------------------ */
 /* Início                                                             */
 /* ------------------------------------------------------------------ */
 
+// "await" no nível do módulo: a tela só é montada depois de ler o aparelho.
+const carregado = await carregarDados();
+dados = carregado.dados;
+
 montarMarcas();
 montarChips();
 atualizar();
+el.rodapeTexto.textContent = carregado.aviso;
+
+// Sem esperar: o pedido roda em segundo plano e não atrasa a tela.
+pedirArmazenamentoPersistente();
