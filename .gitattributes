@@ -3,3 +3,7 @@
 # no Windows, o Git converte automaticamente para CRLF ao baixar.
 # Assim o projeto fica igual em qualquer computador.
 * text=auto
+
+# Arquivos binários (imagens e fontes): o Git nunca deve converter nada neles.
+*.png binary
+*.woff2 binary
