@@ -3,8 +3,10 @@
  *
  * O app tem duas vistas, trocadas pelo endereço:
  * - #lancar (padrão): lançar gasto com o veredito ao vivo (este arquivo);
- * - #configurar: dinheiro do mês, categorias, pagamentos e backup
- *   (a parte da configuração fica em ./configurar.js).
+ * - #configurar: dinheiro do mês, contas fixas, categorias, pagamentos e
+ *   backup (a parte da configuração fica em ./configurar.js).
+ * No primeiro acesso (nada gravado no aparelho), aparece antes a vista de
+ * boas-vindas, com a escolha entre começar do zero e ver o exemplo.
  *
  * Este arquivo só cuida da TELA: lê o que a pessoa digitou ou escolheu,
  * pede o resultado ao painel (src/painel.js) e copia os textos e
@@ -13,7 +15,7 @@
  * Os dados ficam gravados no próprio aparelho (IndexedDB, em ./banco.js):
  * fechar e abrir a página mantém os lançamentos. Eles guardam vários meses
  * (src/meses.js); a tela mostra sempre o mês de hoje. Enquanto a
- * configuração do mês não existe, o conteúdo inicial ainda é o EXEMPLO fictício.
+ * Os dados podem ser de verdade ou o EXEMPLO fictício (src/inicio.js).
  */
 
 import { hojeLocal, mesDaData } from '../datas.js';
@@ -24,6 +26,7 @@ import { criarDadosDeExemplo } from '../dados-exemplo.js';
 import { calcularPainel, tituloDoMes } from '../painel.js';
 import { buscarMes, dadosDoMes, virarMes } from '../meses.js';
 import { categoriasAtivas } from '../configuracao.js';
+import { criarDadosIniciais, ehExemplo } from '../inicio.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
@@ -71,6 +74,13 @@ const el = {
   abaLancar: elemento('aba-lancar'),
   abaConfigurar: elemento('aba-configurar'),
   pontoConfigurar: elemento('ponto-configurar'),
+  telaBoasVindas: elemento('tela-boas-vindas'),
+  botaoComecarZero: elemento('botao-comecar-zero'),
+  botaoVerExemplo: elemento('botao-ver-exemplo'),
+  botaoBoasVindasBackup: elemento('botao-boas-vindas-backup'),
+  faixaExemplo: elemento('faixa-exemplo'),
+  botaoZerar: elemento('botao-zerar'),
+  abas: elemento('abas'),
   botaoExportar: elemento('botao-exportar'),
   botaoImportar: elemento('botao-importar'),
   arquivoBackup: elemento('arquivo-backup'),
@@ -132,12 +142,13 @@ function prepararMesAtual(dadosAtuais, hoje) {
 /**
  * Carrega os dados do aparelho.
  *
- * - Primeiro acesso (nada gravado): cria o exemplo e grava.
+ * - Primeiro acesso (nada gravado): devolve dados null; a tela mostra as
+ *   boas-vindas e a pessoa escolhe entre começar do zero e ver o exemplo.
  * - Mês virou: cria o mês novo com o saldo sugerido e grava.
  * - Dados gravados ilegíveis: usa o exemplo só na memória e não grava
  *   nada, para não apagar o que está lá.
  *
- * @returns {Promise<{ dados: object, aviso: string }>}
+ * @returns {Promise<{ dados: object|null, aviso: string }>}
  */
 async function carregarDados() {
   const hoje = hojeLocal();
@@ -155,9 +166,7 @@ async function carregarDados() {
   }
 
   if (pacote === undefined) {
-    const novos = criarDadosDeExemplo(hoje);
-    const gravou = await gravar(novos);
-    return { dados: novos, aviso: gravou ? 'Primeiro acesso: dados de exemplo criados.' : avisoSemGravacao() };
+    return { dados: null, aviso: '' };
   }
 
   let salvos;
@@ -274,6 +283,11 @@ function montarChips() {
   );
 }
 
+/** Mostra a faixa "dados de exemplo" na vista de lançamento, só com os dados fictícios. */
+function atualizarFaixaExemplo() {
+  el.faixaExemplo.hidden = !ehExemplo(dados);
+}
+
 /** Mostra o ponto âmbar na aba Configurar quando o saldo do mês espera confirmação. */
 function atualizarPonto() {
   const registro = buscarMes(dados, mesDaData(hojeLocal()));
@@ -357,15 +371,28 @@ el.formulario.addEventListener('submit', async (evento) => {
 });
 
 el.botaoRestaurar.addEventListener('click', async () => {
-  dados = criarDadosDeExemplo(hojeLocal());
-  el.valor.value = '';
-  montarChips();
-  atualizar();
-  atualizarPonto();
-  configurar.renderizar();
-
+  if (!ehExemplo(dados)) {
+    const confirmou = window.confirm(
+      'Trocar os seus dados pelos dados de exemplo?\n\n' +
+        'Tudo o que está neste aparelho será substituído. Se quiser guardar, exporte um backup antes.',
+    );
+    if (!confirmou) return;
+  }
+  trocarDados(criarDadosDeExemplo(hojeLocal()));
   const gravou = await gravar(dados);
   avisar(gravou ? 'Exemplo restaurado.' : avisoSemGravacao());
+});
+
+el.botaoZerar.addEventListener('click', async () => {
+  const pergunta = ehExemplo(dados)
+    ? 'Apagar os dados de exemplo e começar do zero?'
+    : 'Apagar TODOS os dados deste aparelho e começar do zero?\n\n' +
+      'Se quiser guardar os dados atuais, cancele e exporte um backup antes.';
+  if (!window.confirm(pergunta)) return;
+
+  trocarDados(criarDadosIniciais(hojeLocal()));
+  const gravou = await gravar(dados);
+  avisar(gravou ? 'Pronto: comece informando o saldo da conta em "Dinheiro do mês".' : avisoSemGravacao());
 });
 
 /* ------------------------------------------------------------------ */
@@ -420,21 +447,18 @@ el.arquivoBackup.addEventListener('change', async () => {
     dateStyle: 'short',
     timeStyle: 'short',
   });
+  // No primeiro acesso não há o que substituir, então a pergunta muda.
   const confirmou = window.confirm(
-    `Importar o backup de ${salvoEm}, com ${lido.resumo.lancamentos} lançamento(s)?\n\n` +
-      'Os dados atuais deste aparelho serão substituídos.',
+    `Importar o backup de ${salvoEm}, com ${lido.resumo.lancamentos} lançamento(s)?` +
+      (dados === null ? '' : '\n\nOs dados atuais deste aparelho serão substituídos.'),
   );
   if (!confirmou) {
     avisar('Importação cancelada.');
     return;
   }
 
-  dados = virada.dados;
-  el.valor.value = '';
-  montarChips();
-  atualizar();
-  atualizarPonto();
-  configurar.renderizar();
+  trocarDados(virada.dados);
+  mostrarVista(); // sai das boas-vindas, se o backup foi importado no primeiro acesso
 
   // A pessoa confirmou a troca: grava mesmo se os dados antigos estavam
   // ilegíveis. Importar um backup é justamente o jeito de recuperar o app.
@@ -473,6 +497,7 @@ const configurar = iniciarConfigurar({
     montarChips();
     atualizar();
     atualizarPonto();
+    atualizarFaixaExemplo();
     const gravou = await gravar(dados);
     avisar(gravou ? mensagem : avisoSemGravacao());
   },
@@ -488,6 +513,16 @@ const configurar = iniciarConfigurar({
  * com o botão "voltar" do navegador e abrir direto numa vista.
  */
 function mostrarVista() {
+  // Primeiro acesso: só as boas-vindas, sem abas, até a pessoa escolher.
+  const primeiroAcesso = dados === null;
+  el.telaBoasVindas.hidden = !primeiroAcesso;
+  el.abas.hidden = primeiroAcesso;
+  if (primeiroAcesso) {
+    el.tela.hidden = true;
+    el.telaConfigurar.hidden = true;
+    return;
+  }
+
   const vista = location.hash === '#configurar' ? 'configurar' : 'lancar';
 
   el.tela.hidden = vista !== 'lancar';
@@ -510,16 +545,60 @@ window.addEventListener('hashchange', mostrarVista);
 /* Início                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Troca todos os dados de uma vez (exemplo, começar do zero, backup) e
+ * redesenha as duas vistas. Não grava: quem chama decide quando gravar.
+ *
+ * @param {object} novos
+ */
+function trocarDados(novos) {
+  dados = novos;
+  el.valor.value = '';
+  montarChips();
+  atualizar();
+  atualizarPonto();
+  atualizarFaixaExemplo();
+  configurar.renderizar();
+}
+
+// Boas-vindas: "Começar do zero" leva direto para Configurar.
+el.botaoComecarZero.addEventListener('click', async () => {
+  trocarDados(criarDadosIniciais(hojeLocal()));
+  location.hash = '#configurar';
+  mostrarVista();
+  const gravou = await gravar(dados);
+  avisar(gravou ? 'Comece informando o saldo da conta em "Dinheiro do mês".' : avisoSemGravacao());
+});
+
+// Aparelho novo com backup de outro: importa sem passar pelo exemplo.
+el.botaoBoasVindasBackup.addEventListener('click', () => {
+  el.arquivoBackup.value = '';
+  el.arquivoBackup.click();
+});
+
+el.botaoVerExemplo.addEventListener('click', async () => {
+  trocarDados(criarDadosDeExemplo(hojeLocal()));
+  location.hash = '#lancar';
+  mostrarVista();
+  const gravou = await gravar(dados);
+  el.rodapeTexto.textContent = gravou ? '' : avisoSemGravacao();
+});
+
 // "await" no nível do módulo: a tela só é montada depois de ler o aparelho.
 const carregado = await carregarDados();
-dados = carregado.dados;
-
 montarMarcas();
-montarChips();
-atualizar();
-atualizarPonto();
-mostrarVista();
-el.rodapeTexto.textContent = carregado.aviso;
+
+if (carregado.dados === null) {
+  mostrarVista(); // primeiro acesso: boas-vindas
+} else {
+  dados = carregado.dados;
+  montarChips();
+  atualizar();
+  atualizarPonto();
+  atualizarFaixaExemplo();
+  mostrarVista();
+  el.rodapeTexto.textContent = carregado.aviso;
+}
 
 // Sem esperar: o pedido roda em segundo plano e não atrasa a tela.
 pedirArmazenamentoPersistente();
