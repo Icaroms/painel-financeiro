@@ -9,9 +9,18 @@
   <meta name="theme-color" content="#16212B" media="(prefers-color-scheme: dark)">
   <title>Painel Financeiro</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
+  <!-- PWA: nome, ícones e cores do app instalado (manifest) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icones/icone.svg" type="image/svg+xml">
+  <!-- iPhone: ícone da Tela de Início e nome curto embaixo dele -->
+  <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Painel">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- As fontes ficam dentro do projeto (pasta fontes/), para funcionar sem internet -->
+  <link rel="preload" href="fontes/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fontes/barlow-semi-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/app.css">
 
   <!-- type="module": permite usar import/export, os mesmos dos arquivos em src/ -->
