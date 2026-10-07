@@ -18,6 +18,29 @@
   <script type="module" src="src/ui/app.js"></script>
 </head>
 <body>
+  <!-- Vista "Boas-vindas": só no primeiro acesso, quando ainda não há dados no aparelho -->
+  <main class="tela tela-boas-vindas" id="tela-boas-vindas" hidden>
+    <div class="boas-vindas">
+      <!-- Mostrador decorativo: a identidade do app logo na entrada -->
+      <svg class="boas-vindas-mostrador" width="180" height="100" viewBox="0 0 300 166" aria-hidden="true">
+        <path class="arco-trilho" d="M 30 150 A 120 120 0 0 1 270 150"></path>
+        <path class="arco-boas-vindas" d="M 30 150 A 120 120 0 0 1 270 150" stroke-dasharray="132 377"></path>
+        <polygon class="marcador-hoje" points="150,46 138.2,60.6 161.8,60.6"></polygon>
+        <line class="ponteiro-estatico" x1="150" y1="150" x2="88" y2="77"></line>
+        <circle class="eixo" cx="150" cy="150" r="9"></circle>
+        <circle class="eixo-centro" cx="150" cy="150" r="4"></circle>
+      </svg>
+      <h1>Painel Financeiro</h1>
+      <p>Cada gasto que você lança recebe um veredito na hora: ainda cabe, atenção ou passou da conta.</p>
+      <p class="secundario">Os dados ficam só neste aparelho. Nada vai para a internet.</p>
+      <div class="boas-vindas-botoes">
+        <button type="button" class="botao-principal" id="botao-comecar-zero">Começar do zero</button>
+        <button type="button" class="botao-secundario" id="botao-ver-exemplo">Ver com dados de exemplo</button>
+        <button type="button" class="botao-texto" id="botao-boas-vindas-backup">Já tenho um backup: importar</button>
+      </div>
+    </div>
+  </main>
+
   <!-- Vista "Lançar": a tela principal. As vistas trocam pelo endereço (#lancar / #configurar). -->
   <main class="tela" id="tela" data-cor="neutro">
 
@@ -27,6 +50,10 @@
         <span class="secundario" id="dia-texto"></span>
       </div>
       <p class="secundario" id="linha-saldo"></p>
+      <!-- Aparece só com os dados fictícios -->
+      <p class="faixa-exemplo" id="faixa-exemplo" hidden>
+        Você está vendo dados de exemplo. Para usar de verdade, <a href="#configurar">comece do zero em Configurar</a>.
+      </p>
     </header>
 
     <section class="mostrador" aria-label="Mostrador da categoria">
@@ -188,7 +215,10 @@
       </div>
       <!-- Campo de arquivo escondido: o botão "Importar backup" abre a escolha do arquivo -->
       <input type="file" id="arquivo-backup" accept=".json,application/json" hidden>
-      <button type="button" class="botao-texto" id="botao-restaurar">Restaurar exemplo</button>
+      <div class="backup-recomecar">
+        <button type="button" class="botao-texto" id="botao-restaurar">Restaurar exemplo</button>
+        <button type="button" class="botao-texto perigo" id="botao-zerar">Apagar tudo e começar do zero</button>
+      </div>
     </section>
 
   </main>
@@ -196,7 +226,7 @@
   <!-- Mensagens da vista Configurar: ficam presas acima das abas para serem vistas de qualquer ponto da página -->
   <p class="mensagem" id="config-mensagem" aria-live="polite" hidden></p>
 
-  <nav class="abas" aria-label="Seções do app">
+  <nav class="abas" id="abas" aria-label="Seções do app">
     <a href="#lancar" class="aba" id="aba-lancar">Lançar</a>
     <a href="#configurar" class="aba" id="aba-configurar">
       Configurar

@@ -16,6 +16,7 @@ import { formatarCentavos } from '../dinheiro.js';
 import { ErroValidacao } from '../erros.js';
 import { buscarMes } from '../meses.js';
 import { tituloDoMes } from '../painel.js';
+import { ehPrimeiroMes } from '../inicio.js';
 import {
   textoDoValor,
   lerValorComSinal,
@@ -123,9 +124,10 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
     mostrarErro(el.erroRenda, el.rendaPrevista, '');
 
     el.alertaSaldo.hidden = registro.saldoConfirmado;
-    el.alertaSaldoTexto.textContent =
-      `O saldo de ${formatarCentavos(registro.saldoInicialCentavos)} foi sugerido pelo app: ` +
-      'é o que sobrou do mês anterior. Confira com o extrato do banco, corrija se precisar e confirme.';
+    el.alertaSaldoTexto.textContent = ehPrimeiroMes(obterDados(), mes)
+      ? 'Informe quanto havia na sua conta no início do mês e a renda que ainda vai entrar, e confirme.'
+      : `O saldo de ${formatarCentavos(registro.saldoInicialCentavos)} foi sugerido pelo app: ` +
+        'é o que sobrou do mês anterior. Confira com o extrato do banco, corrija se precisar e confirme.';
     el.botaoSalvarMes.textContent = registro.saldoConfirmado ? 'Salvar' : 'Confirmar saldo';
 
     atualizarResumo();

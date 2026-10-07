@@ -387,7 +387,9 @@ body {
 }
 .forma button:focus-visible { outline: 2px solid var(--texto); }
 
-.backup .botao-texto { align-self: flex-start; font-size: 13px; }
+.backup-recomecar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
+.backup .botao-texto { font-size: 13px; }
+.botao-texto.perigo { color: var(--vermelho); }
 
 /* ---------- Mensagem flutuante (vista Configurar) ---------- */
 .mensagem {
@@ -500,3 +502,29 @@ body {
 .campo select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
 
 #botao-novo-fixo { align-self: stretch; }
+
+/* ---------- Faixa de dados de exemplo (vista Lançar) ---------- */
+.faixa-exemplo {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--linha);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.faixa-exemplo a { color: var(--texto); font-weight: 600; }
+
+/* ---------- Boas-vindas (primeiro acesso) ---------- */
+.tela-boas-vindas { justify-content: center; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.boas-vindas { display: flex; flex-direction: column; gap: 14px; }
+.boas-vindas-mostrador { margin-bottom: 4px; }
+.arco-boas-vindas { fill: none; stroke: var(--verde); stroke-width: 14; }
+.ponteiro-estatico { stroke: var(--texto); stroke-width: 4; stroke-linecap: round; }
+.boas-vindas .eixo-centro { fill: var(--fundo); }
+.boas-vindas h1 { margin: 0; font-family: var(--fonte-numero); font-size: 34px; font-weight: 600; }
+.boas-vindas p { margin: 0; font-size: 17px; line-height: 1.45; }
+.boas-vindas .secundario { font-size: 15px; }
+.boas-vindas-botoes { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.boas-vindas-botoes .botao-principal { min-height: 56px; font-size: 20px; }
+.boas-vindas-botoes .botao-secundario { min-height: 48px; }
+.boas-vindas-botoes .botao-texto { align-self: center; margin-top: 4px; font-size: 15px; }
