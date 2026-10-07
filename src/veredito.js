@@ -8,8 +8,8 @@
  * 2. Ritmo: a parte do orçamento já usada comparada à parte do mês que
  *    já passou. "70% usado no dia 10 (33% do mês)" = 37 pontos à frente.
  * 3. Saldo projetado: quanto deve sobrar no fim do mês. É o saldo
- *    inicial menos todos os fixos do mês, menos todos os lançamentos
- *    do mês, menos este gasto. (É o mesmo que "saldo atual menos fixos
+ *    inicial MAIS a renda prevista, menos todos os fixos do mês, menos
+ *    todos os lançamentos do mês, menos este gasto. (É o mesmo que "saldo atual menos fixos
  *    a vencer menos este gasto", só que sem depender de quais fixos
  *    já venceram.)
  *
@@ -106,13 +106,17 @@ export function calcularRitmo(orcamentoCentavos, gastoDepoisCentavos, data, tole
 /**
  * Regra 3: saldo projetado para o fim do mês, já contando o novo gasto.
  *
- * @param {object}   registroMes      Mês (saldo inicial e ajustes).
+ * saldo projetado = saldo inicial + renda prevista − fixos − lançamentos − novo gasto
+ *
+ * @param {object}   registroMes      Mês (saldo inicial, renda prevista e ajustes).
  * @param {object[]} fixos            Todos os fixos cadastrados.
  * @param {object[]} lancamentosDoMes Lançamentos válidos do mês (sem o novo).
  * @param {number}   novoValorCentavos
- * @returns {{ totalFixosCentavos: number, totalLancamentosCentavos: number, saldoProjetadoCentavos: number }}
+ * @returns {{ rendaPrevistaCentavos: number, totalFixosCentavos: number, totalLancamentosCentavos: number, saldoProjetadoCentavos: number }}
  */
 export function calcularSaldoProjetado(registroMes, fixos, lancamentosDoMes, novoValorCentavos) {
+  const rendaPrevistaCentavos = registroMes.rendaPrevistaCentavos;
+
   const totalFixosCentavos = fixos
     .filter((f) => fixoAtivoNoMes(f, registroMes.mes))
     .reduce((soma, f) => soma + valorDoFixoNoMes(f, registroMes), 0);
@@ -121,11 +125,27 @@ export function calcularSaldoProjetado(registroMes, fixos, lancamentosDoMes, nov
     .reduce((soma, l) => soma + l.valorCentavos, 0);
 
   return {
+    rendaPrevistaCentavos,
     totalFixosCentavos,
     totalLancamentosCentavos,
     saldoProjetadoCentavos:
-      registroMes.saldoInicialCentavos - totalFixosCentavos - totalLancamentosCentavos - novoValorCentavos,
+      registroMes.saldoInicialCentavos +
+      rendaPrevistaCentavos -
+      totalFixosCentavos -
+      totalLancamentosCentavos -
+      novoValorCentavos,
   };
+}
+
+/**
+ * Lançamentos que contam num mês: não excluídos e com data naquele mês.
+ *
+ * @param {object[]} lancamentos
+ * @param {string}   mes "AAAA-MM".
+ * @returns {object[]}
+ */
+export function lancamentosValidosDoMes(lancamentos, mes) {
+  return lancamentos.filter((l) => l.excluidoEm === null && mesDaData(l.data) === mes);
 }
 
 /* ------------------------------------------------------------------ */
@@ -164,12 +184,8 @@ export function avaliarGasto(
 
   // Só entram lançamentos válidos do mesmo mês, sem o próprio gasto novo
   // (evita contar o mesmo gasto duas vezes).
-  const lancamentosDoMes = lancamentos.filter(
-    (l) =>
-      l.excluidoEm === null &&
-      l.id !== lancamento.id &&
-      mesDaData(l.data) === registroMes.mes,
-  );
+  const lancamentosDoMes = lancamentosValidosDoMes(lancamentos, registroMes.mes)
+    .filter((l) => l.id !== lancamento.id);
 
   const valor = lancamento.valorCentavos;
   const temOrcamento = categoria.orcamentoCentavos > 0;

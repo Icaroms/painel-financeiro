@@ -256,6 +256,35 @@ describe('criarMes', () => {
     );
   });
 
+  it('renda prevista é zero e o saldo é confirmado, por padrão', () => {
+    const novembro = criarMes({ mes: '2026-11', saldoInicialCentavos: 150000 }, OPCOES);
+    assert.equal(novembro.rendaPrevistaCentavos, 0);
+    assert.equal(novembro.saldoConfirmado, true);
+  });
+
+  it('aceita renda prevista e saldo ainda não confirmado', () => {
+    const novembro = criarMes(
+      { mes: '2026-11', saldoInicialCentavos: 30000, rendaPrevistaCentavos: 200000, saldoConfirmado: false },
+      OPCOES,
+    );
+    assert.equal(novembro.rendaPrevistaCentavos, 200000);
+    assert.equal(novembro.saldoConfirmado, false);
+  });
+
+  it('rejeita renda prevista negativa', () => {
+    assert.throws(
+      () => criarMes({ mes: '2026-11', saldoInicialCentavos: 0, rendaPrevistaCentavos: -1 }, OPCOES),
+      { name: 'ErroValidacao', campo: 'rendaPrevistaCentavos' },
+    );
+  });
+
+  it('rejeita saldoConfirmado que não seja true ou false', () => {
+    assert.throws(
+      () => criarMes({ mes: '2026-11', saldoInicialCentavos: 0, saldoConfirmado: 'sim' }, OPCOES),
+      { name: 'ErroValidacao', campo: 'saldoConfirmado' },
+    );
+  });
+
   it('rejeita saldo com casas decimais', () => {
     assert.throws(
       () => criarMes({ mes: '2026-11', saldoInicialCentavos: 1500.5 }, OPCOES),

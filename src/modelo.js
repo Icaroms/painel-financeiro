@@ -5,7 +5,8 @@
  * - Categoria:  onde o gasto se encaixa (iFood, Uber...) e quanto pode ir para ela no mês.
  * - Fixo:       conta que se repete todo mês (assinatura, parcela, mensalidade).
  * - Lançamento: um gasto registrado.
- * - Mês:        o saldo com que o mês começa e os ajustes de valor de fixos naquele mês.
+ * - Mês:        o saldo com que o mês começa, a renda prevista e os ajustes de valor
+ *               de fixos naquele mês.
  *
  * Todo registro nasce com quatro campos de controle, pensados para a
  * sincronização entre aparelhos numa fase futura:
@@ -230,24 +231,42 @@ export function criarLancamento(
 /**
  * Cria o registro de um mês.
  *
- * @param {object} dados
- * @param {string} dados.mes                  "AAAA-MM".
- * @param {number} dados.saldoInicialCentavos Saldo no começo do mês. Pode ser
- *                                            negativo (mês que já começa no vermelho).
- * @param {object} [opcoes]                   { agora, gerarId }
+ * Dinheiro disponível no mês = saldo inicial + renda prevista.
+ * Ex.: R$ 300 na conta no dia 1 e salário de R$ 2.000 no dia 5
+ * → o mês tem R$ 2.300 para fixos e gastos.
+ *
+ * @param {object}  dados
+ * @param {string}  dados.mes                     "AAAA-MM".
+ * @param {number}  dados.saldoInicialCentavos    Saldo na conta no começo do mês. Pode ser
+ *                                                negativo (mês que já começa no vermelho).
+ * @param {number}  [dados.rendaPrevistaCentavos] O que vai entrar durante o mês (salário etc.). Padrão: 0.
+ * @param {boolean} [dados.saldoConfirmado]       false quando o saldo inicial foi só SUGERIDO
+ *                                                pelo app na virada do mês e a pessoa ainda
+ *                                                não confirmou. Padrão: true.
+ * @param {object}  [opcoes]                      { agora, gerarId }
  */
-export function criarMes({ mes, saldoInicialCentavos }, opcoes = {}) {
+export function criarMes(
+  { mes, saldoInicialCentavos, rendaPrevistaCentavos = 0, saldoConfirmado = true },
+  opcoes = {},
+) {
   if (!Number.isSafeInteger(saldoInicialCentavos)) {
     throw new ErroValidacao(
       'saldoInicialCentavos',
       'O saldo inicial deve ser um número inteiro de centavos (ex.: 150000 para R$ 1.500,00).',
     );
   }
+  if (typeof saldoConfirmado !== 'boolean') {
+    throw new ErroValidacao('saldoConfirmado', 'saldoConfirmado deve ser true ou false.');
+  }
 
   return {
     ...criarBase(opcoes),
     mes: exigirMes(mes, 'mes', 'O mês'),
     saldoInicialCentavos,
+    rendaPrevistaCentavos: exigirCentavos(
+      rendaPrevistaCentavos, 'rendaPrevistaCentavos', 'A renda prevista', { permitirZero: true },
+    ),
+    saldoConfirmado,
     // Valor de um fixo só neste mês, por id do fixo: { "id-do-fixo": 25000 }.
     // Ex.: o dentista, que custa um valor diferente a cada mês.
     ajustesFixos: {},

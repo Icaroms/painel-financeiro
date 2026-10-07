@@ -6,8 +6,9 @@
  * posições para o HTML. Nenhuma conta de dinheiro é feita aqui.
  *
  * Os dados ficam gravados no próprio aparelho (IndexedDB, em ./banco.js):
- * fechar e abrir a página mantém os lançamentos. Enquanto a configuração
- * do mês não existe, o conteúdo inicial ainda é o EXEMPLO fictício.
+ * fechar e abrir a página mantém os lançamentos. Eles guardam vários meses
+ * (src/meses.js); a tela mostra sempre o mês de hoje. Enquanto a
+ * configuração do mês não existe, o conteúdo inicial ainda é o EXEMPLO fictício.
  */
 
 import { hojeLocal, mesDaData } from '../datas.js';
@@ -15,7 +16,8 @@ import { formatarCentavos } from '../dinheiro.js';
 import { ErroValidacao } from '../erros.js';
 import { marcasDaEscala } from '../mostrador.js';
 import { criarDadosDeExemplo } from '../dados-exemplo.js';
-import { calcularPainel } from '../painel.js';
+import { calcularPainel, tituloDoMes } from '../painel.js';
+import { buscarMes, dadosDoMes, virarMes } from '../meses.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
@@ -84,12 +86,42 @@ let gravacaoDisponivel = true;
 /* ------------------------------------------------------------------ */
 
 /**
+ * Garante que o mês de hoje existe nos dados (virada de mês).
+ *
+ * Se o mês ainda não existe, ele é criado com o saldo inicial SUGERIDO
+ * (o que sobrou do mês anterior). A confirmação desse saldo chega com a
+ * tela de configuração.
+ *
+ * @param {object} dadosAtuais
+ * @param {string} hoje "AAAA-MM-DD".
+ * @returns {{ dados: object, mudou: boolean, aviso: string } | null}
+ *   null quando não há mês anterior a hoje nos dados (por exemplo, se a
+ *   data do aparelho voltou no tempo). Nesse caso nada é alterado.
+ */
+function prepararMesAtual(dadosAtuais, hoje) {
+  const mesAtual = mesDaData(hoje);
+  try {
+    const { estado, criado, mesBase } = virarMes(dadosAtuais, mesAtual);
+    if (!criado) return { dados: dadosAtuais, mudou: false, aviso: '' };
+    return {
+      dados: estado,
+      mudou: true,
+      aviso:
+        `${tituloDoMes(mesAtual)} começou com ${formatarCentavos(criado.saldoInicialCentavos)}, ` +
+        `o que sobrou de ${tituloDoMes(mesBase).toLowerCase()}. ` +
+        'A confirmação desse saldo chega com a tela de configuração.',
+    };
+  } catch (erro) {
+    if (!(erro instanceof ErroValidacao)) throw erro;
+    return null;
+  }
+}
+
+/**
  * Carrega os dados do aparelho.
  *
  * - Primeiro acesso (nada gravado): cria o exemplo e grava.
- * - Mês virou: recria o exemplo para o mês novo. Isso é provisório:
- *   por enquanto só existe dado de exemplo. A virada de mês de verdade
- *   (com saldo inicial e fixos) entra na tarefa de configuração do mês.
+ * - Mês virou: cria o mês novo com o saldo sugerido e grava.
  * - Dados gravados ilegíveis: usa o exemplo só na memória e não grava
  *   nada, para não apagar o que está lá.
  *
@@ -129,10 +161,19 @@ async function carregarDados() {
     };
   }
 
-  if (salvos.registroMes.mes !== mesDaData(hoje)) {
-    const novos = criarDadosDeExemplo(hoje);
-    const gravou = await gravar(novos);
-    return { dados: novos, aviso: gravou ? 'Mês novo: o exemplo foi recriado para este mês.' : avisoSemGravacao() };
+  const virada = prepararMesAtual(salvos, hoje);
+  if (virada === null) {
+    gravacaoDisponivel = false;
+    return {
+      dados: criarDadosDeExemplo(hoje),
+      aviso:
+        'A data do aparelho é anterior aos meses gravados. Confira a data e a hora do aparelho. ' +
+        'Nada foi apagado; nesta sessão os lançamentos não serão gravados.',
+    };
+  }
+  if (virada.mudou) {
+    const gravou = await gravar(virada.dados);
+    return { dados: virada.dados, aviso: gravou ? virada.aviso : avisoSemGravacao() };
   }
 
   return { dados: salvos, aviso: '' };
@@ -215,12 +256,24 @@ function montarChips() {
 
 /** Lê o formulário, calcula o painel e atualiza a tela. Devolve o painel. */
 function atualizar() {
+  const hoje = hojeLocal();
+
+  // Página aberta na virada do mês (ex.: 23:59 do dia 31): cria o mês novo.
+  if (!buscarMes(dados, mesDaData(hoje))) {
+    const virada = prepararMesAtual(dados, hoje);
+    if (virada?.mudou) {
+      dados = virada.dados;
+      el.rodapeTexto.textContent = virada.aviso;
+      gravar(dados); // sem esperar: a tela não precisa aguardar a gravação
+    }
+  }
+
   const painel = calcularPainel({
-    dados,
+    dados: dadosDoMes(dados, mesDaData(hoje)),
     valorTexto: el.valor.value,
     categoriaId: el.formulario.elements.categoria.value,
     formaPagamento: el.formulario.elements.pagamento.value,
-    hoje: hojeLocal(),
+    hoje,
   });
 
   el.tela.dataset.cor = painel.cor;
@@ -316,10 +369,17 @@ el.arquivoBackup.addEventListener('change', async () => {
 
   let lido;
   try {
-    lido = lerBackup(await arquivo.text(), { hoje: hojeLocal() });
+    lido = lerBackup(await arquivo.text());
   } catch (erro) {
     if (!(erro instanceof ErroValidacao)) throw erro;
     el.rodapeTexto.textContent = erro.message;
+    return;
+  }
+
+  // O backup pode ser de um mês anterior: o mês de hoje é criado na hora.
+  const virada = prepararMesAtual(lido.dados, hojeLocal());
+  if (virada === null) {
+    el.rodapeTexto.textContent = 'Este backup só tem meses posteriores a hoje. Confira a data do aparelho.';
     return;
   }
 
@@ -336,7 +396,7 @@ el.arquivoBackup.addEventListener('change', async () => {
     return;
   }
 
-  dados = lido.dados;
+  dados = virada.dados;
   el.valor.value = '';
   montarChips();
   atualizar();

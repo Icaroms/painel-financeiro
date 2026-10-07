@@ -1,19 +1,24 @@
 /**
  * Formato de gravação dos dados do Painel Financeiro.
  *
- * Antes de ir para o banco do aparelho (IndexedDB), os dados são
- * "empacotados" num envelope com identificação e versão:
+ * Antes de ir para o banco do aparelho (IndexedDB) ou para um arquivo de
+ * backup, os dados são "empacotados" num envelope com identificação e versão:
  *
  *   {
  *     formato: "painel-financeiro",   ← garante que o pacote é deste app
- *     versao: 1,                      ← muda quando a estrutura dos dados mudar
+ *     versao: 2,                      ← muda quando a estrutura dos dados mudar
  *     salvoEm: "2026-11-03T13:00:00.000Z",
- *     dados: { registroMes, categorias, fixos, lancamentos, formasPagamento }
+ *     dados: { meses, categorias, fixos, lancamentos, formasPagamento }
  *   }
  *
- * O mesmo envelope vai ser usado no backup (exportar e importar), então
- * um backup antigo sempre diz em qual versão foi feito. Se a estrutura
- * mudar no futuro, a conversão de uma versão para a outra entra aqui.
+ * Histórico das versões:
+ * - Versão 1: um mês só, em "registroMes".
+ * - Versão 2: vários meses, em "meses"; cada mês ganhou "rendaPrevistaCentavos"
+ *   e "saldoConfirmado".
+ *
+ * Pacotes antigos são CONVERTIDOS para a versão atual ao serem lidos
+ * (função migrarDaVersao1). Assim, dados gravados e backups feitos antes
+ * de uma mudança continuam funcionando.
  *
  * Funções puras: não tocam no banco nem na tela, então são testadas no Node.
  */
@@ -22,15 +27,37 @@ import { ErroValidacao } from './erros.js';
 import { ehMesValido } from './datas.js';
 
 export const FORMATO = 'painel-financeiro';
-export const VERSAO_ATUAL = 1;
+export const VERSAO_ATUAL = 2;
 
-/** Listas que todo pacote precisa ter. */
-const LISTAS_OBRIGATORIAS = ['categorias', 'fixos', 'lancamentos', 'formasPagamento'];
+/** Listas que todo pacote precisa ter (na versão atual). */
+const LISTAS_OBRIGATORIAS = ['meses', 'categorias', 'fixos', 'lancamentos', 'formasPagamento'];
+
+/**
+ * Converte os dados da versão 1 (um mês só) para a versão 2 (vários meses).
+ *
+ * - "registroMes" vira o único item da lista "meses";
+ * - o mês ganha renda prevista 0 (a versão 1 não tinha renda);
+ * - o saldo inicial fica como confirmado: na versão 1 ele foi digitado, não sugerido.
+ *
+ * @param {object} dadosV1
+ * @returns {object} Dados na versão 2.
+ */
+export function migrarDaVersao1(dadosV1) {
+  if (!dadosV1.registroMes || !ehMesValido(dadosV1.registroMes.mes)) {
+    throw new ErroValidacao('pacote', 'Os dados gravados não têm um mês válido.');
+  }
+
+  const { registroMes, ...resto } = dadosV1;
+  return {
+    ...resto,
+    meses: [{ ...registroMes, rendaPrevistaCentavos: 0, saldoConfirmado: true }],
+  };
+}
 
 /**
  * Coloca os dados no envelope de gravação.
  *
- * @param {object} dados   { registroMes, categorias, fixos, lancamentos, formasPagamento }
+ * @param {object} dados   { meses, categorias, fixos, lancamentos, formasPagamento }
  * @param {object} [opcoes] { agora }
  * @returns {object} O pacote, pronto para gravar.
  */
@@ -44,8 +71,8 @@ export function empacotar(dados, { agora = new Date() } = {}) {
 }
 
 /**
- * Confere um pacote lido do banco (ou, no futuro, de um backup) e
- * devolve os dados de dentro dele.
+ * Confere um pacote lido do banco ou de um backup e devolve os dados
+ * de dentro dele, já convertidos para a versão atual.
  *
  * Qualquer problema lança ErroValidacao com o campo "pacote" e uma
  * mensagem que diz o que está errado.
@@ -70,9 +97,14 @@ export function desempacotar(pacote) {
     );
   }
 
-  const { dados } = pacote;
+  let { dados } = pacote;
   if (dados === null || typeof dados !== 'object') {
     throw new ErroValidacao('pacote', 'O pacote não tem dados dentro.');
+  }
+
+  // Conversões de versões antigas, uma de cada vez, até a versão atual.
+  if (pacote.versao === 1) {
+    dados = migrarDaVersao1(dados);
   }
 
   for (const lista of LISTAS_OBRIGATORIAS) {
@@ -81,11 +113,12 @@ export function desempacotar(pacote) {
     }
   }
 
-  if (!dados.registroMes || !ehMesValido(dados.registroMes.mes)) {
-    throw new ErroValidacao('pacote', 'Os dados gravados não têm um mês válido.');
+  if (dados.meses.length === 0) {
+    throw new ErroValidacao('pacote', 'Os dados gravados não têm nenhum mês.');
+  }
+  if (!dados.meses.every((m) => m && ehMesValido(m.mes))) {
+    throw new ErroValidacao('pacote', 'Os dados gravados têm um mês inválido.');
   }
 
-  // Versão 1 é a única por enquanto. Quando existir a versão 2, a conversão
-  // dos pacotes de versão 1 entra aqui, antes do return.
   return dados;
 }

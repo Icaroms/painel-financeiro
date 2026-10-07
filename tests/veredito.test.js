@@ -362,3 +362,44 @@ describe('calcularRitmo', () => {
     assert.equal(ritmo.acelerado, true);
   });
 });
+
+describe('renda prevista no saldo do mês', () => {
+  it('a renda entra no saldo projetado', () => {
+    // Saldo inicial R$ 300 + renda R$ 2.000 − fixos R$ 389,80 − R$ 50 = R$ 1.860,20
+    const mes = ajustarFixoNoMes(
+      criarMes({ mes: '2026-11', saldoInicialCentavos: 30000, rendaPrevistaCentavos: 200000 }, opcoes),
+      consulta,
+      25000,
+      { agora: AGORA },
+    );
+    const resultado = avaliarGasto({
+      lancamento: gasto(diversos, 5000, '2026-11-15'),
+      categoria: diversos,
+      registroMes: mes,
+      fixos: FIXOS,
+      lancamentos: [],
+    });
+
+    assert.equal(resultado.numeros.rendaPrevistaCentavos, 200000);
+    assert.equal(resultado.numeros.saldoProjetadoCentavos, 186020);
+    assert.equal(resultado.cor, 'verde');
+  });
+
+  it('sem a renda, o mesmo gasto deixaria o saldo negativo', () => {
+    // R$ 300 − R$ 389,80 − R$ 50 = −R$ 139,80
+    const mes = ajustarFixoNoMes(
+      criarMes({ mes: '2026-11', saldoInicialCentavos: 30000 }, opcoes),
+      consulta,
+      25000,
+      { agora: AGORA },
+    );
+    const resultado = avaliarGasto({
+      lancamento: gasto(diversos, 5000, '2026-11-15'),
+      categoria: diversos,
+      registroMes: mes,
+      fixos: FIXOS,
+      lancamentos: [],
+    });
+    assert.equal(resultado.motivo, 'saldo-negativo');
+  });
+});

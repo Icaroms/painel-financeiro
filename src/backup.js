@@ -17,9 +17,8 @@
  */
 
 import { ErroValidacao } from './erros.js';
-import { hojeLocal, mesDaData } from './datas.js';
+import { hojeLocal } from './datas.js';
 import { empacotar, desempacotar } from './persistencia.js';
-import { tituloDoMes } from './painel.js';
 
 /**
  * Nome do arquivo de backup: "backup-painel-financeiro-2026-11-03.json".
@@ -45,15 +44,17 @@ export function gerarBackup(dados, { agora = new Date() } = {}) {
 /**
  * Lê e confere o conteúdo de um arquivo de backup.
  *
+ * Backups da versão 1 (um mês só) são convertidos automaticamente.
  * Qualquer problema lança ErroValidacao com o campo "backup" e uma
  * mensagem pronta para mostrar na tela.
  *
- * @param {string} texto  Conteúdo do arquivo.
- * @param {object} opcoes
- * @param {string} opcoes.hoje "AAAA-MM-DD" (para conferir o mês do backup).
- * @returns {{ dados: object, resumo: { mes: string, salvoEm: string, lancamentos: number } }}
+ * @param {string} texto Conteúdo do arquivo.
+ * @returns {{
+ *   dados: object,
+ *   resumo: { salvoEm: string, meses: number, mesMaisRecente: string, lancamentos: number }
+ * }}
  */
-export function lerBackup(texto, { hoje }) {
+export function lerBackup(texto) {
   if (typeof texto !== 'string' || texto.trim() === '') {
     throw new ErroValidacao('backup', 'O arquivo está vazio.');
   }
@@ -75,22 +76,14 @@ export function lerBackup(texto, { hoje }) {
     throw erro;
   }
 
-  // Provisório: enquanto o app trabalha com um mês só, um backup de outro
-  // mês não pode ser usado. A virada de mês entra na configuração do mês.
-  const mesAtual = mesDaData(hoje);
-  if (dados.registroMes.mes !== mesAtual) {
-    throw new ErroValidacao(
-      'backup',
-      `Este backup é de ${tituloDoMes(dados.registroMes.mes)}. ` +
-        `Por enquanto, o app só trabalha com o mês atual (${tituloDoMes(mesAtual)}).`,
-    );
-  }
+  const meses = dados.meses.map((m) => m.mes).sort();
 
   return {
     dados,
     resumo: {
-      mes: dados.registroMes.mes,
       salvoEm: pacote.salvoEm,
+      meses: meses.length,
+      mesMaisRecente: meses[meses.length - 1],
       lancamentos: dados.lancamentos.filter((l) => l.excluidoEm === null).length,
     },
   };

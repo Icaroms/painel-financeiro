@@ -12,10 +12,16 @@ import assert from 'node:assert/strict';
 
 import { calcularPainel, tituloDoMes } from '../src/painel.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
+import { dadosDoMes } from '../src/meses.js';
 
 const HOJE = '2026-11-10';
 
-function painel(valorTexto, nomeCategoria, dados = criarDadosDeExemplo(HOJE)) {
+/** Visão de novembro dos dados de exemplo (o formato que a tela usa). */
+function exemploDeNovembro() {
+  return dadosDoMes(criarDadosDeExemplo(HOJE), '2026-11');
+}
+
+function painel(valorTexto, nomeCategoria, dados = exemploDeNovembro()) {
   const categoria = dados.categorias.find((c) => c.nome === nomeCategoria);
   return calcularPainel({ dados, valorTexto, categoriaId: categoria.id, formaPagamento: 'Pix', hoje: HOJE });
 }
@@ -30,7 +36,8 @@ describe('tituloDoMes', () => {
 describe('dados de exemplo', () => {
   it('são montados no mês do dia informado', () => {
     const dados = criarDadosDeExemplo('2027-03-15');
-    assert.equal(dados.registroMes.mes, '2027-03');
+    assert.equal(dados.meses.length, 1);
+    assert.equal(dados.meses[0].mes, '2027-03');
     assert.ok(dados.lancamentos.every((l) => l.data === '2027-03-01'));
   });
 });
@@ -99,7 +106,7 @@ describe('calcularPainel com valor', () => {
 
 describe('calcularPainel com categoria inexistente', () => {
   it('lança erro', () => {
-    const dados = criarDadosDeExemplo(HOJE);
+    const dados = exemploDeNovembro();
     assert.throws(
       () => calcularPainel({ dados, valorTexto: '10', categoriaId: 'nao-existe', formaPagamento: 'Pix', hoje: HOJE }),
       { name: 'ErroValidacao', campo: 'categoriaId' },
