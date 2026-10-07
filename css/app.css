@@ -612,7 +612,7 @@ body {
 /* Linha "Nesta semana" nas réguas da aba Mês */
 .regua-semana { margin: 2px 0 0; font-size: 13px; }
 
-/* Paginação do histórico: 5 itens por vez, sem rolagem infinita */
+/* Paginação das listas (Histórico e gastos da aba Mês): 5 itens por vez, sem rolagem infinita */
 .paginacao { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .paginacao:empty { display: none; }
 .paginacao .pagina-atual { font-size: 14px; }

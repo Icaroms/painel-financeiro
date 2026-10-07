@@ -2,6 +2,9 @@
  * Vista "Mês": o que já saiu, o que ainda vai vencer, quanto deve sobrar,
  * a situação de cada categoria e as listas de contas fixas e de gastos.
  *
+ * A lista de gastos mostra 5 por página, como no Histórico, porque ela
+ * cresce o mês inteiro.
+ *
  * Como em toda a pasta src/ui, aqui só fica a TELA. Os números vêm de
  * resumoDoMes (src/resumo-mes.js), testado no Node.
  *
@@ -14,7 +17,7 @@ import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
 import { tituloDoMes } from '../painel.js';
 import { resumoDoMes, excluirLancamento } from '../resumo-mes.js';
-import { gastoDaSemanaAtual } from '../historico.js';
+import { gastoDaSemanaAtual, paginar } from '../historico.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -59,7 +62,40 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     categorias: elemento('mes-categorias'),
     fixos: elemento('mes-fixos'),
     gastos: elemento('mes-gastos'),
+    paginacaoGastos: elemento('paginacao-mes-gastos'),
   };
+
+  /** Página atual da lista de gastos (começa em 1). */
+  let paginaGastos = 1;
+
+  /**
+   * Monta os botões "Anterior" e "Próxima". Com uma página só, eles somem.
+   *
+   * @param {{ pagina: number, totalPaginas: number }} resultado
+   */
+  function montarPaginacao({ pagina, totalPaginas }) {
+    if (totalPaginas <= 1) {
+      el.paginacaoGastos.replaceChildren();
+      return;
+    }
+    const anterior = criar('button', { classe: 'botao-pequeno', type: 'button', texto: '‹ Anterior' });
+    const proxima = criar('button', { classe: 'botao-pequeno', type: 'button', texto: 'Próxima ›' });
+    anterior.disabled = pagina === 1;
+    proxima.disabled = pagina === totalPaginas;
+    anterior.addEventListener('click', () => {
+      paginaGastos = pagina - 1;
+      renderizar();
+    });
+    proxima.addEventListener('click', () => {
+      paginaGastos = pagina + 1;
+      renderizar();
+    });
+    el.paginacaoGastos.replaceChildren(
+      anterior,
+      criar('span', { classe: 'pagina-atual secundario', texto: `Página ${pagina} de ${totalPaginas}` }),
+      proxima,
+    );
+  }
 
   /** Régua de uma categoria: barra de uso e o triângulo de "hoje". */
   function itemDaCategoria(item, fracaoDoMes) {
@@ -182,7 +218,12 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
       'Nenhuma categoria.',
     );
     preencherLista(el.fixos, r.fixos.map(itemDoFixo), 'Nenhuma conta fixa neste mês.');
-    preencherLista(el.gastos, r.gastos.map(itemDoGasto), 'Nenhum gasto lançado neste mês.');
+    // Gastos: 5 por página. Depois de excluir o último gasto de uma página,
+    // paginar() volta sozinha para a última página que ainda existe.
+    const pagina = paginar(r.gastos, paginaGastos);
+    paginaGastos = pagina.pagina;
+    montarPaginacao(pagina);
+    preencherLista(el.gastos, pagina.itens.map(itemDoGasto), 'Nenhum gasto lançado neste mês.');
   }
 
   return { renderizar };
