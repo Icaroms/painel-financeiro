@@ -425,8 +425,8 @@ body {
   bottom: 0;
   display: flex;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 20px calc(8px + env(safe-area-inset-bottom));
+  gap: 4px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   background: var(--fundo);
   border-top: 1px solid var(--linha);
   z-index: 1;
@@ -442,7 +442,7 @@ body {
   border-radius: 14px;
   color: var(--secundario);
   font-family: var(--fonte-numero);
-  font-size: 17px;
+  font-size: 15px; /* quatro abas precisam caber lado a lado no iPhone */
   font-weight: 600;
   text-decoration: none;
 }
@@ -452,7 +452,7 @@ body {
 .ponto {
   position: absolute;
   top: 10px;
-  right: calc(50% - 54px);
+  right: calc(50% - 46px);
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -604,3 +604,16 @@ body {
 /* Conta que ainda vai vencer: valor em segundo plano, como "a pagar" */
 .linha-mes.a-vencer .linha-mes-valor { color: var(--secundario); }
 .lista-vazia { padding: 4px 0; font-size: 14px; }
+
+/* ---------- Vista Histórico ---------- */
+.tela-historico > .campo select { background: var(--painel); }
+.cartao .campo select { background: var(--fundo); }
+
+/* Linha "Nesta semana" nas réguas da aba Mês */
+.regua-semana { margin: 2px 0 0; font-size: 13px; }
+
+/* Paginação do histórico: 5 itens por vez, sem rolagem infinita */
+.paginacao { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.paginacao:empty { display: none; }
+.paginacao .pagina-atual { font-size: 14px; }
+.paginacao .botao-pequeno:disabled { opacity: 0.4; cursor: default; }

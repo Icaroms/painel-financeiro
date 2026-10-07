@@ -17,7 +17,7 @@
  */
 
 /** Mude a versão quando a LISTA de arquivos mudar: a cópia antiga é apagada. */
-const VERSAO_CACHE = 'painel-financeiro-v1';
+const VERSAO_CACHE = 'painel-financeiro-v2';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -44,6 +44,7 @@ const ARQUIVOS = [
   './src/dinheiro.js',
   './src/erros.js',
   './src/fixos.js',
+  './src/historico.js',
   './src/inicio.js',
   './src/meses.js',
   './src/modelo.js',
@@ -56,6 +57,7 @@ const ARQUIVOS = [
   './src/ui/arquivos.js',
   './src/ui/banco.js',
   './src/ui/configurar.js',
+  './src/ui/historico.js',
   './src/ui/mes.js',
 ];
 

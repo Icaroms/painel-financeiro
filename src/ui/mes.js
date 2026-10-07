@@ -14,6 +14,7 @@ import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
 import { tituloDoMes } from '../painel.js';
 import { resumoDoMes, excluirLancamento } from '../resumo-mes.js';
+import { gastoDaSemanaAtual } from '../historico.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -93,6 +94,13 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     else if (cor === 'amarelo') situacao = `Acelerado: sobram ${formatarCentavos(margemCentavos)}.`;
     else situacao = `Sobram ${formatarCentavos(margemCentavos)}.`;
     li.append(criar('p', { classe: 'regua-situacao secundario', texto: situacao }));
+
+    // Quanto a categoria gastou na semana de hoje (segunda a domingo).
+    const semana = gastoDaSemanaAtual(obterDados(), categoria.id, hojeLocal());
+    li.append(criar('p', {
+      classe: 'regua-semana secundario',
+      texto: `Nesta semana (${dataCurta(semana.inicio)} a ${dataCurta(semana.fim)}): ${formatarCentavos(semana.totalCentavos)}`,
+    }));
 
     return li;
   }
