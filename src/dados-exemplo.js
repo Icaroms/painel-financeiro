@@ -50,6 +50,7 @@ export function criarDadosDeExemplo(hoje) {
   ];
 
   return {
+    origem: 'exemplo', // a tela mostra a faixa "dados de exemplo" (veja src/inicio.js)
     meses: [registroMes],
     categorias: [lanches, transporte, mercado, diversos],
     fixos: [academia, streaming, consulta],
