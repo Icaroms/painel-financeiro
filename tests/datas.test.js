@@ -13,6 +13,8 @@ import {
   mesDaData,
   diasNoMes,
   diaDaData,
+  somarMeses,
+  mesesEntre,
 } from '../src/datas.js';
 
 describe('hojeLocal', () => {
@@ -94,5 +96,32 @@ describe('diaDaData', () => {
 
   it('lança erro para data inválida', () => {
     assert.throws(() => diaDaData('2026-11-31'), TypeError);
+  });
+});
+
+describe('somarMeses', () => {
+  it('avança e volta meses, virando o ano', () => {
+    assert.equal(somarMeses('2026-11', 1), '2026-12');
+    assert.equal(somarMeses('2026-11', 3), '2027-02');
+    assert.equal(somarMeses('2026-01', -1), '2025-12');
+    assert.equal(somarMeses('2026-10', -14), '2025-08');
+    assert.equal(somarMeses('2026-10', 0), '2026-10');
+  });
+
+  it('lança erro para mês ou quantidade inválidos', () => {
+    assert.throws(() => somarMeses('2026-13', 1), TypeError);
+    assert.throws(() => somarMeses('2026-10', 1.5), TypeError);
+  });
+});
+
+describe('mesesEntre', () => {
+  it('conta os meses do início ao fim, incluindo os dois', () => {
+    assert.equal(mesesEntre('2026-10', '2026-10'), 1);
+    assert.equal(mesesEntre('2026-10', '2026-12'), 3);
+    assert.equal(mesesEntre('2026-05', '2027-04'), 12);
+  });
+
+  it('lança erro para mês inválido', () => {
+    assert.throws(() => mesesEntre('2026-10', '2026-13'), TypeError);
   });
 });

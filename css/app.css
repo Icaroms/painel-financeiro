@@ -447,3 +447,56 @@ body {
   border-radius: 50%;
   background: var(--amarelo);
 }
+
+/* ---------- Contas fixas (vista Configurar) ---------- */
+.lista-fixos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.fixo { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--linha); }
+.fixo:first-child { padding-top: 0; }
+.fixo-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.fixo-nome { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.fixo-valor { font-family: var(--fonte-numero); font-size: 18px; font-weight: 600; white-space: nowrap; }
+.fixo-detalhe { margin: 0; font-size: 14px; line-height: 1.4; }
+.etiqueta {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--amarelo);
+  border-radius: 999px;
+  color: var(--texto);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.fixo .acoes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.fixo .acoes .botao-pequeno { padding: 0 10px; }
+
+/* Formulário de conta fixa (cadastro e edição) */
+.form-fixo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  margin-top: 4px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--fundo);
+}
+.form-fixo .inteira { grid-column: 1 / -1; }
+.form-fixo .campo input, .form-fixo select { background: var(--painel); }
+.form-fixo .acoes { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.form-fixo .erro { grid-column: 1 / -1; }
+.form-fixo .dica { grid-column: 1 / -1; margin: 0; font-size: 14px; }
+
+.campo select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  color: var(--texto);
+  font-family: var(--fonte-texto);
+  font-size: 16px;
+}
+.campo select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+
+#botao-novo-fixo { align-self: stretch; }
