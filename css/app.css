@@ -7,6 +7,14 @@
  * - o tema segue o do aparelho: claro de dia, azul-ardósia à noite.
  */
 
+/* ---------- Fontes (dentro do projeto, licença SIL OFL em fontes/) ---------- */
+/* font-display: swap mostra o texto na hora com a fonte do sistema e troca quando a Barlow carrega. */
+@font-face { font-family: 'Barlow'; font-style: normal; font-weight: 400; font-display: swap; src: url('../fontes/barlow-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow'; font-style: normal; font-weight: 500; font-display: swap; src: url('../fontes/barlow-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow'; font-style: normal; font-weight: 600; font-display: swap; src: url('../fontes/barlow-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('../fontes/barlow-semi-condensed-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('../fontes/barlow-semi-condensed-latin-600-normal.woff2') format('woff2'); }
+
 /* ---------- Cores (tema claro) ---------- */
 :root {
   --fundo: #DDE3E8;
