@@ -15,7 +15,7 @@ import { mesDaData } from './datas.js';
 /**
  * @param {string} hoje "AAAA-MM-DD".
  * @returns {{
- *   registroMes: object,
+ *   meses: object[],
  *   categorias: object[],
  *   fixos: object[],
  *   lancamentos: object[],
@@ -50,7 +50,7 @@ export function criarDadosDeExemplo(hoje) {
   ];
 
   return {
-    registroMes,
+    meses: [registroMes],
     categorias: [lanches, transporte, mercado, diversos],
     fixos: [academia, streaming, consulta],
     lancamentos,
