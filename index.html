@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover: no iPhone, a tela usa a área toda; as margens seguras ficam no CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#DDE3E8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16212B" media="(prefers-color-scheme: dark)">
+  <title>Painel Financeiro</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+
+  <!-- type="module": permite usar import/export, os mesmos dos arquivos em src/ -->
+  <script type="module" src="src/ui/app.js"></script>
+</head>
+<body>
+  <main class="tela" id="tela" data-cor="neutro">
+
+    <header class="cabecalho">
+      <div class="cabecalho-linha">
+        <h1 id="titulo-mes">Painel Financeiro</h1>
+        <span class="secundario" id="dia-texto"></span>
+      </div>
+      <p class="secundario" id="linha-saldo"></p>
+    </header>
+
+    <section class="mostrador" aria-label="Mostrador da categoria">
+      <svg width="300" height="166" viewBox="0 0 300 166" aria-hidden="true">
+        <!-- Trilho cinza e, por cima, o arco colorido que "enche" conforme o uso -->
+        <path class="arco-trilho" d="M 30 150 A 120 120 0 0 1 270 150"></path>
+        <path class="arco-uso" id="arco-uso" d="M 30 150 A 120 120 0 0 1 270 150" stroke-dasharray="0 377"></path>
+        <g id="marcas"></g>
+        <polygon class="marcador-hoje" id="marcador-hoje" points="0,0 0,0 0,0"></polygon>
+        <line class="ponteiro" id="ponteiro" x1="150" y1="150" x2="54" y2="150"></line>
+        <circle class="eixo" cx="150" cy="150" r="9"></circle>
+        <circle class="eixo-centro" cx="150" cy="150" r="4"></circle>
+      </svg>
+      <div class="mostrador-leitura">
+        <span class="mostrador-numero" id="numero"></span>
+        <span class="secundario" id="legenda"></span>
+      </div>
+      <div class="mostrador-chaves secundario">
+        <span>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><line class="chave-ponteiro" x1="2" y1="12" x2="12" y2="2"></line></svg>
+          <span id="usado-texto"></span>
+        </span>
+        <span>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><polygon class="marcador-hoje" points="6,11 1,2 11,2"></polygon></svg>
+          <span id="hoje-texto"></span>
+        </span>
+      </div>
+    </section>
+
+    <!-- role="status": leitores de tela anunciam a frase quando ela muda -->
+    <div class="aviso" role="status">
+      <span class="luz" aria-hidden="true"></span>
+      <span id="frase"></span>
+    </div>
+
+    <form class="formulario" id="formulario" autocomplete="off">
+      <div class="campo-valor">
+        <label for="valor" class="secundario">Valor</label>
+        <div class="valor-linha">
+          <span class="valor-moeda" aria-hidden="true">R$</span>
+          <input id="valor" name="valor" inputmode="decimal" placeholder="0,00" enterkeyhint="done">
+        </div>
+      </div>
+
+      <fieldset class="grupo">
+        <legend class="secundario">Categoria</legend>
+        <div class="chips chips-2" id="chips-categoria"></div>
+      </fieldset>
+
+      <fieldset class="grupo">
+        <legend class="secundario">Pagamento</legend>
+        <div class="chips chips-4" id="chips-pagamento"></div>
+      </fieldset>
+
+      <button type="submit" class="botao-lancar" id="botao-lancar" disabled>Lançar gasto</button>
+    </form>
+
+    <footer class="rodape secundario">
+      <span id="rodape-texto"></span>
+      <button type="button" class="botao-texto" id="botao-restaurar">Restaurar exemplo</button>
+    </footer>
+
+  </main>
+</body>
+</html>
