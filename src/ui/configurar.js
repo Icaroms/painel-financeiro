@@ -1,5 +1,6 @@
 /**
- * Vista "Configurar": dinheiro do mês, categorias e formas de pagamento.
+ * Vista "Configurar": dinheiro do mês, contas fixas, categorias e formas
+ * de pagamento.
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As mudanças nos dados
  * são feitas pelas funções puras de src/configuracao.js (testadas no Node).
@@ -27,6 +28,15 @@ import {
   adicionarFormaPagamento,
   removerFormaPagamento,
 } from '../configuracao.js';
+import {
+  fixosDoMes,
+  adicionarFixo,
+  editarFixo,
+  encerrarFixo,
+  definirValorNoMes,
+  mesesDoParcelamento,
+  parcelaNoMes,
+} from '../fixos.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -76,6 +86,10 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
     listaFormas: elemento('lista-formas'),
     formNovaForma: elemento('form-nova-forma'),
     erroNovaForma: elemento('erro-nova-forma'),
+    totalFixos: elemento('total-fixos'),
+    listaFixos: elemento('lista-fixos'),
+    areaNovoFixo: elemento('area-novo-fixo'),
+    botaoNovoFixo: elemento('botao-novo-fixo'),
   };
 
   const mesAtual = () => mesDaData(hojeLocal());
@@ -144,6 +158,318 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
         el.saldoInicial.focus();
       }
     }
+  });
+
+  /* ---------------- Contas fixas ---------------- */
+
+  /**
+   * Qual formulário de conta fixa está aberto (só um por vez):
+   * null, { id: 'novo' }, { id, modo: 'editar' } ou { id, modo: 'valor-mes' }.
+   */
+  let fixoAberto = null;
+
+  /** "Termina em agosto de 2027" para um mês final. */
+  const textoTermino = (mesFinal) => `termina em ${tituloDoMes(mesFinal).toLowerCase()}`;
+
+  /** Cria um par de botões de rádio no estilo dos chips da tela de lançamento. */
+  function chipsDoTipo(nomeGrupo, tipoInicial) {
+    const grupo = criar('div', { classe: 'chips chips-2', role: 'radiogroup', 'aria-label': 'Tipo de conta' });
+    for (const [valor, rotulo] of [['mensal', 'Mensal'], ['parcelado', 'Parcelado']]) {
+      const label = criar('label', { classe: 'chip' });
+      const input = criar('input', { type: 'radio', name: nomeGrupo, value: valor });
+      input.checked = valor === tipoInicial;
+      label.append(input, criar('span', { texto: rotulo }));
+      grupo.append(label);
+    }
+    return grupo;
+  }
+
+  /** Cria um campo com rótulo. */
+  function campo(rotulo, controle, classeExtra = '') {
+    const label = criar('label', { classe: `campo ${classeExtra}`.trim() });
+    label.append(criar('span', { classe: 'secundario', texto: rotulo }), controle);
+    return label;
+  }
+
+  /** Cria um campo de dinheiro (com "R$" fixo à esquerda). */
+  function campoDinheiro(rotulo, nome, valorInicial, classeExtra = '') {
+    const caixa = criar('span', { classe: 'campo-dinheiro' });
+    const input = criar('input', { name: nome, inputmode: 'decimal', placeholder: '0,00' });
+    if (valorInicial !== undefined) input.value = valorInicial;
+    caixa.append(criar('span', { texto: 'R$', 'aria-hidden': 'true' }), input);
+    return { rotulo: campo(rotulo, caixa, classeExtra), input };
+  }
+
+  /**
+   * Formulário de conta fixa, usado para cadastrar e para editar.
+   *
+   * @param {object|null} fixo       null para cadastro; o fixo para edição.
+   * @param {string}      textoBotao "Adicionar" ou "Salvar".
+   * @param {(dados: object) => Promise<void>} aoSalvar
+   */
+  function formularioDoFixo(fixo, textoBotao, aoSalvar) {
+    const mes = mesAtual();
+    const dados = obterDados();
+    // Na edição de um parcelado, os campos já vêm com "parcela X de Y" deste mês.
+    const parcelaInicial = fixo ? parcelaNoMes(fixo, mes) : null;
+
+    const form = criar('form', { classe: 'form-fixo', autocomplete: 'off', novalidate: '' });
+
+    const inputNome = criar('input', { name: 'nome', maxlength: '40', placeholder: 'Ex.: Faculdade' });
+    inputNome.value = fixo ? fixo.nome : '';
+
+    const valor = campoDinheiro('Valor', 'valor', fixo ? textoDoValor(fixo.valorCentavos) : '');
+
+    const inputDia = criar('input', { name: 'dia', inputmode: 'numeric', placeholder: '1 a 31', maxlength: '2' });
+    inputDia.value = fixo ? String(fixo.diaVencimento) : '';
+
+    const select = criar('select', { name: 'forma' });
+    for (const forma of dados.formasPagamento) {
+      const opcao = criar('option', { texto: forma, value: forma });
+      opcao.selected = fixo ? fixo.formaPagamento === forma : false;
+      select.append(opcao);
+    }
+
+    const grupoTipo = criar('fieldset', { classe: 'grupo inteira' });
+    grupoTipo.append(
+      criar('legend', { classe: 'secundario', texto: 'Tipo' }),
+      chipsDoTipo(`tipo-${fixo ? fixo.id : 'novo'}`, parcelaInicial ? 'parcelado' : 'mensal'),
+    );
+
+    const inputParcela = criar('input', { name: 'parcela', inputmode: 'numeric', placeholder: 'Ex.: 3', maxlength: '3' });
+    const inputTotal = criar('input', { name: 'total', inputmode: 'numeric', placeholder: 'Ex.: 12', maxlength: '3' });
+    if (parcelaInicial) {
+      inputParcela.value = String(parcelaInicial.atual);
+      inputTotal.value = String(parcelaInicial.total);
+    }
+    const campoParcela = campo('Parcela deste mês', inputParcela);
+    const campoTotal = campo('Total de parcelas', inputTotal);
+    const dica = criar('p', { classe: 'dica secundario' });
+
+    const erro = criar('span', { classe: 'erro' });
+    const acoes = criar('div', { classe: 'acoes' });
+    const botaoCancelar = criar('button', { classe: 'botao-pequeno', texto: 'Cancelar', type: 'button' });
+    const botaoSalvar = criar('button', { classe: 'botao-pequeno', texto: textoBotao, type: 'submit' });
+    acoes.append(botaoCancelar, botaoSalvar);
+
+    /** Tipo escolhido nos chips. */
+    const tipoEscolhido = () => form.querySelector('input[type="radio"]:checked')?.value ?? 'mensal';
+
+    /** Mostra os campos de parcela só para parcelado, com a data de término ao vivo. */
+    function atualizarParcelas() {
+      const parcelado = tipoEscolhido() === 'parcelado';
+      campoParcela.hidden = !parcelado;
+      campoTotal.hidden = !parcelado;
+      dica.hidden = !parcelado;
+      if (!parcelado) return;
+      try {
+        const { mesFinal } = mesesDoParcelamento(mes, Number(inputParcela.value), Number(inputTotal.value));
+        dica.textContent = `A conta ${textoTermino(mesFinal)}.`;
+      } catch {
+        dica.textContent = 'Informe a parcela que cai neste mês e o total, ex.: 3 de 12.';
+      }
+    }
+    form.addEventListener('input', atualizarParcelas);
+    form.addEventListener('change', atualizarParcelas);
+    atualizarParcelas();
+
+    botaoCancelar.addEventListener('click', () => {
+      fixoAberto = null;
+      renderizarFixos();
+    });
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      mostrarErro(erro, null, '');
+      try {
+        await aoSalvar({
+          nome: inputNome.value,
+          valorCentavos: lerValorPositivo(valor.input.value, 'valorCentavos'),
+          diaVencimento: Number(inputDia.value.trim() || NaN),
+          formaPagamento: select.value,
+          tipo: tipoEscolhido(),
+          parcelaAtual: Number(inputParcela.value.trim() || NaN),
+          totalParcelas: Number(inputTotal.value.trim() || NaN),
+        });
+        fixoAberto = null;
+        renderizarFixos();
+      } catch (falha) {
+        if (!(falha instanceof ErroValidacao)) throw falha;
+        mostrarErro(erro, null, falha.message);
+      }
+    });
+
+    form.append(
+      campo('Nome', inputNome, 'inteira'),
+      valor.rotulo,
+      campo('Dia do vencimento', inputDia),
+      campo('Pagamento', select, 'inteira'),
+      grupoTipo,
+      campoParcela,
+      campoTotal,
+      dica,
+      erro,
+      acoes,
+    );
+    return form;
+  }
+
+  /** Formulário "Valor deste mês": muda o valor só no mês atual. */
+  function formularioValorDoMes(item) {
+    const mes = mesAtual();
+    const form = criar('form', { classe: 'form-fixo', autocomplete: 'off', novalidate: '' });
+    const valor = campoDinheiro(
+      `Valor só em ${tituloDoMes(mes).toLowerCase()}`, 'valor', textoDoValor(item.valorCentavos), 'inteira',
+    );
+    const erro = criar('span', { classe: 'erro' });
+    const acoes = criar('div', { classe: 'acoes' });
+
+    const botaoCancelar = criar('button', { classe: 'botao-pequeno', texto: 'Cancelar', type: 'button' });
+    botaoCancelar.addEventListener('click', () => {
+      fixoAberto = null;
+      renderizarFixos();
+    });
+    acoes.append(botaoCancelar);
+
+    if (item.ajustado) {
+      const botaoPadrao = criar('button', {
+        classe: 'botao-pequeno', type: 'button',
+        texto: `Voltar ao padrão (${formatarCentavos(item.fixo.valorCentavos)})`,
+      });
+      botaoPadrao.addEventListener('click', async () => {
+        await aplicarMudanca(definirValorNoMes(obterDados(), mes, item.fixo.id, null), 'Valor padrão restaurado.');
+        fixoAberto = null;
+        renderizarFixos();
+      });
+      acoes.append(botaoPadrao);
+    }
+    acoes.append(criar('button', { classe: 'botao-pequeno', texto: 'Salvar só neste mês', type: 'submit' }));
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      mostrarErro(erro, null, '');
+      try {
+        const centavos = lerValorPositivo(valor.input.value, 'valorCentavos');
+        await aplicarMudanca(
+          definirValorNoMes(obterDados(), mes, item.fixo.id, centavos),
+          `Valor de "${item.fixo.nome}" ajustado só neste mês.`,
+        );
+        fixoAberto = null;
+        renderizarFixos();
+      } catch (falha) {
+        if (!(falha instanceof ErroValidacao)) throw falha;
+        mostrarErro(erro, valor.input, falha.message);
+      }
+    });
+
+    form.append(
+      valor.rotulo,
+      criar('p', { classe: 'dica secundario', texto: 'Os outros meses continuam com o valor padrão.' }),
+      erro,
+      acoes,
+    );
+    return form;
+  }
+
+  /** Monta o item de uma conta fixa na lista. */
+  function itemDoFixo(item) {
+    const { fixo, valorCentavos, ajustado, parcela } = item;
+    const mes = mesAtual();
+    const li = criar('li', { classe: 'fixo' });
+
+    const topo = criar('div', { classe: 'fixo-topo' });
+    topo.append(
+      criar('span', { classe: 'fixo-nome', texto: fixo.nome }),
+      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(valorCentavos) }),
+    );
+
+    const tipoTexto = parcela
+      ? `Parcela ${parcela.atual} de ${parcela.total}, ${textoTermino(fixo.mesFinal)}`
+      : 'Mensal';
+    const detalhe = criar('p', {
+      classe: 'fixo-detalhe secundario',
+      texto: `Dia ${fixo.diaVencimento} · ${fixo.formaPagamento} · ${tipoTexto}`,
+    });
+    if (ajustado) detalhe.append(criar('span', { classe: 'etiqueta', texto: 'valor só deste mês' }));
+
+    const acoes = criar('div', { classe: 'acoes' });
+    const botaoEncerrar = criar('button', {
+      classe: 'botao-pequeno perigo', type: 'button', texto: 'Encerrar',
+      'aria-label': `Encerrar ${fixo.nome}`,
+    });
+    const botaoValor = criar('button', {
+      classe: 'botao-pequeno', type: 'button', texto: 'Valor deste mês',
+      'aria-label': `Mudar o valor de ${fixo.nome} só neste mês`,
+    });
+    const botaoEditar = criar('button', {
+      classe: 'botao-pequeno', type: 'button', texto: 'Editar', 'aria-label': `Editar ${fixo.nome}`,
+    });
+    acoes.append(botaoEncerrar, botaoValor, botaoEditar);
+
+    botaoEditar.addEventListener('click', () => {
+      fixoAberto = { id: fixo.id, modo: 'editar' };
+      renderizarFixos();
+    });
+    botaoValor.addEventListener('click', () => {
+      fixoAberto = { id: fixo.id, modo: 'valor-mes' };
+      renderizarFixos();
+    });
+    botaoEncerrar.addEventListener('click', async () => {
+      const criadoAgora = fixo.mesInicial >= mes;
+      const pergunta = criadoAgora
+        ? `Excluir "${fixo.nome}"?
+
+Ela foi cadastrada neste mês, então sai de vez.`
+        : `Encerrar "${fixo.nome}"?
+
+Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses anteriores não mudam.`;
+      if (!window.confirm(pergunta)) return;
+
+      const { estado, como } = encerrarFixo(obterDados(), fixo.id, mes);
+      await aplicarMudanca(estado, como === 'excluido' ? `"${fixo.nome}" excluída.` : `"${fixo.nome}" encerrada.`);
+      fixoAberto = null;
+      renderizarFixos();
+    });
+
+    li.append(topo, detalhe, acoes);
+
+    if (fixoAberto?.id === fixo.id && fixoAberto.modo === 'editar') {
+      li.append(formularioDoFixo(fixo, 'Salvar', async (dados) => {
+        await aplicarMudanca(editarFixo(obterDados(), fixo.id, dados, mes), 'Conta fixa salva.');
+      }));
+    }
+    if (fixoAberto?.id === fixo.id && fixoAberto.modo === 'valor-mes') {
+      li.append(formularioValorDoMes(item));
+    }
+    return li;
+  }
+
+  function renderizarFixos() {
+    const mes = mesAtual();
+    const itens = fixosDoMes(obterDados(), mes);
+    const total = itens.reduce((soma, item) => soma + item.valorCentavos, 0);
+
+    el.totalFixos.replaceChildren(
+      itens.length === 0 ? 'Nenhuma conta fixa neste mês.' : `${itens.length} conta(s) neste mês, total: `,
+      ...(itens.length === 0 ? [] : [criar('strong', { texto: formatarCentavos(total) })]),
+    );
+    el.listaFixos.replaceChildren(...itens.map(itemDoFixo));
+
+    const cadastrando = fixoAberto?.id === 'novo';
+    el.botaoNovoFixo.hidden = cadastrando;
+    el.areaNovoFixo.replaceChildren(
+      ...(cadastrando
+        ? [formularioDoFixo(null, 'Adicionar', async (dados) => {
+            await aplicarMudanca(adicionarFixo(obterDados(), dados, mes), `"${dados.nome.trim()}" adicionada.`);
+          })]
+        : []),
+    );
+  }
+
+  el.botaoNovoFixo.addEventListener('click', () => {
+    fixoAberto = { id: 'novo' };
+    renderizarFixos();
+    el.areaNovoFixo.querySelector('input')?.focus();
   });
 
   /* ---------------- Categorias ---------------- */
@@ -279,6 +605,7 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
 
   function renderizar() {
     renderizarMes();
+    renderizarFixos();
     renderizarCategorias();
     renderizarFormas();
   }
