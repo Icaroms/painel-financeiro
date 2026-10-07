@@ -122,3 +122,42 @@ export function diaDaData(data) {
   }
   return Number(data.slice(8, 10));
 }
+
+/**
+ * Soma (ou subtrai) meses: somarMeses("2026-11", 3) → "2027-02";
+ * somarMeses("2026-01", -1) → "2025-12".
+ *
+ * @param {string} mes        "AAAA-MM".
+ * @param {number} quantidade Inteiro (negativo volta no tempo).
+ * @returns {string} "AAAA-MM".
+ */
+export function somarMeses(mes, quantidade) {
+  if (!ehMesValido(mes)) {
+    throw new TypeError(`Mês inválido: "${mes}". Use o formato AAAA-MM.`);
+  }
+  if (!Number.isInteger(quantidade)) {
+    throw new TypeError(`A quantidade de meses deve ser um número inteiro, recebido: ${quantidade}.`);
+  }
+
+  // Conta tudo em "meses desde o ano 0" e converte de volta.
+  const total = Number(mes.slice(0, 4)) * 12 + (Number(mes.slice(5, 7)) - 1) + quantidade;
+  const ano = Math.floor(total / 12);
+  const numeroMes = (total % 12) + 1;
+  return `${ano}-${String(numeroMes).padStart(2, '0')}`;
+}
+
+/**
+ * Quantos meses existem de um mês até outro, contando os dois:
+ * mesesEntre("2026-10", "2026-12") → 3.
+ *
+ * @param {string} inicio "AAAA-MM".
+ * @param {string} fim    "AAAA-MM" (igual ou depois do início).
+ * @returns {number}
+ */
+export function mesesEntre(inicio, fim) {
+  if (!ehMesValido(inicio) || !ehMesValido(fim)) {
+    throw new TypeError(`Meses inválidos: "${inicio}" e "${fim}". Use o formato AAAA-MM.`);
+  }
+  const contar = (m) => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7));
+  return contar(fim) - contar(inicio) + 1;
+}
