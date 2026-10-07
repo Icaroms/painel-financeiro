@@ -17,7 +17,9 @@ import { marcasDaEscala } from '../mostrador.js';
 import { criarDadosDeExemplo } from '../dados-exemplo.js';
 import { calcularPainel } from '../painel.js';
 import { empacotar, desempacotar } from '../persistencia.js';
+import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
+import { entregarArquivo } from './arquivos.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -55,7 +57,13 @@ const el = {
   botaoLancar: elemento('botao-lancar'),
   rodapeTexto: elemento('rodape-texto'),
   botaoRestaurar: elemento('botao-restaurar'),
+  botaoExportar: elemento('botao-exportar'),
+  botaoImportar: elemento('botao-importar'),
+  arquivoBackup: elemento('arquivo-backup'),
 };
+
+/** Tamanho máximo aceito para um arquivo de backup (5 MB). */
+const TAMANHO_MAXIMO_BACKUP = 5 * 1024 * 1024;
 
 /* ------------------------------------------------------------------ */
 /* Estado da tela                                                     */
@@ -272,6 +280,74 @@ el.botaoRestaurar.addEventListener('click', async () => {
 
   const gravou = await gravar(dados);
   el.rodapeTexto.textContent = gravou ? 'Exemplo restaurado.' : avisoSemGravacao();
+});
+
+/* ------------------------------------------------------------------ */
+/* Backup                                                             */
+/* ------------------------------------------------------------------ */
+
+el.botaoExportar.addEventListener('click', async () => {
+  const nome = nomeDoArquivoBackup();
+  try {
+    const resultado = await entregarArquivo(nome, gerarBackup(dados));
+    el.rodapeTexto.textContent = resultado === 'cancelado'
+      ? 'Exportação cancelada.'
+      : `Backup exportado: ${nome}`;
+  } catch (erro) {
+    console.error(erro);
+    el.rodapeTexto.textContent = 'Não foi possível exportar o backup.';
+  }
+});
+
+// O botão só abre a escolha de arquivo; a leitura acontece no "change" abaixo.
+el.botaoImportar.addEventListener('click', () => {
+  el.arquivoBackup.value = ''; // permite escolher o mesmo arquivo duas vezes seguidas
+  el.arquivoBackup.click();
+});
+
+el.arquivoBackup.addEventListener('change', async () => {
+  const arquivo = el.arquivoBackup.files[0];
+  if (!arquivo) return; // a pessoa fechou a janela sem escolher
+
+  if (arquivo.size > TAMANHO_MAXIMO_BACKUP) {
+    el.rodapeTexto.textContent = 'Arquivo grande demais para ser um backup do app.';
+    return;
+  }
+
+  let lido;
+  try {
+    lido = lerBackup(await arquivo.text(), { hoje: hojeLocal() });
+  } catch (erro) {
+    if (!(erro instanceof ErroValidacao)) throw erro;
+    el.rodapeTexto.textContent = erro.message;
+    return;
+  }
+
+  const salvoEm = new Date(lido.resumo.salvoEm).toLocaleString('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+  const confirmou = window.confirm(
+    `Importar o backup de ${salvoEm}, com ${lido.resumo.lancamentos} lançamento(s)?\n\n` +
+      'Os dados atuais deste aparelho serão substituídos.',
+  );
+  if (!confirmou) {
+    el.rodapeTexto.textContent = 'Importação cancelada.';
+    return;
+  }
+
+  dados = lido.dados;
+  el.valor.value = '';
+  montarChips();
+  atualizar();
+
+  // A pessoa confirmou a troca: grava mesmo se os dados antigos estavam
+  // ilegíveis. Importar um backup é justamente o jeito de recuperar o app.
+  gravacaoDisponivel = true;
+  const gravou = await gravar(dados);
+  el.rodapeTexto.textContent = gravou
+    ? `Backup importado: ${lido.resumo.lancamentos} lançamento(s).`
+    : avisoSemGravacao();
 });
 
 /* ------------------------------------------------------------------ */

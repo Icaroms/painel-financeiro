@@ -227,3 +227,29 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ---------- Backup ---------- */
+.backup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--linha);
+}
+.backup h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.backup p { margin: 0; font-size: 13px; line-height: 1.4; }
+.backup-botoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+
+.botao-secundario {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--texto);
+  font-family: var(--fonte-texto);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.botao-secundario:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }

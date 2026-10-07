@@ -84,9 +84,21 @@
     </form>
 
     <footer class="rodape secundario">
-      <span id="rodape-texto"></span>
+      <!-- aria-live: leitores de tela anunciam as mensagens do rodapé -->
+      <span id="rodape-texto" aria-live="polite"></span>
       <button type="button" class="botao-texto" id="botao-restaurar">Restaurar exemplo</button>
     </footer>
+
+    <section class="backup" aria-labelledby="titulo-backup">
+      <h2 id="titulo-backup">Backup</h2>
+      <p class="secundario">Os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
+      <div class="backup-botoes">
+        <button type="button" class="botao-secundario" id="botao-exportar">Exportar backup</button>
+        <button type="button" class="botao-secundario" id="botao-importar">Importar backup</button>
+      </div>
+      <!-- Campo de arquivo escondido: o botão "Importar backup" abre a escolha do arquivo -->
+      <input type="file" id="arquivo-backup" accept=".json,application/json" hidden>
+    </section>
 
   </main>
 </body>
