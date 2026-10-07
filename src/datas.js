@@ -161,3 +161,41 @@ export function mesesEntre(inicio, fim) {
   const contar = (m) => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7));
   return contar(fim) - contar(inicio) + 1;
 }
+
+/**
+ * Soma (ou subtrai) dias a uma data: somarDias("2026-10-30", 3) → "2026-11-02".
+ *
+ * @param {string} data       "AAAA-MM-DD".
+ * @param {number} quantidade Inteiro (negativo volta no tempo).
+ * @returns {string} "AAAA-MM-DD".
+ */
+export function somarDias(data, quantidade) {
+  if (!ehDataValida(data)) {
+    throw new TypeError(`Data inválida: "${data}". Use o formato AAAA-MM-DD.`);
+  }
+  if (!Number.isInteger(quantidade)) {
+    throw new TypeError(`A quantidade de dias deve ser um número inteiro, recebido: ${quantidade}.`);
+  }
+  // Contas em UTC: sem horário de verão nem fuso, um dia é sempre um dia.
+  const [ano, mes, dia] = data.split('-').map(Number);
+  const resultado = new Date(Date.UTC(ano, mes - 1, dia + quantidade));
+  return resultado.toISOString().slice(0, 10);
+}
+
+/**
+ * Segunda-feira da semana de uma data (semana de segunda a domingo):
+ * inicioDaSemana("2026-11-04") (quarta) → "2026-11-02" (segunda).
+ *
+ * @param {string} data "AAAA-MM-DD".
+ * @returns {string} "AAAA-MM-DD".
+ */
+export function inicioDaSemana(data) {
+  if (!ehDataValida(data)) {
+    throw new TypeError(`Data inválida: "${data}". Use o formato AAAA-MM-DD.`);
+  }
+  const [ano, mes, dia] = data.split('-').map(Number);
+  // getUTCDay: 0 = domingo, 1 = segunda ... 6 = sábado.
+  const diaDaSemana = new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
+  const voltar = diaDaSemana === 0 ? 6 : diaDaSemana - 1;
+  return somarDias(data, -voltar);
+}
