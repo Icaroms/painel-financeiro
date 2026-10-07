@@ -1,9 +1,10 @@
 /**
  * Tela de lançamento e navegação: liga o HTML (index.html) às regras do app.
  *
- * O app tem três vistas, trocadas pelo endereço:
+ * O app tem quatro vistas, trocadas pelo endereço:
  * - #lancar (padrão): lançar gasto com o veredito ao vivo (este arquivo);
  * - #mes: o resumo do mês, as categorias e as listas (./mes.js);
+ * - #historico: todos os gastos e os totais por semana (./historico.js);
  * - #configurar: dinheiro do mês, contas fixas, categorias, pagamentos e
  *   backup (a parte da configuração fica em ./configurar.js).
  * No primeiro acesso (nada gravado no aparelho), aparece antes a vista de
@@ -34,6 +35,7 @@ import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.
 import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
+import { iniciarHistorico } from './historico.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -77,6 +79,8 @@ const el = {
   abaConfigurar: elemento('aba-configurar'),
   telaMes: elemento('tela-mes'),
   abaMes: elemento('aba-mes'),
+  telaHistorico: elemento('tela-historico'),
+  abaHistorico: elemento('aba-historico'),
   pontoConfigurar: elemento('ponto-configurar'),
   telaBoasVindas: elemento('tela-boas-vindas'),
   botaoComecarZero: elemento('botao-comecar-zero'),
@@ -510,14 +514,15 @@ async function aplicarMudanca(novos, mensagem) {
 
 const configurar = iniciarConfigurar({ obterDados: () => dados, aplicarMudanca });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
+const historico = iniciarHistorico({ obterDados: () => dados });
 
 /* ------------------------------------------------------------------ */
 /* Navegação entre as vistas                                          */
 /* ------------------------------------------------------------------ */
 
 /**
- * Mostra a vista indicada no endereço: #mes, #configurar ou, para
- * qualquer outro valor, a vista de lançamento. Usar o endereço permite voltar
+ * Mostra a vista indicada no endereço: #mes, #historico, #configurar
+ * ou, para qualquer outro valor, a vista de lançamento. Usar o endereço permite voltar
  * com o botão "voltar" do navegador e abrir direto numa vista.
  */
 function mostrarVista() {
@@ -528,25 +533,31 @@ function mostrarVista() {
   if (primeiroAcesso) {
     el.tela.hidden = true;
     el.telaMes.hidden = true;
+    el.telaHistorico.hidden = true;
     el.telaConfigurar.hidden = true;
     return;
   }
 
-  const vistas = { '#mes': 'mes', '#configurar': 'configurar' };
+  const vistas = { '#mes': 'mes', '#historico': 'historico', '#configurar': 'configurar' };
   const vista = vistas[location.hash] ?? 'lancar';
 
   el.tela.hidden = vista !== 'lancar';
   el.telaMes.hidden = vista !== 'mes';
+  el.telaHistorico.hidden = vista !== 'historico';
   el.telaConfigurar.hidden = vista !== 'configurar';
   el.configMensagem.hidden = true;
 
   // aria-current="page" marca a aba ativa (para o estilo e para leitores de tela).
-  for (const [aba, nome] of [[el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaConfigurar, 'configurar']]) {
+  const abas = [
+    [el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaHistorico, 'historico'], [el.abaConfigurar, 'configurar'],
+  ];
+  for (const [aba, nome] of abas) {
     if (nome === vista) aba.setAttribute('aria-current', 'page');
     else aba.removeAttribute('aria-current');
   }
 
   if (vista === 'mes') resumo.renderizar();
+  if (vista === 'historico') historico.renderizar();
   if (vista === 'configurar') configurar.renderizar();
   window.scrollTo(0, 0);
 }

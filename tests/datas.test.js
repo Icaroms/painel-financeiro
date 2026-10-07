@@ -15,6 +15,8 @@ import {
   diaDaData,
   somarMeses,
   mesesEntre,
+  somarDias,
+  inicioDaSemana,
 } from '../src/datas.js';
 
 describe('hojeLocal', () => {
@@ -123,5 +125,31 @@ describe('mesesEntre', () => {
 
   it('lança erro para mês inválido', () => {
     assert.throws(() => mesesEntre('2026-10', '2026-13'), TypeError);
+  });
+});
+
+describe('somarDias', () => {
+  it('avança e volta dias, virando mês e ano', () => {
+    assert.equal(somarDias('2026-10-30', 3), '2026-11-02');
+    assert.equal(somarDias('2026-01-01', -1), '2025-12-31');
+    assert.equal(somarDias('2028-02-28', 1), '2028-02-29'); // bissexto
+    assert.equal(somarDias('2026-11-03', 0), '2026-11-03');
+  });
+
+  it('lança erro para data ou quantidade inválidas', () => {
+    assert.throws(() => somarDias('2026-02-30', 1), TypeError);
+    assert.throws(() => somarDias('2026-11-03', 0.5), TypeError);
+  });
+});
+
+describe('inicioDaSemana', () => {
+  it('devolve a segunda-feira da semana', () => {
+    assert.equal(inicioDaSemana('2026-11-02'), '2026-11-02'); // segunda
+    assert.equal(inicioDaSemana('2026-11-04'), '2026-11-02'); // quarta
+    assert.equal(inicioDaSemana('2026-11-08'), '2026-11-02'); // domingo é o fim da semana
+  });
+
+  it('a semana pode começar no mês anterior', () => {
+    assert.equal(inicioDaSemana('2026-11-01'), '2026-10-26'); // domingo, 1º de novembro
   });
 });

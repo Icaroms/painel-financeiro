@@ -180,6 +180,39 @@
 
   </main>
 
+  <!-- Vista "Histórico" -->
+  <main class="tela tela-historico" id="tela-historico" hidden>
+
+    <header class="cabecalho">
+      <h1>Histórico</h1>
+    </header>
+
+    <label class="campo">
+      <span class="secundario">Categoria</span>
+      <select id="historico-categoria"></select>
+    </label>
+
+    <section class="cartao" aria-labelledby="titulo-historico-semanas">
+      <h2 id="titulo-historico-semanas">Por semana</h2>
+      <p class="secundario explicacao">Semanas de segunda a domingo. Elas atravessam os meses.</p>
+      <p class="resumo-dinheiro" id="historico-media"></p>
+      <ul class="lista-mes" id="historico-semanas"></ul>
+      <nav class="paginacao" id="paginacao-semanas" aria-label="Páginas das semanas"></nav>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-historico-gastos">
+      <h2 id="titulo-historico-gastos">Gastos</h2>
+      <label class="campo">
+        <span class="secundario">Mês</span>
+        <select id="historico-mes"></select>
+      </label>
+      <p class="resumo-dinheiro" id="historico-total"></p>
+      <ul class="lista-mes" id="historico-gastos"></ul>
+      <nav class="paginacao" id="paginacao-gastos" aria-label="Páginas dos gastos"></nav>
+    </section>
+
+  </main>
+
   <!-- Vista "Configurar" -->
   <main class="tela tela-configurar" id="tela-configurar" hidden>
 
@@ -291,6 +324,7 @@
   <nav class="abas" id="abas" aria-label="Seções do app">
     <a href="#lancar" class="aba" id="aba-lancar">Lançar</a>
     <a href="#mes" class="aba" id="aba-mes">Mês</a>
+    <a href="#historico" class="aba" id="aba-historico">Histórico</a>
     <a href="#configurar" class="aba" id="aba-configurar">
       Configurar
       <span class="ponto" id="ponto-configurar" hidden></span>
