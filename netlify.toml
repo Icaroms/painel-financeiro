@@ -1,0 +1,28 @@
+# Configuração da publicação no Netlify.
+#
+# O app é feito só com HTML, CSS e JavaScript puro: não há nada para
+# "construir". O Netlify publica os arquivos da raiz do repositório
+# exatamente como estão, a cada merge na branch main.
+
+[build]
+  publish = "."
+
+# O service worker nunca pode ficar preso numa versão antiga guardada
+# pelo navegador: sem cache, cada atualização do app chega aos aparelhos.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Proteções básicas para todas as páginas.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # App pessoal: pede aos buscadores (Google etc.) para não listar o site.
+    X-Robots-Tag = "noindex"
+    # Impede que outro site abra o app dentro de uma moldura (iframe).
+    X-Frame-Options = "DENY"
+    # O navegador respeita o tipo de cada arquivo, sem "adivinhar".
+    X-Content-Type-Options = "nosniff"
+    # Não informa a outros sites de onde a pessoa veio.
+    Referrer-Policy = "no-referrer"
