@@ -614,3 +614,11 @@ if (carregado.dados === null) {
 
 // Sem esperar: o pedido roda em segundo plano e não atrasa a tela.
 pedirArmazenamentoPersistente();
+
+// PWA: instala o service worker (../../sw.js), que faz o app abrir sem internet.
+// Falhar aqui não impede o app de funcionar: só deixa de funcionar offline.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch((erro) => {
+    console.error('Não foi possível instalar o funcionamento offline.', erro);
+  });
+}
