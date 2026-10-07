@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "dev": "node scripts/servidor.js"
   },
   "engines": {
     "node": ">=20"
