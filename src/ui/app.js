@@ -1,8 +1,9 @@
 /**
  * Tela de lançamento e navegação: liga o HTML (index.html) às regras do app.
  *
- * O app tem duas vistas, trocadas pelo endereço:
+ * O app tem três vistas, trocadas pelo endereço:
  * - #lancar (padrão): lançar gasto com o veredito ao vivo (este arquivo);
+ * - #mes: o resumo do mês, as categorias e as listas (./mes.js);
  * - #configurar: dinheiro do mês, contas fixas, categorias, pagamentos e
  *   backup (a parte da configuração fica em ./configurar.js).
  * No primeiro acesso (nada gravado no aparelho), aparece antes a vista de
@@ -32,6 +33,7 @@ import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
 import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
+import { iniciarMes } from './mes.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -73,6 +75,8 @@ const el = {
   configMensagem: elemento('config-mensagem'),
   abaLancar: elemento('aba-lancar'),
   abaConfigurar: elemento('aba-configurar'),
+  telaMes: elemento('tela-mes'),
+  abaMes: elemento('aba-mes'),
   pontoConfigurar: elemento('ponto-configurar'),
   telaBoasVindas: elemento('tela-boas-vindas'),
   botaoComecarZero: elemento('botao-comecar-zero'),
@@ -470,13 +474,13 @@ el.arquivoBackup.addEventListener('change', async () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Vista Configurar e mensagens                                       */
+/* Vistas Mês e Configurar, e mensagens                              */
 /* ------------------------------------------------------------------ */
 
 let temporizadorMensagem = null;
 
 /**
- * Mostra uma mensagem da vista Configurar. Ela fica presa acima das abas
+ * Mostra uma mensagem das vistas Mês e Configurar. Ela fica presa acima das abas
  * (para ser vista de qualquer ponto da página) e some depois de 6 segundos.
  *
  * @param {string} texto
@@ -490,26 +494,30 @@ function avisar(texto) {
   }, 6000);
 }
 
-const configurar = iniciarConfigurar({
-  obterDados: () => dados,
-  aplicarMudanca: async (novos, mensagem) => {
-    dados = novos;
-    montarChips();
-    atualizar();
-    atualizarPonto();
-    atualizarFaixaExemplo();
-    const gravou = await gravar(dados);
-    avisar(gravou ? mensagem : avisoSemGravacao());
-  },
-});
+/**
+ * Troca os dados por uma versão alterada (vinda das vistas Mês ou
+ * Configurar), redesenha a tela de lançamento, grava e avisa.
+ */
+async function aplicarMudanca(novos, mensagem) {
+  dados = novos;
+  montarChips();
+  atualizar();
+  atualizarPonto();
+  atualizarFaixaExemplo();
+  const gravou = await gravar(dados);
+  avisar(gravou ? mensagem : avisoSemGravacao());
+}
+
+const configurar = iniciarConfigurar({ obterDados: () => dados, aplicarMudanca });
+const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 
 /* ------------------------------------------------------------------ */
 /* Navegação entre as vistas                                          */
 /* ------------------------------------------------------------------ */
 
 /**
- * Mostra a vista indicada no endereço: #configurar ou, para qualquer
- * outro valor, a vista de lançamento. Usar o endereço permite voltar
+ * Mostra a vista indicada no endereço: #mes, #configurar ou, para
+ * qualquer outro valor, a vista de lançamento. Usar o endereço permite voltar
  * com o botão "voltar" do navegador e abrir direto numa vista.
  */
 function mostrarVista() {
@@ -519,22 +527,26 @@ function mostrarVista() {
   el.abas.hidden = primeiroAcesso;
   if (primeiroAcesso) {
     el.tela.hidden = true;
+    el.telaMes.hidden = true;
     el.telaConfigurar.hidden = true;
     return;
   }
 
-  const vista = location.hash === '#configurar' ? 'configurar' : 'lancar';
+  const vistas = { '#mes': 'mes', '#configurar': 'configurar' };
+  const vista = vistas[location.hash] ?? 'lancar';
 
   el.tela.hidden = vista !== 'lancar';
+  el.telaMes.hidden = vista !== 'mes';
   el.telaConfigurar.hidden = vista !== 'configurar';
   el.configMensagem.hidden = true;
 
-  // aria-current marca a aba ativa (para o estilo e para leitores de tela).
-  el.abaLancar.toggleAttribute('aria-current', vista === 'lancar');
-  el.abaConfigurar.toggleAttribute('aria-current', vista === 'configurar');
-  if (vista === 'lancar') el.abaLancar.setAttribute('aria-current', 'page');
-  if (vista === 'configurar') el.abaConfigurar.setAttribute('aria-current', 'page');
+  // aria-current="page" marca a aba ativa (para o estilo e para leitores de tela).
+  for (const [aba, nome] of [[el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaConfigurar, 'configurar']]) {
+    if (nome === vista) aba.setAttribute('aria-current', 'page');
+    else aba.removeAttribute('aria-current');
+  }
 
+  if (vista === 'mes') resumo.renderizar();
   if (vista === 'configurar') configurar.renderizar();
   window.scrollTo(0, 0);
 }

@@ -38,11 +38,12 @@
   }
 }
 
-/* A cor do veredito vem do atributo data-cor da tela, que o JavaScript troca. */
-.tela[data-cor="verde"]    { --cor: var(--verde); }
-.tela[data-cor="amarelo"]  { --cor: var(--amarelo); }
-.tela[data-cor="vermelho"] { --cor: var(--vermelho); }
-.tela[data-cor="neutro"]   { --cor: var(--neutro); }
+/* A cor de aviso vem do atributo data-cor, que o JavaScript troca
+   (na tela de lançamento, nas réguas e na linha "Deve sobrar"). */
+[data-cor="verde"]    { --cor: var(--verde); }
+[data-cor="amarelo"]  { --cor: var(--amarelo); }
+[data-cor="vermelho"] { --cor: var(--vermelho); }
+[data-cor="neutro"]   { --cor: var(--neutro); }
 
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
@@ -425,7 +426,7 @@ body {
 .aba {
   position: relative;
   flex: 1 1 0;
-  max-width: 200px;
+  max-width: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -443,7 +444,7 @@ body {
 .ponto {
   position: absolute;
   top: 10px;
-  right: calc(50% - 56px);
+  right: calc(50% - 54px);
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -528,3 +529,70 @@ body {
 .boas-vindas-botoes .botao-principal { min-height: 56px; font-size: 20px; }
 .boas-vindas-botoes .botao-secundario { min-height: 48px; }
 .boas-vindas-botoes .botao-texto { align-self: center; margin-top: 4px; font-size: 15px; }
+
+/* ---------- Vista Mês ---------- */
+.contas { margin: 0; display: flex; flex-direction: column; }
+.conta-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--linha);
+}
+.conta-linha dt { display: flex; flex-direction: column; gap: 2px; font-size: 16px; }
+.conta-linha dt .secundario { font-size: 13px; }
+.conta-linha dd { margin: 0; font-family: var(--fonte-numero); font-size: 20px; font-weight: 600; white-space: nowrap; }
+.conta-total { border-bottom: none; padding-bottom: 0; }
+.conta-total dt { flex-direction: row; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; white-space: nowrap; }
+.conta-total dd { font-size: 30px; }
+.conta-total .luz { box-shadow: 0 0 0 4px var(--painel), 0 0 0 5px var(--cor); }
+.aviso-saldo { margin: 0; font-size: 14px; }
+.aviso-saldo a, .faixa-exemplo a { color: var(--texto); font-weight: 600; }
+
+/* Réguas das categorias: o "marcador de combustível" em versão horizontal */
+.lista-reguas { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.regua-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+.regua-nome { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.regua-valores { font-family: var(--fonte-numero); font-size: 16px; white-space: nowrap; }
+.regua {
+  position: relative;
+  height: 10px;
+  margin: 10px 0 6px; /* espaço em cima para o triângulo de "hoje" */
+  border-radius: 999px;
+  background: var(--linha);
+}
+.regua-uso { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--cor); }
+/* Triângulo apontando para baixo, logo acima da barra */
+.regua-hoje {
+  position: absolute;
+  top: -9px;
+  width: 0;
+  height: 0;
+  transform: translateX(-6px);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid var(--texto);
+}
+.regua-situacao { margin: 0; font-size: 14px; }
+
+/* Listas de contas fixas e gastos */
+.lista-mes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.linha-mes {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--linha);
+}
+.linha-mes:last-child { border-bottom: none; }
+.linha-mes-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.linha-mes-nome { font-size: 16px; font-weight: 500; overflow-wrap: anywhere; }
+.linha-mes-detalhe { font-size: 13px; }
+.linha-mes-valor { font-family: var(--fonte-numero); font-size: 17px; font-weight: 600; white-space: nowrap; }
+.linha-mes-lado { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.linha-mes-lado .botao-texto { padding: 2px 0; font-size: 13px; }
+/* Conta que ainda vai vencer: valor em segundo plano, como "a pagar" */
+.linha-mes.a-vencer .linha-mes-valor { color: var(--secundario); }
+.lista-vazia { padding: 4px 0; font-size: 14px; }

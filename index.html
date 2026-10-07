@@ -118,6 +118,59 @@
 
   </main>
 
+  <!-- Vista "Mês" -->
+  <main class="tela tela-mes" id="tela-mes" hidden>
+
+    <header class="cabecalho">
+      <div class="cabecalho-linha">
+        <h1 id="mes-titulo"></h1>
+        <span class="secundario" id="mes-dia"></span>
+      </div>
+    </header>
+
+    <section class="cartao" aria-label="Resumo do dinheiro do mês">
+      <!-- dl: lista de "termo e valor", como as linhas de um extrato -->
+      <dl class="contas">
+        <div class="conta-linha">
+          <dt>Dinheiro do mês <span class="secundario">saldo + renda</span></dt>
+          <dd id="mes-dinheiro"></dd>
+        </div>
+        <div class="conta-linha">
+          <dt>Já saiu <span class="secundario" id="mes-ja-saiu-detalhe"></span></dt>
+          <dd id="mes-ja-saiu"></dd>
+        </div>
+        <div class="conta-linha">
+          <dt>Ainda vai vencer <span class="secundario">contas fixas</span></dt>
+          <dd id="mes-a-vencer"></dd>
+        </div>
+        <div class="conta-linha conta-total" id="mes-linha-sobra" data-cor="neutro">
+          <dt><span class="luz" aria-hidden="true"></span>Deve sobrar</dt>
+          <dd id="mes-sobra"></dd>
+        </div>
+      </dl>
+      <p class="aviso-saldo secundario" id="mes-aviso-saldo" hidden>
+        O saldo do mês ainda não foi confirmado. <a href="#configurar">Confirmar em Configurar</a>.
+      </p>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-mes-categorias">
+      <h2 id="titulo-mes-categorias">Categorias</h2>
+      <p class="secundario explicacao">A barra mostra o quanto do orçamento já foi usado; o triângulo marca o dia de hoje.</p>
+      <ul class="lista-reguas" id="mes-categorias"></ul>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-mes-fixos">
+      <h2 id="titulo-mes-fixos">Contas fixas</h2>
+      <ul class="lista-mes" id="mes-fixos"></ul>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-mes-gastos">
+      <h2 id="titulo-mes-gastos">Gastos lançados</h2>
+      <ul class="lista-mes" id="mes-gastos"></ul>
+    </section>
+
+  </main>
+
   <!-- Vista "Configurar" -->
   <main class="tela tela-configurar" id="tela-configurar" hidden>
 
@@ -223,11 +276,12 @@
 
   </main>
 
-  <!-- Mensagens da vista Configurar: ficam presas acima das abas para serem vistas de qualquer ponto da página -->
+  <!-- Mensagens das vistas Mês e Configurar: ficam presas acima das abas para serem vistas de qualquer ponto da página -->
   <p class="mensagem" id="config-mensagem" aria-live="polite" hidden></p>
 
   <nav class="abas" id="abas" aria-label="Seções do app">
     <a href="#lancar" class="aba" id="aba-lancar">Lançar</a>
+    <a href="#mes" class="aba" id="aba-mes">Mês</a>
     <a href="#configurar" class="aba" id="aba-configurar">
       Configurar
       <span class="ponto" id="ponto-configurar" hidden></span>
