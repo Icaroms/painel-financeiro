@@ -73,7 +73,8 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
   const lancamentos = lancamentosValidosDoMes(estado.lancamentos, mes);
 
   // Contas fixas: um vencimento no dia 31 cai no último dia dos meses mais curtos.
-  const fixos = fixosDoMes(estado, mes).map((item) => {
+  // Contas opcionais não previstas no mês ficam de fora: valem zero e só poluiriam a lista.
+  const fixos = fixosDoMes(estado, mes).filter((item) => item.previsto).map((item) => {
     const diaEfetivo = Math.min(item.fixo.diaVencimento, ultimoDia);
     return { ...item, diaEfetivo, vencido: diaEfetivo <= dia };
   });

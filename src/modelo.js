@@ -127,9 +127,12 @@ export function criarCategoria({ nome, orcamentoCentavos }, opcoes = {}) {
  * @param {object}      [opcoes]             { agora, gerarId }
  */
 export function criarFixo(
-  { nome, valorCentavos, diaVencimento, formaPagamento, mesInicial, mesFinal = null },
+  { nome, valorCentavos, diaVencimento, formaPagamento, mesInicial, mesFinal = null, opcional = false },
   opcoes = {},
 ) {
+  if (typeof opcional !== 'boolean') {
+    throw new ErroValidacao('opcional', 'O campo "opcional" deve ser true ou false.');
+  }
   if (!Number.isInteger(diaVencimento) || diaVencimento < 1 || diaVencimento > 31) {
     throw new ErroValidacao('diaVencimento', 'O dia de vencimento deve ser um número de 1 a 31.');
   }
@@ -151,6 +154,9 @@ export function criarFixo(
     formaPagamento: exigirTexto(formaPagamento, 'formaPagamento', 'A forma de pagamento'),
     mesInicial: inicio,
     mesFinal,
+    // Conta opcional (ex.: dentista): só conta no mês em que tiver um valor
+    // definido para aquele mês (ajuste). O valor padrão vira só uma sugestão.
+    opcional,
   };
 }
 
@@ -298,15 +304,21 @@ export function ajustarFixoNoMes(registroMes, fixo, valorCentavos, { agora = new
 }
 
 /**
- * Valor que um fixo cobra num mês: o ajuste daquele mês, se existir;
- * senão, o valor padrão do fixo.
+ * Valor que um fixo cobra num mês:
+ * - com ajuste naquele mês, o valor do ajuste;
+ * - conta OPCIONAL sem ajuste: zero (ela não foi prevista para o mês);
+ * - senão, o valor padrão do fixo.
+ *
+ * Fixos gravados antes do campo "opcional" existir não têm o campo e
+ * contam como contas comuns.
  *
  * @param {object} fixo
  * @param {object} registroMes
  * @returns {number} Centavos.
  */
 export function valorDoFixoNoMes(fixo, registroMes) {
-  return registroMes.ajustesFixos[fixo.id] ?? fixo.valorCentavos;
+  if (Object.hasOwn(registroMes.ajustesFixos, fixo.id)) return registroMes.ajustesFixos[fixo.id];
+  return fixo.opcional === true ? 0 : fixo.valorCentavos;
 }
 
 /* ------------------------------------------------------------------ */

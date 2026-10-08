@@ -72,9 +72,13 @@ export function parcelaNoMes(fixo, mes) {
  * Fixos que contam num mês, com o valor daquele mês e a parcela.
  * Ordenados pelo dia de vencimento.
  *
+ * "previsto" é false só para uma conta opcional sem valor definido no
+ * mês: ela aparece na configuração (para poder ser ativada), mas não
+ * entra nas contas do mês.
+ *
  * @param {object} estado
  * @param {string} mes "AAAA-MM".
- * @returns {{ fixo: object, valorCentavos: number, ajustado: boolean, parcela: object|null }[]}
+ * @returns {{ fixo: object, valorCentavos: number, ajustado: boolean, previsto: boolean, parcela: object|null }[]}
  */
 export function fixosDoMes(estado, mes) {
   const registro = buscarMes(estado, mes);
@@ -85,12 +89,16 @@ export function fixosDoMes(estado, mes) {
   return estado.fixos
     .filter((f) => fixoAtivoNoMes(f, mes))
     .sort((a, b) => a.diaVencimento - b.diaVencimento)
-    .map((fixo) => ({
-      fixo,
-      valorCentavos: valorDoFixoNoMes(fixo, registro),
-      ajustado: Object.hasOwn(registro.ajustesFixos, fixo.id),
-      parcela: parcelaNoMes(fixo, mes),
-    }));
+    .map((fixo) => {
+      const ajustado = Object.hasOwn(registro.ajustesFixos, fixo.id);
+      return {
+        fixo,
+        valorCentavos: valorDoFixoNoMes(fixo, registro),
+        ajustado,
+        previsto: fixo.opcional !== true || ajustado,
+        parcela: parcelaNoMes(fixo, mes),
+      };
+    });
 }
 
 /* ------------------------------------------------------------------ */
@@ -106,7 +114,9 @@ export function fixosDoMes(estado, mes) {
  * @returns {object} Campos prontos para criarFixo.
  */
 function prepararCampos(estado, dados, mesReferencia) {
-  const { nome, valorCentavos, diaVencimento, formaPagamento, tipo, parcelaAtual, totalParcelas } = dados;
+  const {
+    nome, valorCentavos, diaVencimento, formaPagamento, tipo, parcelaAtual, totalParcelas, opcional = false,
+  } = dados;
 
   if (!estado.formasPagamento.includes(formaPagamento)) {
     throw new ErroValidacao('formaPagamento', 'Escolha uma das formas de pagamento da lista.');
@@ -121,7 +131,7 @@ function prepararCampos(estado, dados, mesReferencia) {
     throw new ErroValidacao('tipo', 'Escolha se a conta é mensal ou parcelada.');
   }
 
-  return { nome, valorCentavos, diaVencimento, formaPagamento, ...meses };
+  return { nome, valorCentavos, diaVencimento, formaPagamento, opcional, ...meses };
 }
 
 /**
@@ -137,6 +147,7 @@ function prepararCampos(estado, dados, mesReferencia) {
  * @param {number} dados.diaVencimento  1 a 31.
  * @param {string} dados.formaPagamento Precisa estar na lista de formas de pagamento.
  * @param {'mensal'|'parcelado'} dados.tipo
+ * @param {boolean} [dados.opcional]     Conta que nem todo mês acontece (ex.: dentista).
  * @param {number} [dados.parcelaAtual]  Só para parcelado.
  * @param {number} [dados.totalParcelas] Só para parcelado.
  * @param {string} mesReferencia "AAAA-MM" (o mês atual).
@@ -185,6 +196,7 @@ export function editarFixo(estado, id, dados, mesReferencia, { agora = new Date(
     formaPagamento: validado.formaPagamento,
     mesInicial: validado.mesInicial,
     mesFinal: validado.mesFinal,
+    opcional: validado.opcional,
     atualizadoEm: agora.toISOString(),
   };
 
