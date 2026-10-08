@@ -2,9 +2,10 @@
  * Resumo do mês: tudo o que a vista "Mês" mostra.
  *
  * - Quanto dinheiro o mês tem (saldo inicial + renda prevista);
- * - quanto já saiu (contas fixas já vencidas + gastos lançados);
- * - quanto ainda vai vencer (contas fixas com vencimento depois de hoje);
+ * - quanto já foi PAGO (concretizado): contas marcadas como pagas + gastos lançados;
+ * - quanto ainda está PREVISTO (estipulado): contas que ainda vão sair;
  * - quanto deve sobrar no fim do mês;
+ * - quanto deve estar na conta agora (para conferir com o banco);
  * - a situação de cada categoria, com as mesmas regras do veredito;
  * - a lista de contas fixas e de gastos do mês.
  *
@@ -15,7 +16,7 @@ import { ErroValidacao } from './erros.js';
 import { mesDaData, diaDaData, diasNoMes } from './datas.js';
 import { excluirRegistro } from './modelo.js';
 import { buscarMes } from './meses.js';
-import { fixosDoMes } from './fixos.js';
+import { fixosDoMes, diaDeReferencia } from './fixos.js';
 import { categoriasAtivas } from './configuracao.js';
 import {
   LIMITES_PADRAO,
@@ -23,18 +24,6 @@ import {
   calcularSaldoProjetado,
   lancamentosValidosDoMes,
 } from './veredito.js';
-
-/**
- * Dia que serve de "hoje" para um mês:
- * - mês atual: o dia de hoje;
- * - mês que já passou: o último dia (tudo já venceu);
- * - mês futuro: 0 (nada venceu ainda).
- */
-function diaDeReferencia(mes, hoje) {
-  const mesHoje = mesDaData(hoje);
-  if (mes === mesHoje) return diaDaData(hoje);
-  return mes < mesHoje ? diasNoMes(mes) : 0;
-}
 
 /**
  * Cor da situação de uma categoria, sem nenhum gasto novo:
@@ -72,16 +61,18 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
   const ultimoDia = diasNoMes(mes);
   const lancamentos = lancamentosValidosDoMes(estado.lancamentos, mes);
 
-  // Contas fixas: um vencimento no dia 31 cai no último dia dos meses mais curtos.
-  // Contas opcionais não previstas no mês ficam de fora: valem zero e só poluiriam a lista.
-  const fixos = fixosDoMes(estado, mes).filter((item) => item.previsto).map((item) => {
-    const diaEfetivo = Math.min(item.fixo.diaVencimento, ultimoDia);
-    return { ...item, diaEfetivo, vencido: diaEfetivo <= dia };
-  });
+  // Contas fixas com a situação do mês. "Atrasada": prevista e já passou do vencimento.
+  const ORDEM = { atrasada: 0, previsto: 1, pago: 2, dispensado: 3 };
+  const fixos = fixosDoMes(estado, mes, hoje)
+    .map((item) => ({ ...item, atrasado: item.status === 'previsto' && item.diaEfetivo < dia }))
+    // O que pede ação vem primeiro: atrasadas, previstas, pagas e, por último, dispensadas.
+    .sort((a, b) =>
+      ORDEM[a.atrasado ? 'atrasada' : a.status] - ORDEM[b.atrasado ? 'atrasada' : b.status]
+      || a.diaEfetivo - b.diaEfetivo);
 
   const somar = (lista, campo) => lista.reduce((soma, item) => soma + item[campo], 0);
-  const fixosVencidos = somar(fixos.filter((f) => f.vencido), 'valorCentavos');
-  const fixosAVencer = somar(fixos.filter((f) => !f.vencido), 'valorCentavos');
+  const fixosPagos = somar(fixos.filter((f) => f.status === 'pago'), 'valorCentavos');
+  const fixosPrevistos = somar(fixos.filter((f) => f.status === 'previsto'), 'valorCentavos');
   const totalLancamentos = somar(lancamentos, 'valorCentavos');
 
   const dinheiroDoMes = registro.saldoInicialCentavos + registro.rendaPrevistaCentavos;
@@ -123,13 +114,23 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
     fracaoDoMes: dia / ultimoDia,
     saldoConfirmado: registro.saldoConfirmado,
     dinheiroDoMesCentavos: dinheiroDoMes,
-    jaSaiu: {
-      fixosCentavos: fixosVencidos,
+    // Concretizado: o que já saiu de verdade.
+    jaPago: {
+      fixosCentavos: fixosPagos,
       gastosCentavos: totalLancamentos,
-      totalCentavos: fixosVencidos + totalLancamentos,
+      totalCentavos: fixosPagos + totalLancamentos,
     },
-    aVencerCentavos: fixosAVencer,
+    // Estipulado: contas que ainda vão sair (as dispensadas não contam).
+    previstoCentavos: fixosPrevistos,
     deveSobrarCentavos: saldoProjetadoCentavos,
+    // Dinheiro do mês menos o que já foi pago: deve bater com o saldo do banco.
+    naContaAgoraCentavos: dinheiroDoMes - fixosPagos - totalLancamentos,
+    contagemFixos: {
+      previstas: fixos.filter((f) => f.status === 'previsto').length,
+      atrasadas: fixos.filter((f) => f.atrasado).length,
+      pagas: fixos.filter((f) => f.status === 'pago').length,
+      dispensadas: fixos.filter((f) => f.status === 'dispensado').length,
+    },
     corSaldo,
     categorias,
     fixos,

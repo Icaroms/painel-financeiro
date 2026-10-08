@@ -127,11 +127,11 @@ export function criarCategoria({ nome, orcamentoCentavos }, opcoes = {}) {
  * @param {object}      [opcoes]             { agora, gerarId }
  */
 export function criarFixo(
-  { nome, valorCentavos, diaVencimento, formaPagamento, mesInicial, mesFinal = null, opcional = false },
+  { nome, valorCentavos, diaVencimento, formaPagamento, mesInicial, mesFinal = null, pagamentoAutomatico = false },
   opcoes = {},
 ) {
-  if (typeof opcional !== 'boolean') {
-    throw new ErroValidacao('opcional', 'O campo "opcional" deve ser true ou false.');
+  if (typeof pagamentoAutomatico !== 'boolean') {
+    throw new ErroValidacao('pagamentoAutomatico', 'O campo "pagamento automático" deve ser true ou false.');
   }
   if (!Number.isInteger(diaVencimento) || diaVencimento < 1 || diaVencimento > 31) {
     throw new ErroValidacao('diaVencimento', 'O dia de vencimento deve ser um número de 1 a 31.');
@@ -154,9 +154,9 @@ export function criarFixo(
     formaPagamento: exigirTexto(formaPagamento, 'formaPagamento', 'A forma de pagamento'),
     mesInicial: inicio,
     mesFinal,
-    // Conta opcional (ex.: dentista): só conta no mês em que tiver um valor
-    // definido para aquele mês (ajuste). O valor padrão vira só uma sugestão.
-    opcional,
+    // Débito automático ou cobrança no cartão: a conta vira "Pago" sozinha
+    // no dia do vencimento (veja statusDoFixoNoMes, em src/fixos.js).
+    pagamentoAutomatico,
   };
 }
 
@@ -276,6 +276,10 @@ export function criarMes(
     // Valor de um fixo só neste mês, por id do fixo: { "id-do-fixo": 25000 }.
     // Ex.: o dentista, que custa um valor diferente a cada mês.
     ajustesFixos: {},
+    // Situação de cada conta fixa NESTE mês, por id do fixo:
+    // { "id-do-fixo": "pago" } ou "dispensado" ou "previsto".
+    // Conta sem entrada aqui está "previsto" (ou "pago", se for automática e já venceu).
+    statusFixos: {},
   };
 }
 
@@ -303,22 +307,25 @@ export function ajustarFixoNoMes(registroMes, fixo, valorCentavos, { agora = new
   };
 }
 
+/** Situações possíveis de uma conta fixa num mês. */
+export const STATUS_FIXO = Object.freeze(['previsto', 'pago', 'dispensado']);
+
 /**
  * Valor que um fixo cobra num mês:
- * - com ajuste naquele mês, o valor do ajuste;
- * - conta OPCIONAL sem ajuste: zero (ela não foi prevista para o mês);
+ * - conta DISPENSADA no mês (ex.: não fui ao dentista): zero;
+ * - com ajuste naquele mês (ou valor real pago), o valor do ajuste;
  * - senão, o valor padrão do fixo.
  *
- * Fixos gravados antes do campo "opcional" existir não têm o campo e
- * contam como contas comuns.
+ * Meses gravados antes do campo "statusFixos" existir não têm o campo:
+ * nesse caso, nenhuma conta está dispensada.
  *
  * @param {object} fixo
  * @param {object} registroMes
  * @returns {number} Centavos.
  */
 export function valorDoFixoNoMes(fixo, registroMes) {
-  if (Object.hasOwn(registroMes.ajustesFixos, fixo.id)) return registroMes.ajustesFixos[fixo.id];
-  return fixo.opcional === true ? 0 : fixo.valorCentavos;
+  if (registroMes.statusFixos?.[fixo.id] === 'dispensado') return 0;
+  return registroMes.ajustesFixos[fixo.id] ?? fixo.valorCentavos;
 }
 
 /* ------------------------------------------------------------------ */

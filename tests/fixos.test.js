@@ -16,6 +16,8 @@ import {
   editarFixo,
   encerrarFixo,
   definirValorNoMes,
+  definirStatusDoFixo,
+  statusDoFixoNoMes,
   MAXIMO_PARCELAS,
 } from '../src/fixos.js';
 import { fixoAtivoNoMes } from '../src/modelo.js';
@@ -23,6 +25,7 @@ import { sobraDoMes, virarMes } from '../src/meses.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 
 const MES = '2026-11';
+const HOJE = '2026-11-05';
 const AGORA = new Date('2026-11-05T12:00:00.000Z');
 const exemplo = () => criarDadosDeExemplo('2026-11-03');
 
@@ -105,7 +108,7 @@ describe('adicionarFixo', () => {
 describe('fixosDoMes', () => {
   it('lista os fixos do mês ordenados pelo dia, com valor e parcela', () => {
     const { estado } = comFixo(PARCELADO, comFixo(MENSAL).estado);
-    const lista = fixosDoMes(estado, MES);
+    const lista = fixosDoMes(estado, MES, HOJE);
 
     const dias = lista.map((item) => item.fixo.diaVencimento);
     assert.deepEqual(dias, [...dias].sort((a, b) => a - b));
@@ -117,7 +120,7 @@ describe('fixosDoMes', () => {
   });
 
   it('marca o fixo ajustado só neste mês (a consulta do exemplo)', () => {
-    const consulta = fixosDoMes(exemplo(), MES).find((item) => item.fixo.nome === 'Consulta');
+    const consulta = fixosDoMes(exemplo(), MES, HOJE).find((item) => item.fixo.nome === 'Consulta');
     assert.equal(consulta.ajustado, true);
     assert.equal(consulta.valorCentavos, 25000);
   });
@@ -198,7 +201,7 @@ describe('definirValorNoMes', () => {
     const dados = exemplo();
     const consulta = dados.fixos.find((f) => f.nome === 'Consulta');
     const depois = definirValorNoMes(dados, MES, consulta.id, null);
-    const item = fixosDoMes(depois, MES).find((i) => i.fixo.id === consulta.id);
+    const item = fixosDoMes(depois, MES, HOJE).find((i) => i.fixo.id === consulta.id);
 
     assert.equal(item.ajustado, false);
     assert.equal(item.valorCentavos, 0);
@@ -213,55 +216,98 @@ describe('definirValorNoMes', () => {
   });
 });
 
-describe('conta fixa opcional (ex.: dentista)', () => {
-  const OPCIONAL = { ...MENSAL, nome: 'Dentista', valorCentavos: 15000, diaVencimento: 1, opcional: true };
+describe('status das contas fixas: previsto, pago e dispensado', () => {
+  const DENTISTA = { ...MENSAL, nome: 'Dentista', valorCentavos: 12000, diaVencimento: 1 };
+  const AUTOMATICA = { ...MENSAL, nome: 'Assinatura', valorCentavos: 11851, diaVencimento: 3, pagamentoAutomatico: true };
+  const item = (estado, id, hoje = HOJE) => fixosDoMes(estado, MES, hoje).find((i) => i.fixo.id === id);
 
-  it('é guardada como opcional; contas comuns não são', () => {
-    assert.equal(comFixo(OPCIONAL).fixo.opcional, true);
-    assert.equal(comFixo(MENSAL).fixo.opcional, false);
+  it('toda conta começa o mês como prevista', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    assert.equal(item(estado, fixo.id).status, 'previsto');
+    assert.equal(item(estado, fixo.id).valorCentavos, 12000);
   });
 
-  it('sem valor no mês: não conta nada e não muda a sobra', () => {
+  it('pago com o valor real: muda o valor só neste mês', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    const pago = definirStatusDoFixo(estado, MES, fixo.id, 'pago', { valorCentavos: 13500 });
+    assert.equal(item(pago, fixo.id).status, 'pago');
+    assert.equal(item(pago, fixo.id).valorCentavos, 13500);
+    assert.equal(pago.fixos.find((f) => f.id === fixo.id).valorCentavos, 12000); // valor padrão intacto
+  });
+
+  it('pago com o valor de sempre não cria ajuste', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    const pago = definirStatusDoFixo(estado, MES, fixo.id, 'pago', { valorCentavos: 12000 });
+    assert.equal(item(pago, fixo.id).ajustado, false);
+  });
+
+  it('dispensado: deixa de contar e não muda a sobra', () => {
     const base = exemplo();
-    const { estado } = comFixo(OPCIONAL, base);
-    const item = fixosDoMes(estado, MES).find((i) => i.fixo.nome === 'Dentista');
+    const { estado, fixo } = comFixo(DENTISTA, base);
+    const dispensado = definirStatusDoFixo(estado, MES, fixo.id, 'dispensado');
 
-    assert.equal(item.previsto, false);
-    assert.equal(item.valorCentavos, 0);
-    assert.equal(sobraDoMes(estado, MES), sobraDoMes(base, MES));
+    assert.equal(item(dispensado, fixo.id).valorCentavos, 0);
+    assert.equal(item(dispensado, fixo.id).valorEstipuladoCentavos, 12000);
+    assert.equal(sobraDoMes(dispensado, MES), sobraDoMes(base, MES));
   });
 
-  it('com valor só deste mês: passa a contar, e no mês seguinte volta a não contar', () => {
-    const { estado, fixo } = comFixo(OPCIONAL);
-    const comConsulta = definirValorNoMes(estado, MES, fixo.id, 20000);
-    const item = fixosDoMes(comConsulta, MES).find((i) => i.fixo.id === fixo.id);
-    assert.equal(item.previsto, true);
-    assert.equal(item.valorCentavos, 20000);
-
-    const dezembro = virarMes(comConsulta, '2026-12').estado;
-    const emDezembro = fixosDoMes(dezembro, '2026-12').find((i) => i.fixo.id === fixo.id);
-    assert.equal(emDezembro.previsto, false);
-    assert.equal(emDezembro.valorCentavos, 0);
+  it('o mês seguinte começa com tudo previsto de novo', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    const dezembro = virarMes(definirStatusDoFixo(estado, MES, fixo.id, 'dispensado'), '2026-12').estado;
+    const emDezembro = fixosDoMes(dezembro, '2026-12', '2026-12-02').find((i) => i.fixo.id === fixo.id);
+    assert.equal(emDezembro.status, 'previsto');
+    assert.equal(emDezembro.valorCentavos, 12000);
   });
 
-  it('editar pode ligar e desligar o opcional', () => {
-    const { estado, fixo } = comFixo(MENSAL);
-    const ligado = editarFixo(estado, fixo.id, { ...MENSAL, opcional: true }, MES);
-    assert.equal(ligado.fixos.find((f) => f.id === fixo.id).opcional, true);
-    const desligado = editarFixo(ligado, fixo.id, { ...MENSAL, opcional: false }, MES);
-    assert.equal(desligado.fixos.find((f) => f.id === fixo.id).opcional, false);
+  it('pagamento automático vira pago sozinho no dia do vencimento', () => {
+    const { estado, fixo } = comFixo(AUTOMATICA);
+    assert.equal(item(estado, fixo.id, '2026-11-02').status, 'previsto');
+    assert.deepEqual(
+      [item(estado, fixo.id, '2026-11-03').status, item(estado, fixo.id, '2026-11-03').automatico],
+      ['pago', true],
+    );
   });
 
-  it('fixo gravado antes do campo existir conta como conta comum', () => {
-    const { estado, fixo } = comFixo(MENSAL);
-    const { opcional, ...antigo } = fixo;
-    const semCampo = { ...estado, fixos: estado.fixos.map((f) => (f.id === fixo.id ? antigo : f)) };
-    const item = fixosDoMes(semCampo, MES).find((i) => i.fixo.id === fixo.id);
-    assert.equal(item.previsto, true);
-    assert.equal(item.valorCentavos, 3490);
+  it('o que a pessoa marcou vence o automático', () => {
+    const { estado, fixo } = comFixo(AUTOMATICA);
+    const voltou = definirStatusDoFixo(estado, MES, fixo.id, 'previsto');
+    assert.equal(item(voltou, fixo.id, '2026-11-20').status, 'previsto');
+    const dispensada = definirStatusDoFixo(estado, MES, fixo.id, 'dispensado');
+    assert.equal(item(dispensada, fixo.id, '2026-11-20').status, 'dispensado');
   });
 
-  it('rejeita "opcional" que não seja true ou false', () => {
-    assert.throws(() => comFixo({ ...MENSAL, opcional: 'sim' }), { campo: 'opcional' });
+  it('statusDoFixoNoMes: vencimento no dia 31 cai no último dia do mês', () => {
+    const { estado, fixo } = comFixo({ ...AUTOMATICA, diaVencimento: 31 });
+    const novembro = estado.meses.find((m) => m.mes === MES);
+    assert.equal(statusDoFixoNoMes(fixo, novembro, '2026-11-29').status, 'previsto');
+    assert.equal(statusDoFixoNoMes(fixo, novembro, '2026-11-30').status, 'pago');
+    assert.equal(statusDoFixoNoMes(fixo, novembro, '2026-11-30').diaEfetivo, 30);
+  });
+
+  it('mês gravado antes do campo existir: nada dispensado, tudo previsto', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    const semCampo = {
+      ...estado,
+      meses: estado.meses.map(({ statusFixos, ...resto }) => resto),
+    };
+    assert.equal(item(semCampo, fixo.id).status, 'previsto');
+    assert.equal(item(semCampo, fixo.id).valorCentavos, 12000);
+  });
+
+  it('editar liga e desliga o pagamento automático e descarta o antigo "opcional"', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    const comOpcional = { ...estado, fixos: estado.fixos.map((f) => (f.id === fixo.id ? { ...f, opcional: true } : f)) };
+    const ligado = editarFixo(comOpcional, fixo.id, { ...DENTISTA, pagamentoAutomatico: true }, MES);
+    const editado = ligado.fixos.find((f) => f.id === fixo.id);
+    assert.equal(editado.pagamentoAutomatico, true);
+    assert.equal(Object.hasOwn(editado, 'opcional'), false);
+  });
+
+  it('rejeita status inválido, valor negativo e conta fora do mês', () => {
+    const { estado, fixo } = comFixo(DENTISTA);
+    assert.throws(() => definirStatusDoFixo(estado, MES, fixo.id, 'talvez'), { campo: 'status' });
+    assert.throws(() => definirStatusDoFixo(estado, MES, fixo.id, 'pago', { valorCentavos: -1 }), { campo: 'valorCentavos' });
+    assert.throws(() => definirStatusDoFixo(estado, MES, 'nao-existe', 'pago'), { campo: 'fixo' });
+    assert.throws(() => comFixo({ ...DENTISTA, pagamentoAutomatico: 'sim' }), { campo: 'pagamentoAutomatico' });
   });
 });
