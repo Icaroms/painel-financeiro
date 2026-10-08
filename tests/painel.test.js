@@ -10,7 +10,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { calcularPainel, tituloDoMes } from '../src/painel.js';
+import { calcularPainel, tituloDoMes, problemaNaDataDoGasto } from '../src/painel.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { dadosDoMes } from '../src/meses.js';
 
@@ -111,5 +111,54 @@ describe('calcularPainel com categoria inexistente', () => {
       () => calcularPainel({ dados, valorTexto: '10', categoriaId: 'nao-existe', formaPagamento: 'Pix', hoje: HOJE }),
       { name: 'ErroValidacao', campo: 'categoriaId' },
     );
+  });
+});
+
+describe('data do gasto', () => {
+  /** Painel de Lanches com um valor e uma data escolhida. */
+  function comData(valorTexto, data) {
+    const dados = exemploDeNovembro();
+    const lanches = dados.categorias.find((c) => c.nome === 'Lanches');
+    return calcularPainel({ dados, valorTexto, categoriaId: lanches.id, formaPagamento: 'Pix', hoje: HOJE, data });
+  }
+
+  it('sem data escolhida, o gasto é de hoje', () => {
+    const p = painel('10', 'Lanches');
+    assert.equal(p.lancamento.data, HOJE);
+    assert.equal(p.dataAnterior, false);
+    assert.equal(p.dataTexto, 'Hoje');
+  });
+
+  it('aceita um dia anterior do mesmo mês e guarda o gasto nessa data', () => {
+    const p = comData('10', '2026-11-03');
+    assert.equal(p.lancamento.data, '2026-11-03');
+    assert.equal(p.dataAnterior, true);
+    assert.equal(p.dataTexto, 'Gasto do dia 03/11');
+  });
+
+  it('o veredito julga o mês como ele está hoje, qualquer que seja a data', () => {
+    // Mesmo valor, datas diferentes: a cor e a frase são as mesmas.
+    const deHoje = comData('40', HOJE);
+    const antigo = comData('40', '2026-11-02');
+    assert.equal(antigo.cor, deHoje.cor);
+    assert.equal(antigo.frase, deHoje.frase);
+  });
+
+  it('data no futuro ou de outro mês não gera lançamento e explica o motivo', () => {
+    const futuro = comData('10', '2026-11-11');
+    assert.equal(futuro.lancamento, null);
+    assert.equal(futuro.cor, 'neutro');
+    assert.equal(futuro.frase, 'A data do gasto não pode ser depois de hoje.');
+
+    const outroMes = comData('10', '2026-10-31');
+    assert.equal(outroMes.lancamento, null);
+    assert.match(outroMes.frase, /novembro de 2026/);
+  });
+
+  it('problemaNaDataDoGasto', () => {
+    assert.equal(problemaNaDataDoGasto('2026-11-01', HOJE), null);
+    assert.equal(problemaNaDataDoGasto(HOJE, HOJE), null);
+    assert.equal(problemaNaDataDoGasto('', HOJE), 'Escolha uma data válida para o gasto.');
+    assert.equal(problemaNaDataDoGasto('2026-11-31', HOJE), 'Escolha uma data válida para o gasto.');
   });
 });

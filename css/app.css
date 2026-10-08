@@ -626,3 +626,33 @@ body {
   border-radius: 12px;
   line-height: 1.4;
 }
+
+/* ---------- Data do gasto (tela de lançamento) ---------- */
+/* Linha discreta: "Data · Hoje". O campo de data do sistema fica por cima,
+   invisível, então tocar na linha abre o calendário do iPhone. */
+.campo-data {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--linha);
+  border-radius: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.campo-data .data-escolhida { font-weight: 500; }
+.campo-data input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px; /* evita o zoom automático do Safari */
+}
+.campo-data:focus-within { outline: 2px solid var(--texto); outline-offset: 2px; }
+/* Gasto de outro dia: borda âmbar, para não lançar um gasto de hoje na data errada sem perceber */
+.campo-data.anterior { border-color: var(--amarelo); }

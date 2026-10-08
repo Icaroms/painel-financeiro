@@ -73,6 +73,9 @@ const el = {
   chipsPagamento: elemento('chips-pagamento'),
   botaoLancar: elemento('botao-lancar'),
   rodapeTexto: elemento('rodape-texto'),
+  campoData: elemento('campo-data'),
+  dataGasto: elemento('data-gasto'),
+  dataTexto: elemento('data-texto'),
   botaoRestaurar: elemento('botao-restaurar'),
   telaConfigurar: elemento('tela-configurar'),
   configMensagem: elemento('config-mensagem'),
@@ -337,13 +340,22 @@ function atualizar() {
     }
   }
 
+  // Data do gasto: só dias do mês atual até hoje. Sem escolha, vale hoje.
+  el.dataGasto.min = `${mesDaData(hoje)}-01`;
+  el.dataGasto.max = hoje;
+  if (el.dataGasto.value === '') el.dataGasto.value = hoje;
+
   const painel = calcularPainel({
     dados: dadosDoMes(dados, mesDaData(hoje)),
     valorTexto: el.valor.value,
     categoriaId: el.formulario.elements.categoria.value,
     formaPagamento: el.formulario.elements.pagamento.value,
     hoje,
+    data: el.dataGasto.value,
   });
+
+  el.dataTexto.textContent = painel.dataTexto;
+  el.campoData.classList.toggle('anterior', painel.dataAnterior);
 
   el.tela.dataset.cor = painel.cor;
   el.tituloMes.textContent = painel.tituloMes;
@@ -388,9 +400,12 @@ el.formulario.addEventListener('submit', async (evento) => {
   atualizar();
   el.valor.focus();
 
+  // A data escolhida continua escolhida: facilita lançar vários gastos
+  // esquecidos do mesmo dia. A borda âmbar avisa que não é hoje.
+  const doDia = painel.dataAnterior ? `, ${painel.dataTexto.replace('Gasto do dia', 'no dia')}` : '';
   const gravou = await gravar(dados);
   el.rodapeTexto.textContent = gravou
-    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)} em ${categoria.nome}.`
+    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)} em ${categoria.nome}${doDia}.`
     : avisoSemGravacao();
 });
 
