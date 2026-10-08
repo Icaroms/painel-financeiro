@@ -656,3 +656,9 @@ body {
 .campo-data:focus-within { outline: 2px solid var(--texto); outline-offset: 2px; }
 /* Gasto de outro dia: borda âmbar, para não lançar um gasto de hoje na data errada sem perceber */
 .campo-data.anterior { border-color: var(--amarelo); }
+
+/* ---------- Conta fixa opcional (vista Configurar) ---------- */
+.opcao-opcional { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.4; cursor: pointer; }
+.opcao-opcional input { flex: 0 0 auto; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--texto); }
+/* Opcional fora do mês: em segundo plano, como uma conta "desligada" */
+.fixo-fora .fixo-nome, .fixo-fora .fixo-valor { color: var(--secundario); font-weight: 500; }

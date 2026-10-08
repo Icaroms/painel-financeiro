@@ -248,6 +248,20 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
     const campoTotal = campo('Total de parcelas', inputTotal);
     const dica = criar('p', { classe: 'dica secundario' });
 
+    // Conta opcional: nem todo mês acontece (ex.: dentista).
+    const campoOpcional = criar('label', { classe: 'opcao-opcional inteira' });
+    const inputOpcional = criar('input', { type: 'checkbox', name: 'opcional' });
+    inputOpcional.checked = fixo ? fixo.opcional === true : false;
+    const textoOpcional = criar('span');
+    textoOpcional.append(
+      criar('strong', { texto: 'Conta opcional' }),
+      criar('span', {
+        classe: 'secundario',
+        texto: ' — nem todo mês acontece. Só conta no mês em que você tocar em "Vou usar este mês".',
+      }),
+    );
+    campoOpcional.append(inputOpcional, textoOpcional);
+
     const erro = criar('span', { classe: 'erro' });
     const acoes = criar('div', { classe: 'acoes' });
     const botaoCancelar = criar('button', { classe: 'botao-pequeno', texto: 'Cancelar', type: 'button' });
@@ -292,6 +306,7 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
           tipo: tipoEscolhido(),
           parcelaAtual: Number(inputParcela.value.trim() || NaN),
           totalParcelas: Number(inputTotal.value.trim() || NaN),
+          opcional: inputOpcional.checked,
         });
         fixoAberto = null;
         renderizarFixos();
@@ -310,6 +325,7 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
       campoParcela,
       campoTotal,
       dica,
+      campoOpcional,
       erro,
       acoes,
     );
@@ -333,19 +349,31 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
     });
     acoes.append(botaoCancelar);
 
+    const opcional = item.fixo.opcional === true;
+
+    // Conta opcional ainda não prevista: o campo já vem com o valor de sempre, como sugestão.
+    if (opcional && !item.ajustado) valor.input.value = textoDoValor(item.fixo.valorCentavos);
+
     if (item.ajustado) {
       const botaoPadrao = criar('button', {
         classe: 'botao-pequeno', type: 'button',
-        texto: `Voltar ao padrão (${formatarCentavos(item.fixo.valorCentavos)})`,
+        texto: opcional
+          ? 'Não vou usar este mês'
+          : `Voltar ao padrão (${formatarCentavos(item.fixo.valorCentavos)})`,
       });
       botaoPadrao.addEventListener('click', async () => {
-        await aplicarMudanca(definirValorNoMes(obterDados(), mes, item.fixo.id, null), 'Valor padrão restaurado.');
+        await aplicarMudanca(
+          definirValorNoMes(obterDados(), mes, item.fixo.id, null),
+          opcional ? `"${item.fixo.nome}" não conta mais neste mês.` : 'Valor padrão restaurado.',
+        );
         fixoAberto = null;
         renderizarFixos();
       });
       acoes.append(botaoPadrao);
     }
-    acoes.append(criar('button', { classe: 'botao-pequeno', texto: 'Salvar só neste mês', type: 'submit' }));
+    acoes.append(criar('button', {
+      classe: 'botao-pequeno', type: 'submit', texto: opcional ? 'Usar neste mês' : 'Salvar só neste mês',
+    }));
 
     form.addEventListener('submit', async (evento) => {
       evento.preventDefault();
@@ -354,7 +382,9 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
         const centavos = lerValorPositivo(valor.input.value, 'valorCentavos');
         await aplicarMudanca(
           definirValorNoMes(obterDados(), mes, item.fixo.id, centavos),
-          `Valor de "${item.fixo.nome}" ajustado só neste mês.`,
+          opcional
+            ? `"${item.fixo.nome}" entra nas contas deste mês.`
+            : `Valor de "${item.fixo.nome}" ajustado só neste mês.`,
         );
         fixoAberto = null;
         renderizarFixos();
@@ -366,7 +396,12 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
 
     form.append(
       valor.rotulo,
-      criar('p', { classe: 'dica secundario', texto: 'Os outros meses continuam com o valor padrão.' }),
+      criar('p', {
+        classe: 'dica secundario',
+        texto: opcional
+          ? 'Ela conta só neste mês. No mês seguinte, volta a ficar de fora.'
+          : 'Os outros meses continuam com o valor padrão.',
+      }),
       erro,
       acoes,
     );
@@ -375,9 +410,10 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
 
   /** Monta o item de uma conta fixa na lista. */
   function itemDoFixo(item) {
-    const { fixo, valorCentavos, ajustado, parcela } = item;
+    const { fixo, valorCentavos, ajustado, parcela, previsto } = item;
     const mes = mesAtual();
-    const li = criar('li', { classe: 'fixo' });
+    // Opcional não prevista no mês: linha discreta, com o botão para ativar.
+    const li = criar('li', { classe: previsto ? 'fixo' : 'fixo fixo-fora' });
 
     const topo = criar('div', { classe: 'fixo-topo' });
     topo.append(
@@ -385,9 +421,10 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
       criar('span', { classe: 'fixo-valor', texto: formatarCentavos(valorCentavos) }),
     );
 
-    const tipoTexto = parcela
+    let tipoTexto = parcela
       ? `Parcela ${parcela.atual} de ${parcela.total}, ${textoTermino(fixo.mesFinal)}`
       : 'Mensal';
+    if (fixo.opcional === true) tipoTexto += previsto ? ' · opcional' : ' · opcional, não prevista este mês';
     const detalhe = criar('p', {
       classe: 'fixo-detalhe secundario',
       texto: `Dia ${fixo.diaVencimento} · ${fixo.formaPagamento} · ${tipoTexto}`,
@@ -400,8 +437,9 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
       'aria-label': `Encerrar ${fixo.nome}`,
     });
     const botaoValor = criar('button', {
-      classe: 'botao-pequeno', type: 'button', texto: 'Valor deste mês',
-      'aria-label': `Mudar o valor de ${fixo.nome} só neste mês`,
+      classe: 'botao-pequeno', type: 'button',
+      texto: previsto ? 'Valor deste mês' : 'Vou usar este mês',
+      'aria-label': previsto ? `Mudar o valor de ${fixo.nome} só neste mês` : `Usar ${fixo.nome} neste mês`,
     });
     const botaoEditar = criar('button', {
       classe: 'botao-pequeno', type: 'button', texto: 'Editar', 'aria-label': `Editar ${fixo.nome}`,
@@ -449,11 +487,13 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
   function renderizarFixos() {
     const mes = mesAtual();
     const itens = fixosDoMes(obterDados(), mes);
-    const total = itens.reduce((soma, item) => soma + item.valorCentavos, 0);
+    // O total conta só as previstas: opcional sem valor no mês não conta.
+    const previstas = itens.filter((item) => item.previsto);
+    const total = previstas.reduce((soma, item) => soma + item.valorCentavos, 0);
 
     el.totalFixos.replaceChildren(
-      itens.length === 0 ? 'Nenhuma conta fixa neste mês.' : `${itens.length} conta(s) neste mês, total: `,
-      ...(itens.length === 0 ? [] : [criar('strong', { texto: formatarCentavos(total) })]),
+      previstas.length === 0 ? 'Nenhuma conta fixa neste mês.' : `${previstas.length} conta(s) neste mês, total: `,
+      ...(previstas.length === 0 ? [] : [criar('strong', { texto: formatarCentavos(total) })]),
     );
     el.listaFixos.replaceChildren(...itens.map(itemDoFixo));
 
