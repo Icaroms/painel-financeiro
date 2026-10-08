@@ -11,8 +11,8 @@
  */
 
 import { ErroValidacao } from './erros.js';
-import { somarMeses, mesesEntre } from './datas.js';
-import { criarFixo, fixoAtivoNoMes, valorDoFixoNoMes, excluirRegistro } from './modelo.js';
+import { somarMeses, mesesEntre, mesDaData, diaDaData, diasNoMes } from './datas.js';
+import { criarFixo, fixoAtivoNoMes, valorDoFixoNoMes, excluirRegistro, STATUS_FIXO } from './modelo.js';
 import { buscarMes } from './meses.js';
 
 /** Limite de parcelas aceito no cadastro (10 anos). */
@@ -69,18 +69,66 @@ export function parcelaNoMes(fixo, mes) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Fixos que contam num mês, com o valor daquele mês e a parcela.
+ * Dia que serve de "hoje" para um mês:
+ * - mês atual: o dia de hoje;
+ * - mês que já passou: o último dia (tudo já venceu);
+ * - mês futuro: 0 (nada venceu ainda).
+ *
+ * @param {string} mes  "AAAA-MM".
+ * @param {string} hoje "AAAA-MM-DD".
+ * @returns {number}
+ */
+export function diaDeReferencia(mes, hoje) {
+  const mesHoje = mesDaData(hoje);
+  if (mes === mesHoje) return diaDaData(hoje);
+  return mes < mesHoje ? diasNoMes(mes) : 0;
+}
+
+/**
+ * Situação de uma conta fixa num mês.
+ *
+ * 1. O que a pessoa marcou no mês vale sempre (previsto, pago ou dispensado).
+ * 2. Sem marcação: conta de pagamento automático que já venceu está "pago";
+ *    todas as outras estão "previsto".
+ *
+ * @param {object} fixo
+ * @param {object} registroMes
+ * @param {string} hoje "AAAA-MM-DD".
+ * @returns {{ status: 'previsto'|'pago'|'dispensado', automatico: boolean, diaEfetivo: number }}
+ *   automatico: true quando o "pago" veio da regra do pagamento automático.
+ *   diaEfetivo: o dia de vencimento no mês (dia 31 cai no último dia dos meses curtos).
+ */
+export function statusDoFixoNoMes(fixo, registroMes, hoje) {
+  const diaEfetivo = Math.min(fixo.diaVencimento, diasNoMes(registroMes.mes));
+  const marcado = registroMes.statusFixos?.[fixo.id];
+  if (STATUS_FIXO.includes(marcado)) {
+    return { status: marcado, automatico: false, diaEfetivo };
+  }
+  if (fixo.pagamentoAutomatico === true && diaEfetivo <= diaDeReferencia(registroMes.mes, hoje)) {
+    return { status: 'pago', automatico: true, diaEfetivo };
+  }
+  return { status: 'previsto', automatico: false, diaEfetivo };
+}
+
+/**
+ * Fixos que contam num mês, com o valor, a situação e a parcela daquele mês.
  * Ordenados pelo dia de vencimento.
  *
- * "previsto" é false só para uma conta opcional sem valor definido no
- * mês: ela aparece na configuração (para poder ser ativada), mas não
- * entra nas contas do mês.
- *
  * @param {object} estado
- * @param {string} mes "AAAA-MM".
- * @returns {{ fixo: object, valorCentavos: number, ajustado: boolean, previsto: boolean, parcela: object|null }[]}
+ * @param {string} mes  "AAAA-MM".
+ * @param {string} hoje "AAAA-MM-DD" (para o pagamento automático).
+ * @returns {{
+ *   fixo: object,
+ *   valorCentavos: number,          // o que conta no mês (zero se dispensado)
+ *   valorEstipuladoCentavos: number, // o valor esperado, mesmo se dispensado
+ *   ajustado: boolean,
+ *   status: 'previsto'|'pago'|'dispensado',
+ *   automatico: boolean,
+ *   diaEfetivo: number,
+ *   parcela: object|null
+ * }[]}
  */
-export function fixosDoMes(estado, mes) {
+export function fixosDoMes(estado, mes, hoje) {
   const registro = buscarMes(estado, mes);
   if (!registro) {
     throw new ErroValidacao('mes', `O mês ${mes} não existe nos dados.`);
@@ -89,16 +137,64 @@ export function fixosDoMes(estado, mes) {
   return estado.fixos
     .filter((f) => fixoAtivoNoMes(f, mes))
     .sort((a, b) => a.diaVencimento - b.diaVencimento)
-    .map((fixo) => {
-      const ajustado = Object.hasOwn(registro.ajustesFixos, fixo.id);
-      return {
-        fixo,
-        valorCentavos: valorDoFixoNoMes(fixo, registro),
-        ajustado,
-        previsto: fixo.opcional !== true || ajustado,
-        parcela: parcelaNoMes(fixo, mes),
-      };
-    });
+    .map((fixo) => ({
+      fixo,
+      valorCentavos: valorDoFixoNoMes(fixo, registro),
+      valorEstipuladoCentavos: registro.ajustesFixos[fixo.id] ?? fixo.valorCentavos,
+      ajustado: Object.hasOwn(registro.ajustesFixos, fixo.id),
+      ...statusDoFixoNoMes(fixo, registro, hoje),
+      parcela: parcelaNoMes(fixo, mes),
+    }));
+}
+
+/**
+ * Muda a situação de uma conta fixa num mês.
+ *
+ * - "pago": com valorCentavos, guarda o valor REAL pago neste mês (ex.: a
+ *   consulta estipulada em R$ 120 custou R$ 135). Sem valorCentavos, vale
+ *   o valor estipulado.
+ * - "dispensado": a conta não vai sair neste mês e deixa de contar.
+ * - "previsto": volta a ser esperada (também desfaz o "pago" automático).
+ *
+ * Só vale para o mês indicado: na virada, o mês novo começa sem marcações.
+ *
+ * @param {object} estado
+ * @param {string} mes     "AAAA-MM".
+ * @param {string} fixoId
+ * @param {'previsto'|'pago'|'dispensado'} status
+ * @param {object} [opcoes] { valorCentavos, agora }
+ * @returns {object} Estado novo.
+ */
+export function definirStatusDoFixo(estado, mes, fixoId, status, { valorCentavos, agora = new Date() } = {}) {
+  const registro = buscarMes(estado, mes);
+  if (!registro) {
+    throw new ErroValidacao('mes', `O mês ${mes} não existe nos dados.`);
+  }
+  const fixo = estado.fixos.find((f) => f.id === fixoId);
+  if (!fixo || !fixoAtivoNoMes(fixo, mes)) {
+    throw new ErroValidacao('fixo', 'Esta conta fixa não conta neste mês.');
+  }
+  if (!STATUS_FIXO.includes(status)) {
+    throw new ErroValidacao('status', 'Escolha Previsto, Pago ou Dispensado.');
+  }
+
+  const ajustesFixos = { ...registro.ajustesFixos };
+  if (status === 'pago' && valorCentavos !== undefined) {
+    if (!Number.isSafeInteger(valorCentavos) || valorCentavos < 0) {
+      throw new ErroValidacao('valorCentavos', 'O valor pago deve ser zero ou positivo.');
+    }
+    // Pagou o valor de sempre: não precisa de ajuste do mês.
+    if (valorCentavos === fixo.valorCentavos) delete ajustesFixos[fixoId];
+    else ajustesFixos[fixoId] = valorCentavos;
+  }
+
+  const atualizado = {
+    ...registro,
+    ajustesFixos,
+    statusFixos: { ...(registro.statusFixos ?? {}), [fixoId]: status },
+    atualizadoEm: agora.toISOString(),
+  };
+  return { ...estado, meses: estado.meses.map((m) => (m.mes === mes ? atualizado : m)) };
 }
 
 /* ------------------------------------------------------------------ */
@@ -115,7 +211,7 @@ export function fixosDoMes(estado, mes) {
  */
 function prepararCampos(estado, dados, mesReferencia) {
   const {
-    nome, valorCentavos, diaVencimento, formaPagamento, tipo, parcelaAtual, totalParcelas, opcional = false,
+    nome, valorCentavos, diaVencimento, formaPagamento, tipo, parcelaAtual, totalParcelas, pagamentoAutomatico = false,
   } = dados;
 
   if (!estado.formasPagamento.includes(formaPagamento)) {
@@ -131,7 +227,7 @@ function prepararCampos(estado, dados, mesReferencia) {
     throw new ErroValidacao('tipo', 'Escolha se a conta é mensal ou parcelada.');
   }
 
-  return { nome, valorCentavos, diaVencimento, formaPagamento, opcional, ...meses };
+  return { nome, valorCentavos, diaVencimento, formaPagamento, pagamentoAutomatico, ...meses };
 }
 
 /**
@@ -147,7 +243,7 @@ function prepararCampos(estado, dados, mesReferencia) {
  * @param {number} dados.diaVencimento  1 a 31.
  * @param {string} dados.formaPagamento Precisa estar na lista de formas de pagamento.
  * @param {'mensal'|'parcelado'} dados.tipo
- * @param {boolean} [dados.opcional]     Conta que nem todo mês acontece (ex.: dentista).
+ * @param {boolean} [dados.pagamentoAutomatico] Vira "Pago" sozinha no dia do vencimento.
  * @param {number} [dados.parcelaAtual]  Só para parcelado.
  * @param {number} [dados.totalParcelas] Só para parcelado.
  * @param {string} mesReferencia "AAAA-MM" (o mês atual).
@@ -196,9 +292,12 @@ export function editarFixo(estado, id, dados, mesReferencia, { agora = new Date(
     formaPagamento: validado.formaPagamento,
     mesInicial: validado.mesInicial,
     mesFinal: validado.mesFinal,
-    opcional: validado.opcional,
+    pagamentoAutomatico: validado.pagamentoAutomatico,
     atualizadoEm: agora.toISOString(),
   };
+  // O campo "opcional" de uma versão anterior do app foi substituído pelo
+  // status "Dispensado" de cada mês: ao editar, ele deixa de ser guardado.
+  delete editado.opcional;
 
   return { ...estado, fixos: estado.fixos.map((f) => (f.id === id ? editado : f)) };
 }

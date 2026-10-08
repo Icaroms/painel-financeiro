@@ -15,7 +15,7 @@ import { resumoDoMes, excluirLancamento } from '../src/resumo-mes.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { criarLancamento } from '../src/modelo.js';
 import { removerCategoria } from '../src/configuracao.js';
-import { adicionarFixo } from '../src/fixos.js';
+import { adicionarFixo, definirStatusDoFixo } from '../src/fixos.js';
 import { sobraDoMes } from '../src/meses.js';
 
 const MES = '2026-11';
@@ -23,24 +23,42 @@ const exemplo = () => criarDadosDeExemplo('2026-11-01');
 const categoria = (estado, nome) => estado.categorias.find((c) => c.nome === nome);
 
 describe('resumoDoMes: os grandes números', () => {
-  it('no dia 10: já saiu, vai vencer e deve sobrar', () => {
+  it('sem nada marcado: as contas estão previstas e só os gastos já foram pagos', () => {
     const resumo = resumoDoMes(exemplo(), MES, '2026-11-10');
 
     assert.equal(resumo.dinheiroDoMesCentavos, 150000);
-    // Já venceram: Consulta (dia 1) e Academia (dia 5) = 349,90; gastos = 350,00
-    assert.equal(resumo.jaSaiu.fixosCentavos, 34990);
-    assert.equal(resumo.jaSaiu.gastosCentavos, 35000);
-    assert.equal(resumo.jaSaiu.totalCentavos, 69990);
-    // Ainda vai vencer: Streaming (dia 12)
-    assert.equal(resumo.aVencerCentavos, 3990);
+    assert.equal(resumo.jaPago.fixosCentavos, 0);
+    assert.equal(resumo.jaPago.gastosCentavos, 35000);
+    assert.equal(resumo.jaPago.totalCentavos, 35000);
+    // Previstas: Consulta 250 + Academia 99,90 + Streaming 39,90 = 389,80
+    assert.equal(resumo.previstoCentavos, 38980);
     // 1500 − 389,80 − 350 = 760,20
     assert.equal(resumo.deveSobrarCentavos, 76020);
+    assert.equal(resumo.naContaAgoraCentavos, 115000);
     assert.equal(resumo.corSaldo, 'verde');
   });
 
-  it('as contas fecham: dinheiro − já saiu − a vencer = deve sobrar', () => {
-    const r = resumoDoMes(exemplo(), MES, '2026-11-10');
-    assert.equal(r.dinheiroDoMesCentavos - r.jaSaiu.totalCentavos - r.aVencerCentavos, r.deveSobrarCentavos);
+  it('marcar como pago passa a conta de previsto para já pago', () => {
+    const base = exemplo();
+    const academia = base.fixos.find((f) => f.nome === 'Academia');
+    const r = resumoDoMes(definirStatusDoFixo(base, MES, academia.id, 'pago'), MES, '2026-11-10');
+
+    assert.equal(r.jaPago.fixosCentavos, 9990);
+    assert.equal(r.previstoCentavos, 38980 - 9990);
+    assert.equal(r.naContaAgoraCentavos, 150000 - 9990 - 35000);
+    assert.equal(r.deveSobrarCentavos, 76020); // o fim do mês não muda: a conta só trocou de lado
+  });
+
+  it('as contas fecham: dinheiro − já pago − previsto = deve sobrar', () => {
+    const base = exemplo();
+    const consulta = base.fixos.find((f) => f.nome === 'Consulta');
+    const academia = base.fixos.find((f) => f.nome === 'Academia');
+    const estado = definirStatusDoFixo(
+      definirStatusDoFixo(base, MES, consulta.id, 'pago', { valorCentavos: 27000 }),
+      MES, academia.id, 'dispensado',
+    );
+    const r = resumoDoMes(estado, MES, '2026-11-10');
+    assert.equal(r.dinheiroDoMesCentavos - r.jaPago.totalCentavos - r.previstoCentavos, r.deveSobrarCentavos);
   });
 
   it('deve sobrar é igual à sobra usada na virada do mês', () => {
@@ -55,10 +73,10 @@ describe('resumoDoMes: os grandes números', () => {
     assert.equal(r.fracaoDoMes, 0.5);
   });
 
-  it('mês que já passou: todas as contas venceram', () => {
+  it('mês que já passou: conta não marcada aparece como atrasada', () => {
     const r = resumoDoMes(exemplo(), MES, '2026-12-02');
-    assert.equal(r.aVencerCentavos, 0);
     assert.equal(r.dia, 30);
+    assert.equal(r.contagemFixos.atrasadas, 3);
   });
 
   it('cor do saldo: amarelo abaixo de R$ 200 e vermelho no negativo', () => {
@@ -119,12 +137,25 @@ describe('resumoDoMes: categorias', () => {
 });
 
 describe('resumoDoMes: listas', () => {
-  it('contas fixas por dia, com situação de vencida', () => {
-    const r = resumoDoMes(exemplo(), MES, '2026-11-10');
-    assert.deepEqual(
-      r.fixos.map((f) => [f.fixo.nome, f.vencido]),
-      [['Consulta', true], ['Academia', true], ['Streaming', false]],
+  it('ordem das contas: atrasadas, previstas, pagas e dispensadas', () => {
+    const base = exemplo();
+    const consulta = base.fixos.find((f) => f.nome === 'Consulta');   // dia 1
+    const streaming = base.fixos.find((f) => f.nome === 'Streaming'); // dia 12
+    const estado = definirStatusDoFixo(
+      definirStatusDoFixo(base, MES, consulta.id, 'pago'),
+      MES, streaming.id, 'dispensado',
     );
+    const r = resumoDoMes(estado, MES, '2026-11-10');
+    assert.deepEqual(
+      r.fixos.map((f) => [f.fixo.nome, f.status, f.atrasado]),
+      [['Academia', 'previsto', true], ['Consulta', 'pago', false], ['Streaming', 'dispensado', false]],
+    );
+    assert.deepEqual(r.contagemFixos, { previstas: 1, atrasadas: 1, pagas: 1, dispensadas: 1 });
+  });
+
+  it('no dia do vencimento a conta ainda não está atrasada', () => {
+    const academia = resumoDoMes(exemplo(), MES, '2026-11-05').fixos.find((f) => f.fixo.nome === 'Academia');
+    assert.equal(academia.atrasado, false);
   });
 
   it('vencimento no dia 31 cai no último dia de um mês de 30 dias', () => {
@@ -134,7 +165,7 @@ describe('resumoDoMes: listas', () => {
     }, MES);
     const aluguel = resumoDoMes(comDia31, MES, '2026-11-30').fixos.find((f) => f.fixo.nome === 'Aluguel');
     assert.equal(aluguel.diaEfetivo, 30);
-    assert.equal(aluguel.vencido, true);
+    assert.equal(aluguel.atrasado, false); // vence no dia 30 = hoje
   });
 
   it('gastos do mais recente para o mais antigo, com o nome da categoria', () => {
@@ -162,8 +193,8 @@ describe('excluirLancamento', () => {
     assert.equal(depois.lancamentos.length, estado.lancamentos.length);
     assert.equal(depois.lancamentos.find((l) => l.id === alvo.id).excluidoEm, '2026-11-10T12:00:00.000Z');
     assert.equal(
-      resumoDoMes(depois, MES, '2026-11-10').jaSaiu.gastosCentavos,
-      resumoDoMes(estado, MES, '2026-11-10').jaSaiu.gastosCentavos - alvo.valorCentavos,
+      resumoDoMes(depois, MES, '2026-11-10').jaPago.gastosCentavos,
+      resumoDoMes(estado, MES, '2026-11-10').jaPago.gastosCentavos - alvo.valorCentavos,
     );
   });
 
@@ -176,16 +207,15 @@ describe('excluirLancamento', () => {
   });
 });
 
-describe('resumoDoMes: conta fixa opcional', () => {
-  it('opcional sem valor no mês fica fora da lista e das contas', () => {
+describe('resumoDoMes: conta dispensada', () => {
+  it('dispensada fica na lista, mas fora das contas', () => {
     const base = exemplo();
-    const comDentista = adicionarFixo(base, {
-      nome: 'Dentista', valorCentavos: 15000, diaVencimento: 1, formaPagamento: 'Pix', tipo: 'mensal', opcional: true,
-    }, MES);
-    const r = resumoDoMes(comDentista, MES, '2026-11-10');
+    const consulta = base.fixos.find((f) => f.nome === 'Consulta');
+    const r = resumoDoMes(definirStatusDoFixo(base, MES, consulta.id, 'dispensado'), MES, '2026-11-10');
     const antes = resumoDoMes(base, MES, '2026-11-10');
 
-    assert.equal(r.fixos.some((f) => f.fixo.nome === 'Dentista'), false);
-    assert.equal(r.deveSobrarCentavos, antes.deveSobrarCentavos);
+    assert.ok(r.fixos.some((f) => f.fixo.nome === 'Consulta' && f.status === 'dispensado'));
+    assert.equal(r.previstoCentavos, antes.previstoCentavos - 25000);
+    assert.equal(r.deveSobrarCentavos, antes.deveSobrarCentavos + 25000);
   });
 });
