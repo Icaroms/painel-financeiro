@@ -152,18 +152,20 @@
           <dd id="mes-dinheiro"></dd>
         </div>
         <div class="conta-linha">
-          <dt>Já saiu <span class="secundario" id="mes-ja-saiu-detalhe"></span></dt>
-          <dd id="mes-ja-saiu"></dd>
+          <dt>Já pago <span class="secundario" id="mes-ja-pago-detalhe"></span></dt>
+          <dd id="mes-ja-pago"></dd>
         </div>
         <div class="conta-linha">
-          <dt>Ainda vai vencer <span class="secundario">contas fixas</span></dt>
-          <dd id="mes-a-vencer"></dd>
+          <dt>Ainda previsto <span class="secundario">contas fixas que ainda vão sair</span></dt>
+          <dd id="mes-previsto"></dd>
         </div>
         <div class="conta-linha conta-total" id="mes-linha-sobra" data-cor="neutro">
           <dt><span class="luz" aria-hidden="true"></span>Deve sobrar</dt>
           <dd id="mes-sobra"></dd>
         </div>
       </dl>
+      <!-- Dinheiro do mês − já pago: serve para conferir o app com o saldo do banco -->
+      <p class="na-conta secundario" id="mes-na-conta"></p>
       <p class="aviso-saldo secundario" id="mes-aviso-saldo" hidden>
         O saldo do mês ainda não foi confirmado. <a href="#configurar">Confirmar em Configurar</a>.
       </p>
@@ -177,7 +179,10 @@
 
     <section class="cartao" aria-labelledby="titulo-mes-fixos">
       <h2 id="titulo-mes-fixos">Contas fixas</h2>
+      <p class="secundario explicacao">Marque cada conta como Pago quando ela sair, ou Dispensado se ela não vai sair este mês.</p>
+      <p class="resumo-dinheiro" id="mes-contagem-fixos"></p>
       <ul class="lista-mes" id="mes-fixos"></ul>
+      <nav class="paginacao" id="paginacao-mes-fixos" aria-label="Páginas das contas fixas do mês"></nav>
     </section>
 
     <section class="cartao" aria-labelledby="titulo-mes-gastos">

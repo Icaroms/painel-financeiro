@@ -657,8 +657,54 @@ body {
 /* Gasto de outro dia: borda âmbar, para não lançar um gasto de hoje na data errada sem perceber */
 .campo-data.anterior { border-color: var(--amarelo); }
 
-/* ---------- Conta fixa opcional (vista Configurar) ---------- */
-.opcao-opcional { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.4; cursor: pointer; }
-.opcao-opcional input { flex: 0 0 auto; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--texto); }
-/* Opcional fora do mês: em segundo plano, como uma conta "desligada" */
+/* ---------- Caixa de marcar no formulário de conta fixa (vista Configurar) ---------- */
+.opcao-check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.4; cursor: pointer; }
+.opcao-check input { flex: 0 0 auto; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--texto); }
+/* Conta dispensada no mês: em segundo plano, como uma conta "desligada" */
 .fixo-fora .fixo-nome, .fixo-fora .fixo-valor { color: var(--secundario); font-weight: 500; }
+
+/* ---------- Status das contas fixas (aba Mês) ---------- */
+.na-conta { margin: 0; font-size: 14px; line-height: 1.4; }
+.na-conta strong { color: var(--texto); font-family: var(--fonte-numero); font-size: 16px; }
+
+.fixo-mes { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 12px; border-bottom: 1px solid var(--linha); }
+.fixo-mes:last-child { border-bottom: none; }
+.fixo-mes .linha-mes { padding: 0; border-bottom: none; }
+.situacao-fixo { font-size: 14px; font-weight: 500; }
+
+/* Cada situação com o seu sinal, como as luzes do painel */
+.status-pago .situacao-fixo { color: var(--verde); }
+.status-previsto .situacao-fixo { color: var(--secundario); }
+.fixo-mes.atrasada .situacao-fixo { color: var(--amarelo); }
+.status-previsto .linha-mes-valor { color: var(--secundario); }
+.status-dispensado .linha-mes-nome,
+.status-dispensado .situacao-fixo { color: var(--secundario); }
+.status-dispensado .linha-mes-valor { color: var(--secundario); text-decoration: line-through; font-weight: 500; }
+
+/* Seletor de três posições: Previsto | Pago | Dispensado */
+.seletor-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--linha); border-radius: 10px; overflow: hidden; }
+.opcao-status {
+  min-height: 36px;
+  padding: 0 6px;
+  border: none;
+  border-left: 1px solid var(--linha);
+  background: transparent;
+  color: var(--secundario);
+  font-family: var(--fonte-texto);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.opcao-status:first-child { border-left: none; }
+.opcao-status[aria-pressed="true"] { background: var(--texto); color: var(--fundo); }
+.opcao-status:focus-visible { outline: 2px solid var(--texto); outline-offset: -2px; }
+
+/* Campo "valor pago", aberto embaixo da conta */
+.form-pago { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.form-pago .dica { grid-column: 1 / -1; margin: 0; font-size: 14px; }
+.form-pago .campo-dinheiro input {
+  width: 100%; min-height: 40px; padding: 0 12px 0 40px; border: 1px solid var(--linha); border-radius: 10px;
+  background: var(--fundo); color: var(--texto); font-family: var(--fonte-numero); font-size: 16px;
+}
+.form-pago .acoes { display: flex; gap: 6px; }
+.form-pago .erro { grid-column: 1 / -1; }
