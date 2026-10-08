@@ -617,3 +617,12 @@ body {
 .paginacao:empty { display: none; }
 .paginacao .pagina-atual { font-size: 14px; }
 .paginacao .botao-pequeno:disabled { opacity: 0.4; cursor: default; }
+
+/* Situação do backup: texto comum, ou aviso âmbar quando está atrasado */
+.backup-situacao { margin: 0; font-size: 15px; }
+.backup-situacao.atrasado {
+  padding: 10px 12px;
+  border: 1px solid var(--amarelo);
+  border-radius: 12px;
+  line-height: 1.4;
+}

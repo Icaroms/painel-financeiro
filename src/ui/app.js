@@ -29,6 +29,7 @@ import { calcularPainel, tituloDoMes } from '../painel.js';
 import { buscarMes, dadosDoMes, virarMes } from '../meses.js';
 import { categoriasAtivas } from '../configuracao.js';
 import { criarDadosIniciais, ehExemplo } from '../inicio.js';
+import { registrarBackup, situacaoDoBackup } from '../lembrete-backup.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
@@ -88,6 +89,7 @@ const el = {
   botaoBoasVindasBackup: elemento('botao-boas-vindas-backup'),
   faixaExemplo: elemento('faixa-exemplo'),
   botaoZerar: elemento('botao-zerar'),
+  backupSituacao: elemento('backup-situacao'),
   abas: elemento('abas'),
   botaoExportar: elemento('botao-exportar'),
   botaoImportar: elemento('botao-importar'),
@@ -296,10 +298,24 @@ function atualizarFaixaExemplo() {
   el.faixaExemplo.hidden = !ehExemplo(dados);
 }
 
-/** Mostra o ponto âmbar na aba Configurar quando o saldo do mês espera confirmação. */
+/**
+ * Mostra o ponto âmbar na aba Configurar quando o saldo do mês espera
+ * confirmação ou quando o backup está atrasado, e atualiza a linha
+ * "Último backup" do cartão Backup.
+ */
 function atualizarPonto() {
   const registro = buscarMes(dados, mesDaData(hojeLocal()));
-  el.pontoConfigurar.hidden = !registro || registro.saldoConfirmado;
+  const saldoPendente = registro !== undefined && !registro.saldoConfirmado;
+  const backup = situacaoDoBackup(dados);
+
+  // O ponto acende por qualquer um dos dois motivos: saldo a confirmar ou backup atrasado.
+  el.pontoConfigurar.hidden = !saldoPendente && !backup.atrasado;
+
+  // Linha do cartão Backup, em Configurar.
+  el.backupSituacao.textContent = backup.atrasado
+    ? `${backup.texto} Já passou de uma semana: exporte um backup e guarde no iCloud Drive.`
+    : backup.texto;
+  el.backupSituacao.classList.toggle('atrasado', backup.atrasado);
 }
 
 /* ------------------------------------------------------------------ */
@@ -410,10 +426,18 @@ el.botaoZerar.addEventListener('click', async () => {
 el.botaoExportar.addEventListener('click', async () => {
   const nome = nomeDoArquivoBackup();
   try {
-    const resultado = await entregarArquivo(nome, gerarBackup(dados));
-    avisar(resultado === 'cancelado'
-      ? 'Exportação cancelada.'
-      : `Backup exportado: ${nome}`);
+    // A data do backup vai DENTRO do arquivo: ao importar, o app já sabe
+    // quando esse backup foi feito.
+    const comData = registrarBackup(dados);
+    const resultado = await entregarArquivo(nome, gerarBackup(comData));
+    if (resultado === 'cancelado') {
+      avisar('Exportação cancelada.');
+      return;
+    }
+    dados = comData;
+    atualizarPonto();
+    const gravou = await gravar(dados);
+    avisar(gravou ? `Backup exportado: ${nome}` : avisoSemGravacao());
   } catch (erro) {
     console.error(erro);
     avisar('Não foi possível exportar o backup.');
