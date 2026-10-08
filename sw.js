@@ -17,7 +17,7 @@
  */
 
 /** Mude a versão quando a LISTA de arquivos mudar: a cópia antiga é apagada. */
-const VERSAO_CACHE = 'painel-financeiro-v3';
+const VERSAO_CACHE = 'painel-financeiro-v4';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -38,6 +38,7 @@ const ARQUIVOS = [
   './icones/icone-512.png',
   './icones/apple-touch-icon.png',
   './src/backup.js',
+  './src/cartoes.js',
   './src/configuracao.js',
   './src/dados-exemplo.js',
   './src/datas.js',

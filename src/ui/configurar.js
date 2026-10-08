@@ -1,6 +1,6 @@
 /**
- * Vista "Configurar": dinheiro do mês, contas fixas, categorias e formas
- * de pagamento.
+ * Vista "Configurar": dinheiro do mês, contas fixas, categorias, formas
+ * de pagamento e cartões de crédito.
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As mudanças nos dados
  * são feitas pelas funções puras de src/configuracao.js (testadas no Node).
@@ -17,6 +17,7 @@ import { ErroValidacao } from '../erros.js';
 import { buscarMes } from '../meses.js';
 import { tituloDoMes } from '../painel.js';
 import { ehPrimeiroMes } from '../inicio.js';
+import { cartaoDaForma, salvarCartao, removerCartao, faturaDaCompra } from '../cartoes.js';
 import {
   textoDoValor,
   lerValorComSinal,
@@ -91,6 +92,9 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
     listaFixos: elemento('lista-fixos'),
     areaNovoFixo: elemento('area-novo-fixo'),
     botaoNovoFixo: elemento('botao-novo-fixo'),
+    listaCartoes: elemento('lista-cartoes'),
+    areaCartao: elemento('area-cartao'),
+    botaoNovoCartao: elemento('botao-novo-cartao'),
   };
 
   const mesAtual = () => mesDaData(hojeLocal());
@@ -602,6 +606,7 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
           try {
             await aplicarMudanca(removerFormaPagamento(obterDados(), forma), `"${forma}" removida.`);
             renderizarFormas();
+            renderizarCartoes(); // o cartão ligado à forma sai junto
           } catch (falha) {
             if (!(falha instanceof ErroValidacao)) throw falha;
             mostrarErro(el.erroNovaForma, null, falha.message);
@@ -621,11 +626,165 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
       await aplicarMudanca(adicionarFormaPagamento(obterDados(), nome.value), `"${nome.value.trim()}" adicionada.`);
       el.formNovaForma.reset();
       renderizarFormas();
+      renderizarCartoes(); // a forma nova pode virar cartão
       nome.focus();
     } catch (falha) {
       if (!(falha instanceof ErroValidacao)) throw falha;
       mostrarErro(el.erroNovaForma, null, falha.message);
     }
+  });
+
+  /* ---------------- Cartões de crédito ---------------- */
+
+  /** Forma de pagamento com o formulário aberto: o nome da forma, 'novo' ou null. */
+  let cartaoAberto = null;
+
+  /** "2026-11-10" → "10/11". */
+  const dataCurta = (data) => `${data.slice(8, 10)}/${data.slice(5, 7)}`;
+
+  /**
+   * Formulário do cartão (cadastro ou edição).
+   *
+   * @param {object|null} cartao null para cadastrar.
+   */
+  function formularioDoCartao(cartao) {
+    const dados = obterDados();
+    const form = criar('form', { classe: 'form-fixo', autocomplete: 'off', novalidate: '' });
+
+    // No cadastro, só as formas que ainda não são cartão; na edição, a forma fica fixa.
+    const select = criar('select', { name: 'forma' });
+    const formas = cartao
+      ? [cartao.formaPagamento]
+      : dados.formasPagamento.filter((f) => !cartaoDaForma(dados, f));
+    for (const forma of formas) select.append(criar('option', { value: forma, texto: forma }));
+    select.disabled = cartao !== null;
+
+    const limite = campoDinheiro('Limite total', 'limite', cartao ? textoDoValor(cartao.limiteCentavos) : '', 'inteira');
+    const inputFechamento = criar('input', { name: 'fechamento', inputmode: 'numeric', placeholder: '1 a 31', maxlength: '2' });
+    const inputVencimento = criar('input', { name: 'vencimento', inputmode: 'numeric', placeholder: '1 a 31', maxlength: '2' });
+    if (cartao) {
+      inputFechamento.value = String(cartao.diaFechamento);
+      inputVencimento.value = String(cartao.diaVencimento);
+    }
+
+    // Prévia ao vivo: em que dia uma compra feita hoje será paga.
+    const dica = criar('p', { classe: 'dica secundario' });
+    function atualizarPrevia() {
+      const diaFechamento = Number(inputFechamento.value);
+      const diaVencimento = Number(inputVencimento.value);
+      const diaValido = (dia) => Number.isInteger(dia) && dia >= 1 && dia <= 31;
+      if (!diaValido(diaFechamento) || !diaValido(diaVencimento) || diaFechamento === diaVencimento) {
+        dica.textContent = 'Informe os dias de fechamento e de vencimento da fatura (dias diferentes).';
+        return;
+      }
+      const { vencimento } = faturaDaCompra({ diaFechamento, diaVencimento }, hojeLocal());
+      dica.textContent = `Uma compra feita hoje será paga em ${dataCurta(vencimento)}.`;
+    }
+    form.addEventListener('input', atualizarPrevia);
+    atualizarPrevia();
+
+    const erro = criar('span', { classe: 'erro' });
+    const acoes = criar('div', { classe: 'acoes' });
+    const cancelar = criar('button', { classe: 'botao-pequeno', type: 'button', texto: 'Cancelar' });
+    cancelar.addEventListener('click', () => {
+      cartaoAberto = null;
+      renderizarCartoes();
+    });
+    acoes.append(cancelar, criar('button', { classe: 'botao-pequeno', type: 'submit', texto: 'Salvar' }));
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      mostrarErro(erro, null, '');
+      try {
+        const formaPagamento = select.value;
+        const novos = salvarCartao(obterDados(), {
+          formaPagamento,
+          limiteCentavos: lerValorPositivo(limite.input.value, 'limiteCentavos'),
+          diaFechamento: Number(inputFechamento.value.trim() || NaN),
+          diaVencimento: Number(inputVencimento.value.trim() || NaN),
+        });
+        await aplicarMudanca(novos, cartao ? `Cartão "${formaPagamento}" salvo.` : `"${formaPagamento}" agora é um cartão.`);
+        cartaoAberto = null;
+        renderizarCartoes();
+      } catch (falha) {
+        if (!(falha instanceof ErroValidacao)) throw falha;
+        mostrarErro(erro, null, falha.message);
+      }
+    });
+
+    form.append(
+      campo('Forma de pagamento', select, 'inteira'),
+      limite.rotulo,
+      campo('Dia do fechamento', inputFechamento),
+      campo('Dia do vencimento', inputVencimento),
+      dica,
+      erro,
+      acoes,
+    );
+    return form;
+  }
+
+  /** Item de um cartão cadastrado. */
+  function itemDoCartao(cartao) {
+    const li = criar('li', { classe: 'fixo' });
+    const topo = criar('div', { classe: 'fixo-topo' });
+    topo.append(
+      criar('span', { classe: 'fixo-nome', texto: cartao.formaPagamento }),
+      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(cartao.limiteCentavos) }),
+    );
+
+    const { vencimento } = faturaDaCompra(cartao, hojeLocal());
+    const detalhe = criar('p', {
+      classe: 'fixo-detalhe secundario',
+      texto: `Limite · fecha dia ${cartao.diaFechamento} · vence dia ${cartao.diaVencimento}. ` +
+        `Compra feita hoje: paga em ${dataCurta(vencimento)}.`,
+    });
+
+    const acoes = criar('div', { classe: 'acoes' });
+    const remover = criar('button', {
+      classe: 'botao-pequeno perigo', type: 'button', texto: 'Deixar de ser cartão',
+      'aria-label': `Deixar ${cartao.formaPagamento} de ser cartão`,
+    });
+    const editar = criar('button', {
+      classe: 'botao-pequeno', type: 'button', texto: 'Editar', 'aria-label': `Editar o cartão ${cartao.formaPagamento}`,
+    });
+    remover.addEventListener('click', async () => {
+      const pergunta = `"${cartao.formaPagamento}" deixa de ser cartão?\n\nEla continua como forma de pagamento.`;
+      if (!window.confirm(pergunta)) return;
+      await aplicarMudanca(removerCartao(obterDados(), cartao.formaPagamento), `"${cartao.formaPagamento}" não é mais cartão.`);
+      cartaoAberto = null;
+      renderizarCartoes();
+    });
+    editar.addEventListener('click', () => {
+      cartaoAberto = cartao.formaPagamento;
+      renderizarCartoes();
+    });
+    acoes.append(remover, editar);
+
+    li.append(topo, detalhe, acoes);
+    if (cartaoAberto === cartao.formaPagamento) li.append(formularioDoCartao(cartao));
+    return li;
+  }
+
+  function renderizarCartoes() {
+    const dados = obterDados();
+    const cartoes = dados.cartoes ?? [];
+    el.listaCartoes.replaceChildren(
+      ...(cartoes.length === 0
+        ? [criar('li', { classe: 'lista-vazia secundario', texto: 'Nenhum cartão cadastrado.' })]
+        : cartoes.map(itemDoCartao)),
+    );
+
+    // Só dá para cadastrar se alguma forma de pagamento ainda não é cartão.
+    const livres = dados.formasPagamento.filter((f) => !cartaoDaForma(dados, f));
+    const cadastrando = cartaoAberto === 'novo' && livres.length > 0;
+    el.botaoNovoCartao.hidden = cadastrando || livres.length === 0;
+    el.areaCartao.replaceChildren(...(cadastrando ? [formularioDoCartao(null)] : []));
+  }
+
+  el.botaoNovoCartao.addEventListener('click', () => {
+    cartaoAberto = 'novo';
+    renderizarCartoes();
   });
 
   /* ---------------- Tudo ---------------- */
@@ -635,6 +794,7 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     renderizarFixos();
     renderizarCategorias();
     renderizarFormas();
+    renderizarCartoes();
   }
 
   return { renderizar };

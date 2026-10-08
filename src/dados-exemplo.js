@@ -9,6 +9,7 @@
  * funcionar em qualquer data em que a página for aberta.
  */
 
+import { criarCartao } from './cartoes.js';
 import { criarCategoria, criarFixo, criarLancamento, criarMes, ajustarFixoNoMes } from './modelo.js';
 import { mesDaData } from './datas.js';
 
@@ -19,7 +20,8 @@ import { mesDaData } from './datas.js';
  *   categorias: object[],
  *   fixos: object[],
  *   lancamentos: object[],
- *   formasPagamento: string[]
+ *   formasPagamento: string[],
+ *   cartoes: object[]
  * }}
  */
 export function criarDadosDeExemplo(hoje) {
@@ -56,5 +58,7 @@ export function criarDadosDeExemplo(hoje) {
     fixos: [academia, streaming, consulta],
     lancamentos,
     formasPagamento: ['Pix', 'Crédito', 'Débito', 'Dinheiro'],
+    // "Crédito" é um cartão: limite de R$ 2.000, fecha dia 3 e vence dia 10.
+    cartoes: [criarCartao({ formaPagamento: 'Crédito', limiteCentavos: 200000, diaFechamento: 3, diaVencimento: 10 })],
   };
 }

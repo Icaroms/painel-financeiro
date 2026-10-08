@@ -250,8 +250,9 @@ export function adicionarFormaPagamento(estado, nome) {
 }
 
 /**
- * Remove uma forma de pagamento. Os lançamentos antigos guardam o nome
- * como texto, então não são afetados. Precisa sobrar pelo menos uma.
+ * Remove uma forma de pagamento (e o cartão ligado a ela, se houver).
+ * Os lançamentos antigos guardam o nome como texto, então não são
+ * afetados. Precisa sobrar pelo menos uma.
  *
  * @param {object} estado
  * @param {string} nome
@@ -264,5 +265,10 @@ export function removerFormaPagamento(estado, nome) {
   if (estado.formasPagamento.length === 1) {
     throw new ErroValidacao('formaPagamento', 'Mantenha pelo menos uma forma de pagamento.');
   }
-  return { ...estado, formasPagamento: estado.formasPagamento.filter((f) => f !== nome) };
+  // Se a forma era um cartão, o cadastro do cartão sai junto.
+  return {
+    ...estado,
+    formasPagamento: estado.formasPagamento.filter((f) => f !== nome),
+    cartoes: (estado.cartoes ?? []).filter((c) => c.formaPagamento !== nome),
+  };
 }

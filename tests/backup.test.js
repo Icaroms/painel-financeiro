@@ -27,7 +27,7 @@ describe('gerarBackup', () => {
     const pacote = JSON.parse(texto);
 
     assert.equal(pacote.formato, 'painel-financeiro');
-    assert.equal(pacote.versao, 2);
+    assert.equal(pacote.versao, 3);
     assert.equal(pacote.salvoEm, '2026-11-03T13:00:00.000Z');
     assert.match(texto, /\n  "formato"/); // recuo de 2 espaços
   });

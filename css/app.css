@@ -708,3 +708,7 @@ body {
 }
 .form-pago .acoes { display: flex; gap: 6px; }
 .form-pago .erro { grid-column: 1 / -1; }
+
+/* ---------- Cartões de crédito (vista Configurar) ---------- */
+.lista-cartoes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+#botao-novo-cartao { align-self: stretch; }
