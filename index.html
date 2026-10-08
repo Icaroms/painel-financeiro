@@ -117,6 +117,13 @@
         <div class="chips chips-4" id="chips-pagamento"></div>
       </fieldset>
 
+      <!-- Data do gasto: já vem como hoje; muda só para lançar um gasto esquecido do mês -->
+      <label class="campo-data" id="campo-data">
+        <span class="secundario">Data</span>
+        <span class="data-escolhida" id="data-texto">Hoje</span>
+        <input type="date" id="data-gasto" name="data" aria-label="Data do gasto">
+      </label>
+
       <button type="submit" class="botao-lancar" id="botao-lancar" disabled>Lançar gasto</button>
     </form>
 
