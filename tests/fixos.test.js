@@ -212,3 +212,56 @@ describe('definirValorNoMes', () => {
     assert.throws(() => definirValorNoMes(estado, MES, fixo.id, -1), { campo: 'valorCentavos' });
   });
 });
+
+describe('conta fixa opcional (ex.: dentista)', () => {
+  const OPCIONAL = { ...MENSAL, nome: 'Dentista', valorCentavos: 15000, diaVencimento: 1, opcional: true };
+
+  it('é guardada como opcional; contas comuns não são', () => {
+    assert.equal(comFixo(OPCIONAL).fixo.opcional, true);
+    assert.equal(comFixo(MENSAL).fixo.opcional, false);
+  });
+
+  it('sem valor no mês: não conta nada e não muda a sobra', () => {
+    const base = exemplo();
+    const { estado } = comFixo(OPCIONAL, base);
+    const item = fixosDoMes(estado, MES).find((i) => i.fixo.nome === 'Dentista');
+
+    assert.equal(item.previsto, false);
+    assert.equal(item.valorCentavos, 0);
+    assert.equal(sobraDoMes(estado, MES), sobraDoMes(base, MES));
+  });
+
+  it('com valor só deste mês: passa a contar, e no mês seguinte volta a não contar', () => {
+    const { estado, fixo } = comFixo(OPCIONAL);
+    const comConsulta = definirValorNoMes(estado, MES, fixo.id, 20000);
+    const item = fixosDoMes(comConsulta, MES).find((i) => i.fixo.id === fixo.id);
+    assert.equal(item.previsto, true);
+    assert.equal(item.valorCentavos, 20000);
+
+    const dezembro = virarMes(comConsulta, '2026-12').estado;
+    const emDezembro = fixosDoMes(dezembro, '2026-12').find((i) => i.fixo.id === fixo.id);
+    assert.equal(emDezembro.previsto, false);
+    assert.equal(emDezembro.valorCentavos, 0);
+  });
+
+  it('editar pode ligar e desligar o opcional', () => {
+    const { estado, fixo } = comFixo(MENSAL);
+    const ligado = editarFixo(estado, fixo.id, { ...MENSAL, opcional: true }, MES);
+    assert.equal(ligado.fixos.find((f) => f.id === fixo.id).opcional, true);
+    const desligado = editarFixo(ligado, fixo.id, { ...MENSAL, opcional: false }, MES);
+    assert.equal(desligado.fixos.find((f) => f.id === fixo.id).opcional, false);
+  });
+
+  it('fixo gravado antes do campo existir conta como conta comum', () => {
+    const { estado, fixo } = comFixo(MENSAL);
+    const { opcional, ...antigo } = fixo;
+    const semCampo = { ...estado, fixos: estado.fixos.map((f) => (f.id === fixo.id ? antigo : f)) };
+    const item = fixosDoMes(semCampo, MES).find((i) => i.fixo.id === fixo.id);
+    assert.equal(item.previsto, true);
+    assert.equal(item.valorCentavos, 3490);
+  });
+
+  it('rejeita "opcional" que não seja true ou false', () => {
+    assert.throws(() => comFixo({ ...MENSAL, opcional: 'sim' }), { campo: 'opcional' });
+  });
+});

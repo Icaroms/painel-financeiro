@@ -175,3 +175,17 @@ describe('excluirLancamento', () => {
     assert.throws(() => excluirLancamento(estado, 'nao-existe'), { campo: 'lancamento' });
   });
 });
+
+describe('resumoDoMes: conta fixa opcional', () => {
+  it('opcional sem valor no mês fica fora da lista e das contas', () => {
+    const base = exemplo();
+    const comDentista = adicionarFixo(base, {
+      nome: 'Dentista', valorCentavos: 15000, diaVencimento: 1, formaPagamento: 'Pix', tipo: 'mensal', opcional: true,
+    }, MES);
+    const r = resumoDoMes(comDentista, MES, '2026-11-10');
+    const antes = resumoDoMes(base, MES, '2026-11-10');
+
+    assert.equal(r.fixos.some((f) => f.fixo.nome === 'Dentista'), false);
+    assert.equal(r.deveSobrarCentavos, antes.deveSobrarCentavos);
+  });
+});
