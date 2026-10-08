@@ -43,6 +43,7 @@ export function criarDadosIniciais(hoje, opcoes = {}) {
     fixos: [],
     lancamentos: [],
     formasPagamento: [...FORMAS_INICIAIS],
+    cartoes: [],
   };
 }
 

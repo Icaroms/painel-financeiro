@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { empacotar, desempacotar, migrarDaVersao1, FORMATO, VERSAO_ATUAL } from '../src/persistencia.js';
+import { empacotar, desempacotar, migrarDaVersao1, migrarDaVersao2, FORMATO, VERSAO_ATUAL } from '../src/persistencia.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 
 const AGORA = new Date('2026-11-03T13:00:00.000Z');
@@ -63,7 +63,7 @@ describe('desempacotar', () => {
   });
 
   it('rejeita dados sem uma das listas obrigatórias', () => {
-    for (const lista of ['meses', 'categorias', 'fixos', 'lancamentos', 'formasPagamento']) {
+    for (const lista of ['meses', 'categorias', 'fixos', 'lancamentos', 'formasPagamento', 'cartoes']) {
       const dados = { ...criarDadosDeExemplo('2026-11-03'), [lista]: undefined };
       assert.throws(() => desempacotar(empacotar(dados)), new RegExp(lista));
     }
@@ -88,7 +88,7 @@ describe('desempacotar', () => {
 /** Monta um pacote no formato antigo, como era gravado na versão 1. */
 function pacoteVersao1() {
   const atual = criarDadosDeExemplo('2026-10-15');
-  const { meses, ...resto } = atual;
+  const { meses, cartoes, ...resto } = atual;
   const { rendaPrevistaCentavos, saldoConfirmado, ...registroMesV1 } = meses[0];
   return {
     formato: FORMATO,
@@ -126,7 +126,32 @@ describe('desempacotar pacote da versão 1', () => {
     assert.equal(dados.meses[0].rendaPrevistaCentavos, 0);
   });
 
-  it('a versão atual do formato é a 2', () => {
-    assert.equal(VERSAO_ATUAL, 2);
+  it('a versão atual do formato é a 3', () => {
+    assert.equal(VERSAO_ATUAL, 3);
+  });
+
+  it('um pacote da versão 1 passa pelas duas conversões e ganha a lista de cartões', () => {
+    assert.deepEqual(desempacotar(pacoteVersao1()).cartoes, []);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Conversão da versão 2 para a versão 3 (cartões de crédito)          */
+/* ------------------------------------------------------------------ */
+
+describe('migrarDaVersao2', () => {
+  it('acrescenta a lista de cartões vazia e não muda o resto', () => {
+    const { cartoes, ...v2 } = criarDadosDeExemplo('2026-10-15');
+    const v3 = migrarDaVersao2(v2);
+    assert.deepEqual(v3.cartoes, []);
+    assert.equal(v3.meses, v2.meses);
+    assert.equal(v3.formasPagamento, v2.formasPagamento);
+  });
+
+  it('um pacote da versão 2 é lido normalmente', () => {
+    const { cartoes, ...v2 } = criarDadosDeExemplo('2026-10-15');
+    const dados = desempacotar({ formato: FORMATO, versao: 2, salvoEm: '2026-10-15T12:00:00.000Z', dados: v2 });
+    assert.deepEqual(dados.cartoes, []);
+    assert.equal(dados.meses.length, 1);
   });
 });
