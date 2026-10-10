@@ -43,8 +43,8 @@ function estadoDeTeste({ limiteCentavos = 1000000 } = {}) {
 }
 
 const visao = (estado = estadoDeTeste()) => dadosDoMes(estado, MES);
-const simular = (aVistaCentavos, opcoes = [], estado) => simularCompra(visao(estado), {
-  formaPagamento: 'Cartão Nubank', aVistaCentavos, opcoes, hoje: HOJE,
+const simular = (aVistaCentavos, opcoes = [], estado = undefined, comprarEm = undefined) => simularCompra(visao(estado), {
+  formaPagamento: 'Cartão Nubank', aVistaCentavos, opcoes, hoje: HOJE, ...(comprarEm ? { comprarEm } : {}),
 });
 
 describe('taxaMensalEquivalente', () => {
@@ -143,7 +143,11 @@ describe('cor e melhor momento', () => {
   it('cabe agora: verde, sem espera', () => {
     const [, tresVezes] = simular(90000, [{ parcelas: 3, totalCentavos: 90000 }]).opcoes;
     assert.equal(tresVezes.cor, 'verde');
-    assert.deepEqual(tresVezes.melhorMomento, { esperaMeses: 0, mesDaCompra: MES, terminam: [] });
+    const { esperaMeses, mesDaCompra, terminam, piorMes, piorMesAgora } = tresVezes.melhorMomento;
+    assert.deepEqual([esperaMeses, mesDaCompra, terminam], [0, MES, []]);
+    // Comprando agora, o pior mês é o mesmo da ficha.
+    assert.deepEqual(piorMes, { mes: '2026-11', sobraCentavos: 70000 });
+    assert.deepEqual(piorMesAgora, piorMes);
   });
 
   it('não cabe agora, mas cabe depois que a Ferramentas termina', () => {
@@ -151,14 +155,19 @@ describe('cor e melhor momento', () => {
     const [, dozeVezes] = simular(720000, [{ parcelas: 12, totalCentavos: 720000 }]).opcoes;
     assert.equal(dozeVezes.cor, 'vermelho');
     assert.equal(dozeVezes.piorMes.sobraCentavos, -70000);
-    assert.deepEqual(dozeVezes.melhorMomento, {
-      esperaMeses: 2, mesDaCompra: '2026-12', terminam: [{ nome: 'Ferramentas', mes: '2026-11' }],
-    });
+    const momento = dozeVezes.melhorMomento;
+    assert.equal(momento.esperaMeses, 2);
+    assert.equal(momento.mesDaCompra, '2026-12');
+    assert.deepEqual(momento.terminam, [{ nome: 'Ferramentas', mes: '2026-11' }]);
+    assert.equal(momento.piorMesAgora.sobraCentavos, -70000); // para comparar: comprando agora
+    assert.equal(momento.piorMes.sobraCentavos, 30000); // comprando em dezembro
   });
 
   it('não cabe nos próximos 12 meses: esperaMeses null', () => {
     const [aVista] = simular(5000000, [], estadoDeTeste({ limiteCentavos: 9000000 })).opcoes;
     assert.equal(aVista.melhorMomento.esperaMeses, null);
+    assert.equal(aVista.melhorMomento.piorMes, null);
+    assert.ok(aVista.melhorMomento.piorMesAgora.sobraCentavos < 20000);
     assert.equal(MESES_DE_ESPERA_MAXIMOS, 12);
   });
 
@@ -174,9 +183,44 @@ describe('cor e melhor momento', () => {
       cartao: CARTAO, aVistaCentavos: 720000, parcelas: 12, totalCentavos: 720000, hoje: HOJE,
     });
     // Comprando em dezembro, a 1ª parcela é em janeiro: o Celular terminou em dezembro.
-    assert.deepEqual(r.melhorMomento, {
-      esperaMeses: 2, mesDaCompra: '2026-12', terminam: [{ nome: 'Celular', mes: '2026-12' }],
-    });
+    assert.equal(r.melhorMomento.mesDaCompra, '2026-12');
+    assert.deepEqual(r.melhorMomento.terminam, [{ nome: 'Celular', mes: '2026-12' }]);
+  });
+});
+
+describe('comprar em um mês futuro', () => {
+  it('a compra é no mesmo dia daquele mês e as parcelas começam depois', () => {
+    const [, dozeVezes] = simular(720000, [{ parcelas: 12, totalCentavos: 720000 }], undefined, '2026-12').opcoes;
+    assert.equal(dozeVezes.dataDaCompra, '2026-12-10');
+    assert.equal(dozeVezes.compraFutura, true);
+    assert.equal(dozeVezes.primeiroVencimento, '2027-01-10');
+    // É o mesmo pior mês do "melhor momento" comprando em dezembro.
+    assert.equal(dozeVezes.piorMes.sobraCentavos, 30000);
+    assert.equal(dozeVezes.cor, 'verde');
+  });
+
+  it('o melhor momento continua contado a partir de hoje', () => {
+    const [, dozeVezes] = simular(720000, [{ parcelas: 12, totalCentavos: 720000 }], undefined, '2027-03').opcoes;
+    assert.equal(dozeVezes.melhorMomento.mesDaCompra, '2026-12');
+  });
+
+  it('limite estimado: as faturas que vencem antes da compra contam como pagas', () => {
+    const estado = estadoDeTeste();
+    estado.lancamentos.push(criarLancamento({
+      valorCentavos: 100000, categoriaId: estado.categorias[0].id, formaPagamento: 'Cartão Nubank',
+      data: '2026-10-05', parcelas: 2, descricao: 'Celular', // faturas de novembro e dezembro
+    }));
+    const [agora] = simular(10000, [], estado).opcoes;
+    const [emJaneiro] = simular(10000, [], estado, '2027-01').opcoes;
+    assert.equal(agora.limite.disponivelAntesCentavos, 900000); // celular inteiro em aberto
+    assert.equal(agora.limite.estimativa, false);
+    assert.equal(emJaneiro.limite.disponivelAntesCentavos, 1000000); // em janeiro, as duas faturas já venceram
+    assert.equal(emJaneiro.limite.estimativa, true);
+  });
+
+  it('mês fora do intervalo (antes de agora ou depois de 12 meses): erro claro', () => {
+    assert.throws(() => simular(10000, [], undefined, '2026-09'), /entre agora e 12 meses/);
+    assert.throws(() => simular(10000, [], undefined, '2027-11'), /entre agora e 12 meses/);
   });
 });
 
