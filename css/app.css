@@ -733,6 +733,26 @@ body {
 /* Sobra menos de 10% do limite depois da compra: cor âmbar, como o saldo apertado */
 .linha-limite.apertado { color: var(--amarelo); font-weight: 600; }
 
+/* ---------- Simulador de compras (parte 2.5) ---------- */
+.link-simular { align-self: flex-start; color: var(--texto); font-size: 14px; font-weight: 600; }
+.link-voltar { display: inline-flex; align-items: center; text-decoration: none; color: var(--texto); }
+.lista-opcoes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.linha-opcao { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.linha-opcao .botao-pequeno { min-height: 44px; }
+.resultado-simulacao { display: flex; flex-direction: column; gap: 12px; }
+.opcao-simulada { border-left: 6px solid var(--cor, var(--linha)); }
+.opcao-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.opcao-topo h2 { font-size: 18px; }
+.selo-opcao { font-size: 13px; font-weight: 600; color: var(--cor); white-space: nowrap; }
+.opcao-linhas { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.4; }
+.opcao-linhas .alerta { color: var(--vermelho); font-weight: 600; }
+.mes-a-mes summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.tabela-meses { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; }
+.tabela-meses th, .tabela-meses td { padding: 4px 2px; text-align: right; border-bottom: 1px solid var(--linha); }
+.tabela-meses th:first-child, .tabela-meses td:first-child { text-align: left; }
+.tabela-meses td { font-family: var(--fonte-numero); white-space: nowrap; }
+.tabela-meses .negativo { color: var(--vermelho); }
+
 /* ---------- Faturas (aba Mês) ---------- */
 .seletor-status.duas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .itens-fatura { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }

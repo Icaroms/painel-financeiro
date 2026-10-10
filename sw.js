@@ -17,7 +17,7 @@
  */
 
 /** Mude a versão quando a LISTA de arquivos mudar: a cópia antiga é apagada. */
-const VERSAO_CACHE = 'painel-financeiro-v6';
+const VERSAO_CACHE = 'painel-financeiro-v7';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -56,6 +56,7 @@ const ARQUIVOS = [
   './src/painel.js',
   './src/persistencia.js',
   './src/resumo-mes.js',
+  './src/simulador.js',
   './src/veredito.js',
   './src/ui/app.js',
   './src/ui/arquivos.js',
@@ -63,6 +64,7 @@ const ARQUIVOS = [
   './src/ui/configurar.js',
   './src/ui/historico.js',
   './src/ui/mes.js',
+  './src/ui/simulador.js',
 ];
 
 // Instalação: guarda a cópia de todos os arquivos.

@@ -38,6 +38,7 @@ import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
 import { iniciarHistorico } from './historico.js';
+import { iniciarSimulador } from './simulador.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -75,6 +76,7 @@ const el = {
   botaoLancar: elemento('botao-lancar'),
   rodapeTexto: elemento('rodape-texto'),
   linhaCartao: elemento('linha-cartao'),
+  linkSimular: elemento('link-simular'),
   parcelas: elemento('parcelas'),
   infoCartao: elemento('info-cartao'),
   campoData: elemento('campo-data'),
@@ -82,6 +84,7 @@ const el = {
   dataTexto: elemento('data-texto'),
   botaoRestaurar: elemento('botao-restaurar'),
   telaConfigurar: elemento('tela-configurar'),
+  telaSimular: elemento('tela-simular'),
   configMensagem: elemento('config-mensagem'),
   abaLancar: elemento('aba-lancar'),
   abaConfigurar: elemento('aba-configurar'),
@@ -373,6 +376,7 @@ function atualizar() {
 
   // Compra no cartão: escolha das parcelas, quando a fatura é paga e o limite.
   el.linhaCartao.hidden = !painel.ehCartao;
+  el.linkSimular.hidden = !painel.ehCartao;
   const linhaLimite = document.createElement('span');
   let classeLimite = 'linha-limite';
   if (painel.limiteEstourado) classeLimite += ' estourado';
@@ -583,6 +587,15 @@ async function aplicarMudanca(novos, mensagem) {
 const configurar = iniciarConfigurar({ obterDados: () => dados, aplicarMudanca });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
+const simulador = iniciarSimulador({ obterDados: () => dados });
+
+// Atalho do Lançar para o simulador: leva o valor digitado e o cartão escolhido.
+el.linkSimular.addEventListener('click', () => {
+  simulador.preencher({
+    formaPagamento: el.formulario.elements.pagamento.value,
+    valorTexto: el.valor.value,
+  });
+});
 
 /* ------------------------------------------------------------------ */
 /* Navegação entre as vistas                                          */
@@ -603,30 +616,35 @@ function mostrarVista() {
     el.telaMes.hidden = true;
     el.telaHistorico.hidden = true;
     el.telaConfigurar.hidden = true;
+    el.telaSimular.hidden = true;
     return;
   }
 
-  const vistas = { '#mes': 'mes', '#historico': 'historico', '#configurar': 'configurar' };
+  const vistas = { '#mes': 'mes', '#historico': 'historico', '#configurar': 'configurar', '#simular': 'simular' };
   const vista = vistas[location.hash] ?? 'lancar';
 
   el.tela.hidden = vista !== 'lancar';
   el.telaMes.hidden = vista !== 'mes';
   el.telaHistorico.hidden = vista !== 'historico';
   el.telaConfigurar.hidden = vista !== 'configurar';
+  el.telaSimular.hidden = vista !== 'simular';
   el.configMensagem.hidden = true;
 
   // aria-current="page" marca a aba ativa (para o estilo e para leitores de tela).
   const abas = [
     [el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaHistorico, 'historico'], [el.abaConfigurar, 'configurar'],
   ];
+  // O simulador não tem aba própria: ele é aberto pelo Lançar, que fica marcado.
+  const abaAtiva = vista === 'simular' ? 'lancar' : vista;
   for (const [aba, nome] of abas) {
-    if (nome === vista) aba.setAttribute('aria-current', 'page');
+    if (nome === abaAtiva) aba.setAttribute('aria-current', 'page');
     else aba.removeAttribute('aria-current');
   }
 
   if (vista === 'mes') resumo.renderizar();
   if (vista === 'historico') historico.renderizar();
   if (vista === 'configurar') configurar.renderizar();
+  if (vista === 'simular') simulador.renderizar();
   window.scrollTo(0, 0);
 }
 
