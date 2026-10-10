@@ -27,11 +27,18 @@
   <script type="module" src="src/ui/app.js"></script>
 </head>
 <body>
-  <!-- Aparece só quando o app abriu com a cópia guardada no aparelho (servidor fora do ar ou sem internet).
-       Fica fora das vistas para aparecer em todas elas. O texto vem de src/versao-app.js. -->
-  <div class="aviso-copia" id="aviso-copia" role="status" hidden>
-    <p id="aviso-copia-texto"></p>
-    <button type="button" class="botao-pequeno" id="aviso-copia-fechar">Entendi</button>
+  <!-- Avisos do topo: ficam fora das vistas para aparecer em todas elas. Os textos vêm de src/versao-app.js. -->
+  <div class="avisos-topo">
+    <!-- Só quando o app abriu com a cópia guardada no aparelho (servidor fora do ar ou sem internet) -->
+    <div class="aviso-topo aviso-copia" id="aviso-copia" role="status" hidden>
+      <p id="aviso-copia-texto"></p>
+      <button type="button" class="botao-pequeno" id="aviso-copia-fechar">Entendi</button>
+    </div>
+    <!-- Só quando chegou uma publicação nova com o app aberto -->
+    <div class="aviso-topo aviso-versao" id="aviso-versao" role="status" hidden>
+      <p id="aviso-versao-texto"></p>
+      <button type="button" class="botao-pequeno" id="aviso-versao-atualizar">Atualizar</button>
+    </div>
   </div>
 
   <!-- Vista "Boas-vindas": só no primeiro acesso, quando ainda não há dados no aparelho -->
