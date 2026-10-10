@@ -14,6 +14,12 @@
  * Meta da reserva = custo do mês × meses da meta (padrão: 6).
  * Custo do mês = contas fixas do mês (valor de sempre) + orçamentos das categorias.
  *
+ * Reserva atual (desde a parte 4.2c): a soma do valor atual dos investimentos
+ * marcados como reserva na aba Investir (src/carteira.js). Antes, ela era
+ * digitada em Configurar; esse valor antigo continua guardado nos dados
+ * (destinoSobra.reservaAtualCentavos), mas só aparece como aviso para a
+ * pessoa cadastrar esse dinheiro na carteira.
+ *
  * É uma SUGESTÃO calculada: o app não move dinheiro nenhum. Contas com
  * números inteiros de centavos; os centavos que sobram da divisão vão
  * para o Alívio, para a soma bater exatamente.
@@ -26,12 +32,12 @@ import { fixoAtivoNoMes } from './modelo.js';
 import { categoriasAtivas } from './configuracao.js';
 import { resumoDoMes } from './resumo-mes.js';
 import { LIMITES_PADRAO } from './veredito.js';
+import { reservaDaCarteira } from './carteira.js';
 
 /** Configuração inicial (decisões de 10/10/2026). */
 export const DESTINO_PADRAO = Object.freeze({
   porcentagens: Object.freeze({ reserva: 70, investir: 20, alivio: 10 }),
   metaMeses: 6,
-  reservaAtualCentavos: 0,
 });
 
 /** Limites aceitos para a meta da reserva, em meses. */
@@ -44,14 +50,15 @@ export const META_MESES_MAXIMO = 24;
  *
  * @param {object} estado
  * @returns {{ porcentagens: { reserva: number, investir: number, alivio: number },
- *   metaMeses: number, reservaAtualCentavos: number }}
+ *   metaMeses: number, reservaDigitadaCentavos: number }}
+ *   reservaDigitadaCentavos: a reserva digitada em Configurar antes da 4.2c (0 se não houver).
  */
 export function configuracaoDoDestino(estado) {
   const salvo = estado.destinoSobra ?? {};
   return {
     porcentagens: { ...DESTINO_PADRAO.porcentagens, ...(salvo.porcentagens ?? {}) },
     metaMeses: salvo.metaMeses ?? DESTINO_PADRAO.metaMeses,
-    reservaAtualCentavos: salvo.reservaAtualCentavos ?? DESTINO_PADRAO.reservaAtualCentavos,
+    reservaDigitadaCentavos: salvo.reservaAtualCentavos ?? 0,
   };
 }
 
@@ -64,16 +71,16 @@ function exigirPorcentagem(valor, campo, rotulo) {
 }
 
 /**
- * Salva a configuração do destino da sobra.
+ * Salva a configuração do destino da sobra. A reserva digitada antes da
+ * 4.2c (se houver) continua guardada como estava.
  *
  * @param {object} estado
  * @param {object} dados
  * @param {{ reserva: number, investir: number, alivio: number }} dados.porcentagens Somam 100.
- * @param {number} dados.metaMeses            1 a 24.
- * @param {number} dados.reservaAtualCentavos Zero ou mais.
+ * @param {number} dados.metaMeses 1 a 24.
  * @returns {object} Estado novo.
  */
-export function salvarDestino(estado, { porcentagens, metaMeses, reservaAtualCentavos }) {
+export function salvarDestino(estado, { porcentagens, metaMeses }) {
   const reserva = exigirPorcentagem(porcentagens?.reserva, 'reserva', 'Reserva');
   const investir = exigirPorcentagem(porcentagens?.investir, 'investir', 'Investir');
   const alivio = exigirPorcentagem(porcentagens?.alivio, 'alivio', 'Alívio');
@@ -83,12 +90,9 @@ export function salvarDestino(estado, { porcentagens, metaMeses, reservaAtualCen
   if (!Number.isInteger(metaMeses) || metaMeses < META_MESES_MINIMO || metaMeses > META_MESES_MAXIMO) {
     throw new ErroValidacao('metaMeses', `A meta da reserva deve ser de ${META_MESES_MINIMO} a ${META_MESES_MAXIMO} meses.`);
   }
-  if (!Number.isSafeInteger(reservaAtualCentavos) || reservaAtualCentavos < 0) {
-    throw new ErroValidacao('reservaAtualCentavos', 'A reserva atual deve ser zero ou mais.');
-  }
   return {
     ...estado,
-    destinoSobra: { porcentagens: { reserva, investir, alivio }, metaMeses, reservaAtualCentavos },
+    destinoSobra: { ...(estado.destinoSobra ?? {}), porcentagens: { reserva, investir, alivio }, metaMeses },
   };
 }
 
@@ -115,11 +119,17 @@ export function custoDoMes(estado, mes) {
  * @param {object} estado
  * @param {string} mes "AAAA-MM".
  * @returns {{ custo: object, metaMeses: number, metaCentavos: number, reservaAtualCentavos: number,
+ *   investimentosNaReserva: number, reservaDigitadaCentavos: number,
  *   faltaCentavos: number, fracao: number, completa: boolean }}
+ *   reservaAtualCentavos: soma dos investimentos marcados como reserva na carteira.
+ *   investimentosNaReserva: quantos investimentos estão marcados.
+ *   reservaDigitadaCentavos: valor digitado antes da 4.2c (só para o aviso de transição).
  *   fracao: de 0 a 1 (1 = meta atingida; acima da meta também é 1).
  */
 export function situacaoDaReserva(estado, mes) {
-  const { metaMeses, reservaAtualCentavos } = configuracaoDoDestino(estado);
+  const { metaMeses, reservaDigitadaCentavos } = configuracaoDoDestino(estado);
+  const naCarteira = reservaDaCarteira(estado);
+  const reservaAtualCentavos = naCarteira.totalCentavos;
   const custo = custoDoMes(estado, mes);
   const metaCentavos = custo.totalCentavos * metaMeses;
   const faltaCentavos = Math.max(0, metaCentavos - reservaAtualCentavos);
@@ -128,6 +138,8 @@ export function situacaoDaReserva(estado, mes) {
     metaMeses,
     metaCentavos,
     reservaAtualCentavos,
+    investimentosNaReserva: naCarteira.itens.length,
+    reservaDigitadaCentavos,
     faltaCentavos,
     fracao: metaCentavos === 0 ? 1 : Math.min(1, reservaAtualCentavos / metaCentavos),
     completa: faltaCentavos === 0,

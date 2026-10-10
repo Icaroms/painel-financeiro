@@ -19,7 +19,15 @@
  *     valorAplicadoCentavos: 100000,
  *     valorAtualCentavos: 105000,               ← digitado pela pessoa
  *     valorAtualEm: '2026-10-01',               ← data do valor atual
+ *     reserva: true,                            ← faz parte da reserva de emergência (4.2c)
  *   }]
+ *
+ * Reserva de emergência (parte 4.2c): a pessoa marca quais aplicações de
+ * renda fixa ou fundos são a reserva. A soma do valor atual delas é a
+ * "reserva atual" que o destino da sobra (src/destino.js) usa. Imóveis,
+ * ações e FIIs não podem ser marcados: a reserva precisa de dinheiro que dá
+ * para sacar rápido e sem risco de vender em baixa. Investimentos gravados
+ * antes da 4.2c não têm o campo e contam como "não é reserva".
  *
  * Decisões de 10/10/2026: o valor atual da renda fixa é digitado agora; na
  * parte 4.4 (taxas) o app passa a estimar pela taxa contratada.
@@ -55,6 +63,14 @@ export const TIPOS_DE_INVESTIMENTO = Object.freeze([
   Object.freeze({ id: 'acao', nome: 'Ação', grupo: 'acoes' }),
   Object.freeze({ id: 'fii', nome: 'FII', grupo: 'fiis' }),
 ]);
+
+/** Grupo cujos investimentos podem ser marcados como reserva de emergência. */
+export const GRUPO_DA_RESERVA = 'renda-fixa';
+
+/** O tipo pode ser marcado como reserva de emergência? */
+export function podeSerReserva(tipo) {
+  return tipoDoInvestimento(tipo)?.grupo === GRUPO_DA_RESERVA;
+}
 
 /** Tamanho máximo do nome de um investimento. */
 export const TAMANHO_MAXIMO_NOME = 40;
@@ -96,7 +112,10 @@ function exigirValor(valor, campo, rotulo, { permitirZero }) {
  * Confere e normaliza os dados de um investimento (cadastro ou edição).
  * Valor atual vazio (null) = igual ao aplicado, na data da aplicação.
  */
-function validar({ tipo, nome, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos = null, valorAtualEm = null }, hoje) {
+function validar(
+  { tipo, nome, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos = null, valorAtualEm = null, reserva = false },
+  hoje,
+) {
   if (!tipoDoInvestimento(tipo)) {
     throw new ErroValidacao('tipo', 'Escolha o tipo do investimento.');
   }
@@ -112,16 +131,23 @@ function validar({ tipo, nome, dataAplicacao, valorAplicadoCentavos, valorAtualC
   }
   exigirDataAteHoje(dataAplicacao, 'dataAplicacao', 'A data da aplicação', hoje);
   exigirValor(valorAplicadoCentavos, 'valorAplicadoCentavos', 'O valor aplicado', { permitirZero: false });
+  if (reserva === true && !podeSerReserva(tipo)) {
+    throw new ErroValidacao('reserva', 'Só renda fixa e fundos podem ser a reserva de emergência: ela precisa de dinheiro que dá para sacar rápido.');
+  }
+  const ehReserva = reserva === true;
 
   if (valorAtualCentavos === null) {
-    return { tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos: valorAplicadoCentavos, valorAtualEm: dataAplicacao };
+    return {
+      tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos,
+      valorAtualCentavos: valorAplicadoCentavos, valorAtualEm: dataAplicacao, reserva: ehReserva,
+    };
   }
   exigirValor(valorAtualCentavos, 'valorAtualCentavos', 'O valor atual', { permitirZero: true });
   exigirDataAteHoje(valorAtualEm, 'valorAtualEm', 'A data do valor atual', hoje);
   if (valorAtualEm < dataAplicacao) {
     throw new ErroValidacao('valorAtualEm', 'A data do valor atual não pode ser antes da aplicação.');
   }
-  return { tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos, valorAtualEm };
+  return { tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos, valorAtualEm, reserva: ehReserva };
 }
 
 /* ------------------------------------------------------------------ */
@@ -242,6 +268,20 @@ export function textoDoPercentual(percentual) {
   if (arredondado > 0) return `+${numero}%`;
   if (arredondado < 0) return `−${numero}%`;
   return `${numero}%`;
+}
+
+/**
+ * Reserva de emergência que está na carteira: os investimentos marcados
+ * como reserva e a soma do valor atual deles.
+ *
+ * @param {object} estado
+ * @returns {{ totalCentavos: number, itens: object[] }} itens: do maior valor para o menor.
+ */
+export function reservaDaCarteira(estado) {
+  const itens = investimentosAtivos(estado)
+    .filter((i) => i.reserva === true && podeSerReserva(i.tipo))
+    .sort((a, b) => b.valorAtualCentavos - a.valorAtualCentavos);
+  return { totalCentavos: itens.reduce((soma, i) => soma + i.valorAtualCentavos, 0), itens };
 }
 
 /**

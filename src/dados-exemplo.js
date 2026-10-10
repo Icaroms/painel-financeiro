@@ -58,7 +58,7 @@ export function criarDadosDeExemplo(hoje) {
   // Carteira fictícia (parte 4.2a): aplicações feitas meses atrás, com o valor atual conferido no dia 1.
   const carteira = [
     { tipo: 'cdb', nome: 'CDB Banco Exemplo', dataAplicacao: `${somarMeses(mes, -6)}-10`, valorAplicadoCentavos: 100000, valorAtualCentavos: 105230, valorAtualEm: primeiroDia },
-    { tipo: 'tesouro', nome: 'Tesouro Selic', dataAplicacao: `${somarMeses(mes, -3)}-05`, valorAplicadoCentavos: 50000, valorAtualCentavos: 51340, valorAtualEm: primeiroDia },
+    { tipo: 'tesouro', nome: 'Tesouro Selic', dataAplicacao: `${somarMeses(mes, -3)}-05`, valorAplicadoCentavos: 50000, valorAtualCentavos: 51340, valorAtualEm: primeiroDia, reserva: true },
   ].reduce((estado, dados) => adicionarInvestimento(estado, dados, { hoje }), { investimentos: [] });
 
   // Uma ação fictícia (parte 4.2b): uma compra há 4 meses e a cotação conferida hoje.
