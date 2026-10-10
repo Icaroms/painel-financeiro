@@ -15,9 +15,10 @@
  * - 4.3b: ações e FIIs da B3: maiores altas e baixas (semana, mês, 12 meses),
  *   mais negociados, com filtro por preço de 1 unidade ("cabe no bolso").
  * - 4.3c: FIIs pelos dividendos de 12 meses informados à CVM, com o P/VP.
- * - 4.3d: o comentário da IA (próxima).
+ * - 4.3d: o comentário da IA (src/radar-ia.js).
+ * - 4.4a: taxas do Banco Central (meta da Selic, CDI e IPCA).
  *
- * Cada parte do radar ("tesouro", "mercado", "fiis") pode faltar (null) quando a
+ * Cada parte do radar ("tesouro", "mercado", "fiis", "taxas") pode faltar (null) quando a
  * fonte ainda não foi baixada pelo robô; a tela mostra o que houver.
  *
  * Funções puras: testadas no Node. A tela fica em src/ui/radar.js.
@@ -71,12 +72,19 @@ function fiiValido(f) {
     && numeroOuNulo(f.dividendos12m) && numeroOuNulo(f.pvp) && /^\d{4}-\d{2}$/.test(f.ultimoMes ?? '');
 }
 
+/** A parte das taxas com os campos que a tela usa. */
+function taxasValidas(t) {
+  return t && Number.isFinite(t.selicMeta?.valor) && ehDataValida(t.selicMeta?.data)
+    && Number.isFinite(t.cdi?.anual) && ehDataValida(t.cdi?.data)
+    && Number.isFinite(t.ipca?.mensal) && Number.isFinite(t.ipca?.acumulado12m) && /^\d{4}-\d{2}$/.test(t.ipca?.mes ?? '');
+}
+
 /**
  * Confere o arquivo baixado e devolve o radar.
  * Qualquer problema lança ErroValidacao com uma mensagem clara.
  *
  * @param {unknown} dados O JSON já convertido em objeto.
- * @returns {object} O radar (com tesouro, mercado e fiis; cada um pode ser null).
+ * @returns {object} O radar (com tesouro, mercado, fiis e taxas; cada um pode ser null).
  */
 export function lerRadar(dados) {
   if (!dados || typeof dados !== 'object' || dados.formato !== FORMATO_RADAR) {
@@ -100,10 +108,14 @@ export function lerRadar(dados) {
   if (fiis && (!ehDataValida(fiis.dataBase) || !Array.isArray(fiis.itens) || !fiis.itens.every(fiiValido))) {
     throw new ErroValidacao('radar', 'A parte de dividendos dos FIIs do radar está incompleta.');
   }
-  if (!tesouro && !mercado && !fiis) {
+  const taxas = dados.taxas ?? null;
+  if (taxas && !taxasValidas(taxas)) {
+    throw new ErroValidacao('radar', 'A parte das taxas do Banco Central do radar está incompleta.');
+  }
+  if (!tesouro && !mercado && !fiis && !taxas) {
     throw new ErroValidacao('radar', 'O radar veio vazio.');
   }
-  return { ...dados, tesouro, mercado, fiis };
+  return { ...dados, tesouro, mercado, fiis, taxas };
 }
 
 /**
@@ -283,4 +295,34 @@ export function textoDoPvp(pvp) {
 export function textoDoMes(mes) {
   const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   return `${nomes[Number(mes.slice(5, 7)) - 1]}/${mes.slice(0, 4)}`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Taxas do Banco Central (parte 4.4a)                                */
+/* ------------------------------------------------------------------ */
+
+/** 14.25 → "14,25%". */
+const porcento = (valor) => `${valor.toFixed(2).replace('.', ',')}%`;
+
+/** Mês por extenso, minúsculo: "2026-09" → "setembro". */
+function nomeDoMes(mes) {
+  return ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][Number(mes.slice(5, 7)) - 1];
+}
+
+/**
+ * Linhas do quadro "Taxas de hoje".
+ *
+ * @param {object} taxas A parte "taxas" do radar.
+ * @returns {{ nome: string, valor: string, detalhe: string }[]}
+ */
+export function linhasDasTaxas(taxas) {
+  return [
+    { nome: 'Selic', valor: `${porcento(taxas.selicMeta.valor)} ao ano`, detalhe: 'meta definida pelo Copom' },
+    { nome: 'CDI', valor: `${porcento(taxas.cdi.anual)} ao ano`, detalhe: `taxa de ${taxas.cdi.data.split('-').reverse().join('/')}, em 252 dias úteis` },
+    {
+      nome: 'IPCA',
+      valor: `${porcento(taxas.ipca.acumulado12m)} em 12 meses`,
+      detalhe: `${porcento(taxas.ipca.mensal)} em ${nomeDoMes(taxas.ipca.mes)} de ${taxas.ipca.mes.slice(0, 4)}`,
+    },
+  ];
 }

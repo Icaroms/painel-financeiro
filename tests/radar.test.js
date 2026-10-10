@@ -92,7 +92,7 @@ describe('endereço e identificação', () => {
 describe('lerRadar', () => {
   it('radar certo volta igual; parte que falta vira null', () => {
     const r = radar();
-    assert.deepEqual(lerRadar(r), { ...r, mercado: null, fiis: null });
+    assert.deepEqual(lerRadar(r), { ...r, mercado: null, fiis: null, taxas: null });
     assert.deepEqual(lerRadar({ ...comMercado(), tesouro: null }).tesouro, null);
   });
 

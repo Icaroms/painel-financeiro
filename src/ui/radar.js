@@ -1,5 +1,5 @@
 /**
- * Seção "Radar de opções" da aba Investir (Fase 04, partes 4.3a, 4.3b e 4.3c).
+ * Seção "Radar de opções" da aba Investir (Fase 04, partes 4.3 e 4.4a).
  *
  * - Ao abrir a aba, mostra o radar guardado no aparelho e, se a última
  *   busca tiver mais de 6 horas, busca o arquivo novo que o robô publicou.
@@ -11,6 +11,7 @@
  *   Investir deste mês", do destino da sobra). 5 por página.
  * - FIIs por dividendos de 12 meses (informados à CVM), com o P/VP: a lista
  *   "Dividendos" aparece quando o tipo é FII.
+ * - Taxas de hoje (4.4a): Selic, CDI e IPCA do Banco Central, com fonte e data.
  * - "Comentar esta lista com IA" (4.3d): a IA comenta a lista da tela com a
  *   carteira (src/radar-ia.js). Mudou um filtro, o comentário antigo some.
  *
@@ -47,6 +48,7 @@ import {
   textoDosDividendos,
   textoDoPvp,
   textoDoMes,
+  linhasDasTaxas,
 } from '../radar.js';
 
 /** Tempo máximo esperando o arquivo do radar. */
@@ -89,6 +91,7 @@ export function iniciarRadar({
 }) {
   const el = {
     situacao: elemento('radar-situacao'),
+    taxas: { fonte: elemento('radar-taxas-fonte'), lista: elemento('radar-taxas') },
     fonte: elemento('radar-tesouro-fonte'),
     filtro: elemento('radar-tesouro-filtro'),
     lista: elemento('radar-tesouro'),
@@ -189,6 +192,28 @@ export function iniciarRadar({
       criar('a', { href: parte.link, target: '_blank', rel: 'noopener noreferrer', texto: parte.fonte }),
       '.',
     );
+  }
+
+  /** Quadro "Taxas de hoje" (Banco Central). */
+  function desenharTaxas(radar) {
+    if (!radar?.taxas) {
+      el.taxas.fonte.textContent = '';
+      el.taxas.lista.replaceChildren(vazio(buscando ? 'Buscando o radar…' : 'Ainda não há taxas do Banco Central neste aparelho.'));
+      return;
+    }
+    linhaDaFonte(el.taxas.fonte, 'Números oficiais', radar.taxas);
+    el.taxas.lista.replaceChildren(...linhasDasTaxas(radar.taxas).map((linha) => {
+      const li = criar('li', { classe: 'linha-mes' });
+      const info = criar('div', { classe: 'linha-mes-info' });
+      info.append(
+        criar('span', { classe: 'linha-mes-nome', texto: linha.nome }),
+        criar('span', { classe: 'linha-mes-detalhe secundario', texto: linha.detalhe }),
+      );
+      const lado = criar('div', { classe: 'linha-mes-lado' });
+      lado.append(criar('span', { classe: 'linha-mes-valor', texto: linha.valor }));
+      li.append(info, lado);
+      return li;
+    }));
   }
 
   /** Parte do Tesouro Direto. */
@@ -369,6 +394,7 @@ export function iniciarRadar({
     el.botao.disabled = buscando;
     const radar = guardado?.radar ?? null;
     visaoAtual = null;
+    desenharTaxas(radar);
     desenharTesouro(radar);
     desenharMercado(radar);
     desenharIA(radar);
