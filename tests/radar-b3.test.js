@@ -31,7 +31,7 @@ function colocar(linha, inicio, fim, valor, { numero = false } = {}) {
 }
 
 /** Linha de cotação (TIPREG 01) com 245 caracteres. Preço e volume em centavos. */
-function linha({ data = '20261009', codbdi = '02', codigo, tpmerc = '010', nome = 'EMPRESA', especi = 'ON', preco, negocios = 1000, volume, fator = 1 }) {
+function linha({ data = '20261009', codbdi = '02', codigo, tpmerc = '010', nome = 'EMPRESA', especi = 'ON', preco, negocios = 1000, volume, fator = 1, isin = '' }) {
   let l = ' '.repeat(245);
   l = colocar(l, 1, 2, '01');
   l = colocar(l, 3, 10, data);
@@ -45,6 +45,7 @@ function linha({ data = '20261009', codbdi = '02', codigo, tpmerc = '010', nome 
   l = colocar(l, 153, 170, 5000, { numero: true });
   l = colocar(l, 171, 188, volume, { numero: true });
   l = colocar(l, 211, 217, fator, { numero: true });
+  l = colocar(l, 231, 242, isin);
   return l;
 }
 
@@ -63,10 +64,10 @@ describe('endereço do arquivo do dia', () => {
 
 describe('lerLinhaCotahist (posições do layout oficial)', () => {
   it('lê data, classificação, código, mercado, nome, preço, negócios e volume', () => {
-    const r = lerLinhaCotahist(linha({ codigo: 'AAAA3', nome: 'EMPRESA A', preco: 3456, negocios: 12345, volume: 98_765_432_10 }));
+    const r = lerLinhaCotahist(linha({ codigo: 'AAAA3', nome: 'EMPRESA A', preco: 3456, negocios: 12345, volume: 98_765_432_10, isin: 'BRAAAAACNOR1' }));
     assert.deepEqual(r, {
       data: '2026-10-09', codbdi: '02', codigo: 'AAAA3', tpmerc: '010', nome: 'EMPRESA A', especificacao: 'ON',
-      precoCentavos: 3456, negocios: 12345, volumeCentavos: 98_765_432_10, fator: 1,
+      precoCentavos: 3456, negocios: 12345, volumeCentavos: 98_765_432_10, fator: 1, isin: 'BRAAAAACNOR1',
     });
   });
 
