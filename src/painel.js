@@ -14,7 +14,7 @@ import {
   avaliarGasto, calcularMargemCategoria, calcularSaldoProjetado, lancamentosValidosDoMes,
 } from './veredito.js';
 import { geometriaMostrador } from './mostrador.js';
-import { saidasNoMes } from './fluxo.js';
+import { saidasNoMes, limiteDoCartao } from './fluxo.js';
 
 // O título do mês mora em datas.js (o veredito também usa); daqui ele é repassado.
 export { tituloDoMes } from './datas.js';
@@ -68,6 +68,25 @@ function textoDoCartao(saidas) {
   return `${saidas.length}x de ${formatarCentavos(saidas[1].valorCentavos)} · 1ª parcela paga em ${data}`;
 }
 
+/**
+ * Texto do limite do cartão na tela de lançamento.
+ *
+ * @param {object|null} limite Resultado de limiteDoCartao (null: não é cartão).
+ * @param {number}      valorCentavos Valor da compra digitada (0 sem valor).
+ * @returns {string}
+ */
+function textoDoLimite(limite, valorCentavos) {
+  if (limite === null) return '';
+  const total = formatarCentavos(limite.limiteCentavos);
+  if (valorCentavos === 0) {
+    return `Limite disponível: ${formatarCentavos(limite.disponivelCentavos)} de ${total}`;
+  }
+  const depois = limite.disponivelCentavos - valorCentavos;
+  return depois < 0
+    ? `Passa do limite em ${formatarCentavos(-depois)} (limite de ${total})`
+    : `Limite depois desta compra: ${formatarCentavos(depois)} de ${total}`;
+}
+
 /** "2026-10-03" → "03/10". */
 function dataCurta(data) {
   return `${data.slice(8, 10)}/${data.slice(5, 7)}`;
@@ -86,7 +105,10 @@ function dataCurta(data) {
 export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento, hoje, data = hoje, parcelas = 1 }) {
   const { registroMes, categorias, fixos, lancamentos } = dados;
   const cartoes = dados.cartoes ?? [];
-  const ehCartao = cartoes.some((c) => c.formaPagamento === formaPagamento);
+  const cartao = cartoes.find((c) => c.formaPagamento === formaPagamento) ?? null;
+  const ehCartao = cartao !== null;
+  // Limite do cartão ANTES desta compra (parte 2.4).
+  const limite = ehCartao ? limiteDoCartao({ cartao, lancamentos, registroMes }) : null;
 
   const categoria = categorias.find((c) => c.id === categoriaId);
   if (!categoria) {
@@ -120,6 +142,15 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     frase = resultado.frase;
     saldoProjetado = resultado.numeros.saldoProjetadoCentavos;
     margem = resultado.numeros.margem;
+
+    // Compra que passa do limite: o banco recusaria, então este aviso vem
+    // antes de qualquer outro (a compra inteira ocupa o limite, mesmo parcelada).
+    if (ehCartao && valor > limite.disponivelCentavos) {
+      cor = 'vermelho';
+      frase = limite.disponivelCentavos > 0
+        ? `Passou do limite: o ${formaPagamento} tem ${formatarCentavos(limite.disponivelCentavos)} disponíveis.`
+        : `Passou do limite: o ${formaPagamento} não tem limite disponível.`;
+    }
   } else {
     // Sem valor: mostra a situação atual, sem julgar nada.
     // Consumo do mês (sem as parcelas convertidas de contas fixas, que só pesam no saldo).
@@ -155,6 +186,10 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     dataTexto: dataAnterior ? `Gasto do dia ${dataCurta(data)}` : 'Hoje',
     ehCartao,
     // Compra no cartão: "3x de R$ 40,00 · 1ª parcela paga em 10/11".
+    // Limite: "Limite disponível: R$ 824,70 de R$ 2.000,00" ou, com valor,
+    // "Limite depois desta compra: R$ 724,70 de R$ 2.000,00".
+    limiteTexto: textoDoLimite(limite, lancamento !== null ? valor : 0),
+    limiteEstourado: limite !== null && lancamento !== null && valor > limite.disponivelCentavos,
     cartaoTexto: ehCartao && numerosVeredito
       ? textoDoCartao(numerosVeredito.saidas)
       : (ehCartao ? 'No cartão: entra na fatura, não sai da conta hoje.' : ''),
