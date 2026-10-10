@@ -202,6 +202,25 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
       itens.append(li2);
     }
     if (fatura.itens.length > 5) itens.append(criar('li', { texto: `e mais ${fatura.itens.length - 5} compra(s)` }));
+    if (fatura.itens.length === 0) itens.append(criar('li', { texto: 'Nenhuma compra nesta fatura.' }));
+
+    // Conferência com o banco: as contas fixas deste cartão no mês. Elas já contam
+    // em "Contas fixas", por isso ficam fora do total da linha acima.
+    const conferencia = [];
+    if (fatura.contasFixasCentavos > 0) {
+      const nomesFixos = fatura.contasFixas.map((c) => c.fixo.nome).join(', ');
+      conferencia.push(
+        criar('p', {
+          classe: 'fixo-detalhe secundario',
+          texto: `Contas fixas neste cartão: ${formatarCentavos(fatura.contasFixasCentavos)} (${nomesFixos}). ` +
+            'Já contam em Contas fixas.',
+        }),
+        criar('p', {
+          classe: 'fixo-detalhe total-banco',
+          texto: `Total no banco: ${formatarCentavos(fatura.totalNoBancoCentavos)}`,
+        }),
+      );
+    }
 
     const grupo = criar('div', { classe: 'seletor-status duas', role: 'group', 'aria-label': `Situação da fatura ${fatura.formaPagamento}` });
     for (const [valor, rotulo] of [['previsto', 'Previsto'], ['pago', 'Pago']]) {
@@ -235,7 +254,7 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
       texto: `Limite disponível: ${formatarCentavos(limite.disponivelCentavos)} de ${formatarCentavos(limite.limiteCentavos)}`,
     });
 
-    li.append(linha, itens, linhaLimite, grupo);
+    li.append(linha, itens, ...conferencia, linhaLimite, grupo);
     return li;
   }
 
