@@ -1,5 +1,5 @@
 /**
- * Robô do Radar de opções (Fase 04, partes 4.3a, 4.3b e 4.3c).
+ * Robô do Radar de opções (Fase 04, partes 4.3a, 4.3b, 4.3c e 4.4a).
  *
  * Roda no GitHub Actions (.github/workflows/radar.yml), uma vez por dia:
  * 1. baixa os dados públicos:
@@ -8,6 +8,7 @@
  *      1 semana, 1 mês e 12 meses antes, para as variações;
  *    - informes mensais dos FIIs (CVM): dividendos de 12 meses e valor
  *      patrimonial da cota (P/VP com o preço da B3);
+ *    - taxas do Banco Central (SGS): meta da Selic, CDI e IPCA;
  * 2. monta o arquivo radar.json;
  * 3. o workflow publica esse arquivo na branch "radar-dados", e o app lê de lá.
  *
@@ -27,6 +28,7 @@ import { FONTE_TESOURO, lerCsvTesouro } from './tesouro.js';
 import { enderecoDoDia, lerCotahist, montarMercado } from './b3.js';
 import { datasDosPeriodos, hojeEmBrasilia, pregaoMaisProximo, baixarZip, SemArquivo } from './baixar.js';
 import { enderecoDoAno, lerInformesFii, montarFiis } from './cvm.js';
+import { SERIES, enderecoDaSerie, lerSerieSgs, montarTaxas } from './bcb.js';
 
 /** Identificação do arquivo. O app (src/radar.js) confere estes dois valores. */
 export const FORMATO_RADAR = 'painel-financeiro-radar';
@@ -44,10 +46,11 @@ const TEMPO_LIMITE_MS = 120_000;
  *   ou a parte "tesouro" de um radar anterior (já com fonte e link).
  * @param {object|null} [partes.mercado] Resultado de montarMercado (ou o do radar anterior).
  * @param {object|null} [partes.fiis] Resultado de montarFiis (ou o do radar anterior).
+ * @param {object|null} [partes.taxas] Resultado de montarTaxas (ou o do radar anterior).
  * @param {Date} [partes.agora]
  * @returns {object} O conteúdo do radar.json.
  */
-export function montarRadar({ tesouro, mercado = null, fiis = null, agora = new Date() }) {
+export function montarRadar({ tesouro, mercado = null, fiis = null, taxas = null, agora = new Date() }) {
   return {
     formato: FORMATO_RADAR,
     versao: VERSAO_RADAR,
@@ -57,6 +60,7 @@ export function montarRadar({ tesouro, mercado = null, fiis = null, agora = new 
       : null,
     mercado,
     fiis,
+    taxas,
   };
 }
 
@@ -147,6 +151,24 @@ async function parteDosFiis(mercado) {
   return fiis;
 }
 
+/** Banco Central: meta da Selic, CDI diário (vira anual) e os 12 últimos IPCAs mensais. */
+async function parteDasTaxas() {
+  console.log('Baixando as taxas do Banco Central…');
+  const serie = async (codigo, ultimos) => {
+    const resposta = await fetch(enderecoDaSerie(codigo, ultimos), { signal: AbortSignal.timeout(30_000) });
+    if (!resposta.ok) throw new Error(`série ${codigo} respondeu ${resposta.status}`);
+    return lerSerieSgs(await resposta.json());
+  };
+  const taxas = montarTaxas({
+    selicMeta: await serie(SERIES.selicMeta, 1),
+    cdiDiario: await serie(SERIES.cdiDiario, 1),
+    ipcaMensal: await serie(SERIES.ipcaMensal, 12),
+  });
+  console.log(`BCB: Selic meta ${taxas.selicMeta.valor}% · CDI ${taxas.cdi.anual}% ao ano (${taxas.cdi.data}) · ` +
+    `IPCA ${taxas.ipca.mensal}% em ${taxas.ipca.mes}, ${taxas.ipca.acumulado12m}% em 12 meses.`);
+  return taxas;
+}
+
 /** Ponto de entrada do robô. */
 async function principal() {
   const saida = process.argv[2];
@@ -182,9 +204,18 @@ async function principal() {
     fiis = anterior?.fiis ?? null;
   }
 
+  let taxas = null;
+  try {
+    taxas = await parteDasTaxas();
+    novas += 1;
+  } catch (erro) {
+    console.warn(`Aviso: taxas do Banco Central falharam (${erro.message}). ${anterior?.taxas ? 'Mantendo a parte do radar anterior.' : ''}`);
+    taxas = anterior?.taxas ?? null;
+  }
+
   if (novas === 0) throw new Error('Todas as fontes falharam: nada foi publicado (o app continua com o último radar).');
 
-  const radar = montarRadar({ tesouro, mercado, fiis });
+  const radar = montarRadar({ tesouro, mercado, fiis, taxas });
   await mkdir(dirname(saida), { recursive: true });
   await writeFile(saida, `${JSON.stringify(radar)}\n`, 'utf8');
   console.log(`Radar gravado em ${saida}.`);
