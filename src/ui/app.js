@@ -38,6 +38,7 @@ import { iniciarConfigIA } from './configurar-ia.js';
 import { configuracaoVazia } from '../ia.js';
 import { mensagemDaCompra } from '../explicacoes.js';
 import { blocoExplicar } from './explicar.js';
+import { iniciarAnaliseMes } from './analise-mes.js';
 import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
@@ -634,6 +635,7 @@ async function salvarConfigIA(config) {
 }
 
 const configuracaoIA = iniciarConfigIA({ obterConfigIA: () => configIA, salvarConfigIA });
+const analiseMes = iniciarAnaliseMes({ obterDados: () => dados, obterConfigIA: () => configIA });
 
 // Atalho do Lançar para o simulador: leva o valor digitado e o cartão escolhido.
 el.linkSimular.addEventListener('click', () => {
@@ -688,7 +690,10 @@ function mostrarVista() {
     else aba.removeAttribute('aria-current');
   }
 
-  if (vista === 'mes') resumo.renderizar();
+  if (vista === 'mes') {
+    resumo.renderizar();
+    analiseMes.renderizar(); // a análise começa vazia: os números podem ter mudado
+  }
   if (vista === 'historico') historico.renderizar();
   if (vista === 'configurar') {
     configurar.renderizar();
