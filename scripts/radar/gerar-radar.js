@@ -28,7 +28,9 @@ import { FONTE_TESOURO, lerCsvTesouro } from './tesouro.js';
 import { enderecoDoDia, lerCotahist, montarMercado } from './b3.js';
 import { datasDosPeriodos, hojeEmBrasilia, pregaoMaisProximo, baixarZip, SemArquivo } from './baixar.js';
 import { enderecoDoAno, lerInformesFii, montarFiis } from './cvm.js';
-import { SERIES, enderecoDaSerie, lerSerieSgs, montarTaxas } from './bcb.js';
+import {
+  SERIES, INICIO_HISTORICO, enderecoDaSerie, enderecoDoPeriodo, periodosDeConsulta, lerSerieSgs, montarTaxas, montarHistorico,
+} from './bcb.js';
 
 /** Identificação do arquivo. O app (src/radar.js) confere estes dois valores. */
 export const FORMATO_RADAR = 'painel-financeiro-radar';
@@ -151,14 +153,39 @@ async function parteDosFiis(mercado) {
   return fiis;
 }
 
-/** Banco Central: meta da Selic, CDI diário (vira anual) e os 12 últimos IPCAs mensais. */
-async function parteDasTaxas() {
-  console.log('Baixando as taxas do Banco Central…');
-  const serie = async (codigo, ultimos) => {
-    const resposta = await fetch(enderecoDaSerie(codigo, ultimos), { signal: AbortSignal.timeout(30_000) });
-    if (!resposta.ok) throw new Error(`série ${codigo} respondeu ${resposta.status}`);
-    return lerSerieSgs(await resposta.json());
+/** Baixa e lê uma resposta da API do SGS. */
+async function baixarSerie(endereco, codigo) {
+  const resposta = await fetch(endereco, { signal: AbortSignal.timeout(60_000) });
+  if (!resposta.ok) throw new Error(`série ${codigo} respondeu ${resposta.status}`);
+  return lerSerieSgs(await resposta.json());
+}
+
+/** Histórico desde INICIO_HISTORICO: CDI diário e IPCA mensal, em blocos de até 5 anos. */
+async function historicoDasTaxas() {
+  const periodos = periodosDeConsulta(INICIO_HISTORICO, hojeEmBrasilia());
+  const serieInteira = async (codigo) => {
+    const partes = [];
+    for (const { de, ate } of periodos) partes.push(...await baixarSerie(enderecoDoPeriodo(codigo, de, ate), codigo));
+    return partes;
   };
+  const historico = montarHistorico({
+    cdiDiario: await serieInteira(SERIES.cdiDiario),
+    ipcaMensal: await serieInteira(SERIES.ipcaMensal),
+  });
+  const ultimoCdi = historico.cdi.at(-1);
+  console.log(`BCB histórico: CDI de ${historico.inicio} a ${ultimoCdi.mes} (até o dia ${ultimoCdi.ultimoDia}), ` +
+    `${historico.cdi.length} meses · IPCA de ${historico.inicio} a ${historico.ipca.at(-1).mes}, ${historico.ipca.length} meses.`);
+  return historico;
+}
+
+/**
+ * Banco Central: meta da Selic, CDI diário (vira anual), os 12 últimos IPCAs
+ * mensais e o histórico mensal (4.4b). Se só o histórico falhar, as taxas de
+ * hoje seguem e o histórico do radar anterior é mantido.
+ */
+async function parteDasTaxas(anterior) {
+  console.log('Baixando as taxas do Banco Central…');
+  const serie = (codigo, ultimos) => baixarSerie(enderecoDaSerie(codigo, ultimos), codigo);
   const taxas = montarTaxas({
     selicMeta: await serie(SERIES.selicMeta, 1),
     cdiDiario: await serie(SERIES.cdiDiario, 1),
@@ -166,6 +193,12 @@ async function parteDasTaxas() {
   });
   console.log(`BCB: Selic meta ${taxas.selicMeta.valor}% · CDI ${taxas.cdi.anual}% ao ano (${taxas.cdi.data}) · ` +
     `IPCA ${taxas.ipca.mensal}% em ${taxas.ipca.mes}, ${taxas.ipca.acumulado12m}% em 12 meses.`);
+  try {
+    taxas.historico = await historicoDasTaxas();
+  } catch (erro) {
+    taxas.historico = anterior?.taxas?.historico ?? null;
+    console.warn(`Aviso: histórico do Banco Central falhou (${erro.message}). ${taxas.historico ? 'Mantendo o do radar anterior.' : ''}`);
+  }
   return taxas;
 }
 
@@ -206,7 +239,7 @@ async function principal() {
 
   let taxas = null;
   try {
-    taxas = await parteDasTaxas();
+    taxas = await parteDasTaxas(anterior);
     novas += 1;
   } catch (erro) {
     console.warn(`Aviso: taxas do Banco Central falharam (${erro.message}). ${anterior?.taxas ? 'Mantendo a parte do radar anterior.' : ''}`);
