@@ -9,7 +9,8 @@
  * Quem usa este módulo (src/ui/app.js) entrega duas funções:
  * - obterDados(): devolve os dados atuais;
  * - aplicarMudanca(novosDados, mensagem): troca os dados, grava no
- *   aparelho e mostra a mensagem.
+ *   aparelho e mostra a mensagem;
+ * - abrirSimulador(formaPagamento): abre o simulador de compras com o cartão.
  */
 
 import { hojeLocal, mesDaData } from '../datas.js';
@@ -73,9 +74,10 @@ function mostrarErro(campoErro, input, mensagem) {
  * @param {object}   opcoes
  * @param {() => object} opcoes.obterDados
  * @param {(novos: object, mensagem: string) => Promise<void>} opcoes.aplicarMudanca
+ * @param {(formaPagamento: string) => void} [opcoes.abrirSimulador]
  * @returns {{ renderizar: () => void }}
  */
-export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
+export function iniciarConfigurar({ obterDados, aplicarMudanca, abrirSimulador = () => {} }) {
   const el = {
     subtitulo: elemento('config-subtitulo'),
     alertaSaldo: elemento('alerta-saldo'),
@@ -790,7 +792,12 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
       cartaoAberto = cartao.formaPagamento;
       renderizarCartoes();
     });
-    acoes.append(remover, editar);
+    // Atalho para o simulador (parte 2.5), já com este cartão escolhido.
+    const simular = criar('button', {
+      classe: 'botao-pequeno', type: 'button', texto: 'Simular compra', 'aria-label': `Simular uma compra no ${cartao.formaPagamento}`,
+    });
+    simular.addEventListener('click', () => abrirSimulador(cartao.formaPagamento));
+    acoes.append(remover, editar, simular);
 
     li.append(topo, detalhe, acoes, erro);
     if (cartaoAberto === cartao.formaPagamento) li.append(formularioDoCartao(cartao));

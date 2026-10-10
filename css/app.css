@@ -745,7 +745,11 @@ body {
 .opcao-topo h2 { font-size: 18px; }
 .selo-opcao { font-size: 13px; font-weight: 600; color: var(--cor); white-space: nowrap; }
 .opcao-linhas { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.4; }
-.opcao-linhas .alerta { color: var(--vermelho); font-weight: 600; }
+.opcao-linhas .linha-alerta { color: var(--vermelho); font-weight: 600; }
+/* "Quando comprar": um quadro à parte, para a resposta não se perder entre as outras linhas */
+.quando-comprar { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--linha); border-radius: 12px; background: var(--fundo); }
+.quando-comprar strong { font-size: 15px; }
+.quando-comprar p { margin: 0; font-size: 14px; line-height: 1.4; }
 .mes-a-mes summary { cursor: pointer; font-size: 14px; font-weight: 600; }
 .tabela-meses { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 13px; }
 .tabela-meses th, .tabela-meses td { padding: 4px 2px; text-align: right; border-bottom: 1px solid var(--linha); }

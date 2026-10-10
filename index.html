@@ -249,7 +249,7 @@
     <header class="cabecalho">
       <div class="cabecalho-linha">
         <h1>Simular compra</h1>
-        <a href="#lancar" class="botao-pequeno link-voltar">‹ Lançar</a>
+        <a href="#lancar" class="botao-pequeno link-voltar" id="simular-voltar">‹ Lançar</a>
       </div>
       <p class="secundario">Só uma consulta: nada é gravado.</p>
     </header>
@@ -267,6 +267,11 @@
           <span aria-hidden="true">R$</span>
           <input id="simular-avista" inputmode="decimal" placeholder="0,00" autocomplete="off">
         </span>
+      </label>
+      <!-- "E se eu comprar em...?": agora ou um dos próximos 12 meses -->
+      <label class="campo">
+        <span class="secundario">Comprar em</span>
+        <select id="simular-comprar-em"></select>
       </label>
       <h3 class="subtitulo-secao">Opções de parcelamento</h3>
       <p class="secundario explicacao">Como a loja oferece: o número de parcelas e o total parcelado. Total vazio = sem juros (o mesmo preço à vista).</p>
