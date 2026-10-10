@@ -1,8 +1,11 @@
 /**
- * Carteira de investimentos (Fase 04, parte 4.2a).
+ * Carteira de investimentos (Fase 04, partes 4.2a e 4.2b).
  *
- * O que a pessoa tem aplicado: renda fixa, fundos e imóveis. Ações e FIIs
- * (registrados por operação, com preço médio) entram na parte 4.2b.
+ * O que a pessoa tem aplicado: renda fixa, fundos, imóveis, ações e FIIs.
+ * Este arquivo cuida da renda fixa, dos fundos e dos imóveis (valor aplicado
+ * e valor atual digitados) e do resumo da carteira inteira. Ações e FIIs são
+ * registrados por operação, com preço médio: as regras deles ficam em
+ * src/acoes.js.
  *
  * Cada investimento fica na lista "investimentos" dos dados (vai junto no
  * backup). A lista é opcional: dados gravados antes da Fase 04 não têm o
@@ -27,14 +30,20 @@
 
 import { ErroValidacao } from './erros.js';
 import { ehDataValida } from './datas.js';
+import { ehPorOperacao, valoresDoAtivo } from './acoes.js';
 
 /** Grupos do resumo da carteira, na ordem em que aparecem. */
 export const GRUPOS_DE_INVESTIMENTO = Object.freeze([
   Object.freeze({ id: 'renda-fixa', nome: 'Renda fixa e fundos' }),
+  Object.freeze({ id: 'acoes', nome: 'Ações' }),
+  Object.freeze({ id: 'fiis', nome: 'FIIs' }),
   Object.freeze({ id: 'imovel', nome: 'Imóveis' }),
 ]);
 
-/** Tipos aceitos nesta parte, com o grupo de cada um. */
+/**
+ * Tipos aceitos, com o grupo de cada um. Ação e FII são registrados por
+ * operação (src/acoes.js); os outros, por valor aplicado e valor atual.
+ */
 export const TIPOS_DE_INVESTIMENTO = Object.freeze([
   Object.freeze({ id: 'cdb', nome: 'CDB', grupo: 'renda-fixa' }),
   Object.freeze({ id: 'tesouro', nome: 'Tesouro Direto', grupo: 'renda-fixa' }),
@@ -43,6 +52,8 @@ export const TIPOS_DE_INVESTIMENTO = Object.freeze([
   Object.freeze({ id: 'fundo', nome: 'Fundo de investimento', grupo: 'renda-fixa' }),
   Object.freeze({ id: 'outro-renda-fixa', nome: 'Outra renda fixa', grupo: 'renda-fixa' }),
   Object.freeze({ id: 'imovel', nome: 'Imóvel', grupo: 'imovel' }),
+  Object.freeze({ id: 'acao', nome: 'Ação', grupo: 'acoes' }),
+  Object.freeze({ id: 'fii', nome: 'FII', grupo: 'fiis' }),
 ]);
 
 /** Tamanho máximo do nome de um investimento. */
@@ -88,6 +99,9 @@ function exigirValor(valor, campo, rotulo, { permitirZero }) {
 function validar({ tipo, nome, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos = null, valorAtualEm = null }, hoje) {
   if (!tipoDoInvestimento(tipo)) {
     throw new ErroValidacao('tipo', 'Escolha o tipo do investimento.');
+  }
+  if (ehPorOperacao(tipo)) {
+    throw new ErroValidacao('tipo', 'Ações e FIIs são registrados por operação (compra e venda).');
   }
   const nomeLimpo = typeof nome === 'string' ? nome.trim() : '';
   if (nomeLimpo === '') {
@@ -231,33 +245,58 @@ export function textoDoPercentual(percentual) {
 }
 
 /**
- * Resumo da carteira: total, por grupo e a lista ordenada (maior valor atual primeiro).
+ * Valor aplicado e valor atual de qualquer investimento da carteira.
+ * - Renda fixa, fundos e imóveis: os valores digitados.
+ * - Ações e FIIs: o custo da posição e quantidade × cotação (src/acoes.js).
+ *
+ * @param {object} investimento
+ * @returns {{ aplicadoCentavos: number, atualCentavos: number, semCotacao: boolean, encerrado: boolean }}
+ *   semCotacao: ação/FII sem cotação digitada (o valor atual fica igual ao custo).
+ *   encerrado: ação/FII com a posição zerada (tudo vendido).
+ */
+export function valoresDoInvestimento(investimento) {
+  if (ehPorOperacao(investimento.tipo)) return valoresDoAtivo(investimento);
+  return {
+    aplicadoCentavos: investimento.valorAplicadoCentavos,
+    atualCentavos: investimento.valorAtualCentavos,
+    semCotacao: false,
+    encerrado: false,
+  };
+}
+
+/**
+ * Resumo da carteira: total, por grupo e a lista ordenada (maior valor
+ * atual primeiro; posições zeradas no fim).
  *
  * @param {object} estado
  * @returns {{
  *   aplicadoCentavos: number, atualCentavos: number, rendimentoCentavos: number, percentual: number|null,
  *   grupos: { id: string, nome: string, aplicadoCentavos: number, atualCentavos: number, quantidade: number }[],
- *   itens: object[]
- * }} grupos: só os que têm investimento.
+ *   itens: { investimento: object, aplicadoCentavos: number, atualCentavos: number,
+ *            semCotacao: boolean, encerrado: boolean }[]
+ * }} grupos: só os que têm investimento em aberto (posições zeradas não contam).
  */
 export function resumoDaCarteira(estado) {
-  const itens = [...investimentosAtivos(estado)]
-    .sort((a, b) => b.valorAtualCentavos - a.valorAtualCentavos || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const itens = investimentosAtivos(estado)
+    .map((investimento) => ({ investimento, ...valoresDoInvestimento(investimento) }))
+    .sort((a, b) => Number(a.encerrado) - Number(b.encerrado)
+      || b.atualCentavos - a.atualCentavos
+      || a.investimento.nome.localeCompare(b.investimento.nome, 'pt-BR'));
 
   const grupos = GRUPOS_DE_INVESTIMENTO
     .map((grupo) => {
-      const doGrupo = itens.filter((i) => tipoDoInvestimento(i.tipo)?.grupo === grupo.id);
+      const doGrupo = itens.filter((i) => !i.encerrado && tipoDoInvestimento(i.investimento.tipo)?.grupo === grupo.id);
       return {
         id: grupo.id,
         nome: grupo.nome,
-        aplicadoCentavos: doGrupo.reduce((soma, i) => soma + i.valorAplicadoCentavos, 0),
-        atualCentavos: doGrupo.reduce((soma, i) => soma + i.valorAtualCentavos, 0),
+        aplicadoCentavos: doGrupo.reduce((soma, i) => soma + i.aplicadoCentavos, 0),
+        atualCentavos: doGrupo.reduce((soma, i) => soma + i.atualCentavos, 0),
         quantidade: doGrupo.length,
       };
     })
     .filter((g) => g.quantidade > 0);
 
-  const aplicadoCentavos = itens.reduce((soma, i) => soma + i.valorAplicadoCentavos, 0);
-  const atualCentavos = itens.reduce((soma, i) => soma + i.valorAtualCentavos, 0);
+  const aplicadoCentavos = itens.reduce((soma, i) => soma + i.aplicadoCentavos, 0);
+  const atualCentavos = itens.reduce((soma, i) => soma + i.atualCentavos, 0);
   return { aplicadoCentavos, atualCentavos, ...rendimento(aplicadoCentavos, atualCentavos), grupos, itens };
 }
