@@ -799,6 +799,12 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .operacoes { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border: 1px solid var(--linha); border-radius: 14px; background: var(--fundo); }
 .botao-texto.perigo { color: var(--vermelho); }
 
+/* ---------- Radar de opções (parte 4.3) ---------- */
+.radar-situacao, .radar-fonte { margin: 0; font-size: 13px; line-height: 1.4; }
+.radar-situacao:empty, .radar-fonte:empty { display: none; }
+.radar-fonte a { color: var(--texto); }
+#botao-atualizar-radar { align-self: flex-start; }
+
 /* ---------- Destino da sobra (parte 4.1) ---------- */
 .linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .destino-reserva p { margin: 0; font-size: 14px; line-height: 1.4; }

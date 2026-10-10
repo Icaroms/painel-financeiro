@@ -312,6 +312,25 @@
       <button type="button" class="botao-secundario" id="botao-novo-investimento">Adicionar investimento</button>
     </section>
 
+    <!-- Radar de opções (parte 4.3): opções do mercado por números objetivos, com fonte e data.
+         Os dados vêm do robô no GitHub (.github/workflows/radar.yml). -->
+    <section class="cartao" aria-labelledby="titulo-radar">
+      <h2 id="titulo-radar">Radar de opções</h2>
+      <p class="secundario explicacao">Opções do mercado por números objetivos, sempre com a fonte e a data. Não é recomendação: o app não diz o que comprar, e rendimento passado não garante rendimento futuro.</p>
+      <p class="secundario radar-situacao" id="radar-situacao" role="status"></p>
+
+      <h3 class="subtitulo-secao">Tesouro Direto hoje</h3>
+      <p class="secundario radar-fonte" id="radar-tesouro-fonte"></p>
+      <label class="campo">
+        <span class="secundario">Tipo de rendimento</span>
+        <select id="radar-tesouro-filtro"></select>
+      </label>
+      <ul class="lista-mes" id="radar-tesouro"></ul>
+      <nav class="paginacao" id="paginacao-radar-tesouro" aria-label="Páginas dos títulos do Tesouro"></nav>
+
+      <button type="button" class="botao-pequeno" id="botao-atualizar-radar">Atualizar radar</button>
+    </section>
+
   </main>
 
   <!-- Vista "Simular compra" (Fase 02, parte 2.5): uma consulta, nada é gravado -->
