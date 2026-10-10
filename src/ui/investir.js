@@ -10,6 +10,11 @@
  * - Cadastro: os campos mudam com o tipo (valor aplicado ou primeira compra).
  * - Reserva de emergência (4.2c): renda fixa e fundos podem ser marcados como
  *   reserva; a soma aparece no resumo e é a "reserva atual" do destino da sobra.
+ * - Taxa contratada (4.4c): CDB, Tesouro, LCI/LCA e outra renda fixa podem ter
+ *   a taxa (% do CDI, prefixado ou IPCA +). O valor mostrado vira a estimativa
+ *   de hoje, bruta e líquida de IR (src/renda-fixa.js), a partir do último
+ *   valor digitado. A tela mostra a "visão com estimativas" (obterDadosEstimados);
+ *   toda mudança parte dos dados digitados (obterDados).
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As regras ficam em
  * src/carteira.js e src/acoes.js (testados no Node). Todo texto entra com textContent.
@@ -32,7 +37,9 @@ import {
   textoDoPercentual,
   resumoDaCarteira,
   podeSerReserva,
+  investimentosAtivos,
 } from '../carteira.js';
+import { INDEXADORES_CONTRATADOS, aceitaTaxa, lerPercentual, textoDaTaxa } from '../renda-fixa.js';
 import { situacaoDaReserva } from '../destino.js';
 import {
   ehPorOperacao,
@@ -121,11 +128,12 @@ function botoesDoFormulario(textoEnviar, aoCancelar) {
  * Liga a vista Investir.
  *
  * @param {object} opcoes
- * @param {() => object} opcoes.obterDados
+ * @param {() => object} opcoes.obterDados Dados digitados (toda mudança parte deles).
+ * @param {() => object} [opcoes.obterDadosEstimados] Dados com a renda fixa estimada (só para mostrar).
  * @param {(novos: object, mensagem: string) => Promise<void>} opcoes.aplicarMudanca
  * @returns {{ renderizar: () => void }}
  */
-export function iniciarInvestir({ obterDados, aplicarMudanca }) {
+export function iniciarInvestir({ obterDados, obterDadosEstimados = obterDados, aplicarMudanca }) {
   const el = {
     total: elemento('investir-total'),
     rendimento: elemento('investir-rendimento'),
@@ -217,6 +225,24 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
       texto: 'É reserva de emergência (entra na reserva do destino da sobra, na aba Mês)',
     }));
 
+    // Taxa contratada (4.4c): só CDB, Tesouro, LCI/LCA e outra renda fixa.
+    const indexador = criar('select', { name: 'indexador' });
+    indexador.append(
+      criar('option', { value: '', texto: 'Não informar' }),
+      ...INDEXADORES_CONTRATADOS.map((i) => criar('option', { value: i.id, texto: i.nome })),
+    );
+    indexador.value = item?.taxa?.indexador ?? '';
+    const percentual = criar('input', { name: 'percentual', inputmode: 'decimal' });
+    percentual.value = item?.taxa ? String(item.taxa.percentual).replace('.', ',') : '';
+    const rotuloIndexador = campo('Taxa contratada', indexador);
+    const rotuloPercentual = campo('Taxa', percentual);
+    const dicaTaxa = criar('p', {
+      classe: 'dica secundario',
+      texto: 'Como está no contrato ou no app do banco. Ex.: CDB de 110% do CDI → "% do CDI" e 110. ' +
+        'Tesouro Selic: "% do CDI" e 100 (aproximação). Com a taxa, o app estima o valor de hoje ' +
+        'a partir do último valor digitado, com o CDI e o IPCA oficiais do Banco Central.',
+    });
+
     const camposDeValor = [
       campo('Nome', nome, 'inteira'),
       campo('Data da aplicação', dataAplicacao),
@@ -228,6 +254,9 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
         classe: 'dica secundario',
         texto: 'O valor atual é o que aparece hoje no app ou no extrato do banco. Deixe vazio se ainda é igual ao aplicado.',
       }),
+      rotuloIndexador,
+      rotuloPercentual,
+      dicaTaxa,
     ];
 
     // Campos de ação e FII: o código e a primeira compra.
@@ -250,11 +279,26 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
       }),
     ];
 
+    /** Campo da taxa: some sem indexador; o rótulo e o exemplo mudam com ele. */
+    function mostrarCampoDaTaxa() {
+      const info = INDEXADORES_CONTRATADOS.find((i) => i.id === indexador.value);
+      rotuloPercentual.hidden = !info || !aceitaTaxa(tipo.value) || ehPorOperacao(tipo.value);
+      if (info) {
+        rotuloPercentual.firstChild.textContent = `Taxa (${info.unidade})`;
+        percentual.placeholder = `Ex.: ${info.exemplo}`;
+      }
+    }
+    indexador.addEventListener('change', mostrarCampoDaTaxa);
+
     /** Mostra só os campos do tipo escolhido. */
     function mostrarCamposDoTipo() {
       const porOperacao = ehPorOperacao(tipo.value);
       for (const c of camposDeValor) c.hidden = porOperacao;
       for (const c of camposDeCompra) c.hidden = !porOperacao;
+      const comTaxa = !porOperacao && aceitaTaxa(tipo.value);
+      rotuloIndexador.hidden = !comTaxa;
+      dicaTaxa.hidden = !comTaxa;
+      mostrarCampoDaTaxa();
       // A reserva precisa de dinheiro que dá para sacar rápido: só renda fixa e fundos.
       opcaoReserva.hidden = !podeSerReserva(tipo.value);
       rotuloQuantidade.firstChild.textContent = tipo.value === 'fii' ? 'Quantidade de cotas' : 'Quantidade de ações';
@@ -289,6 +333,10 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
           valorAtualCentavos: semValorAtual ? null : lerValorPositivo(atual.input.value, 'valorAtualCentavos'),
           valorAtualEm: semValorAtual ? null : dataAtual.value,
           reserva: podeSerReserva(tipo.value) && caixaReserva.checked,
+          // Taxa escolhida sem número vira NaN: a regra explica o erro.
+          taxa: aceitaTaxa(tipo.value) && indexador.value
+            ? { indexador: indexador.value, percentual: lerPercentual(percentual.value) ?? NaN }
+            : null,
         };
         return item
           ? [editarInvestimento(estado, item.id, dados, opcoes), `"${dados.nome.trim()}" salvo.`]
@@ -435,8 +483,37 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
     }, 'perigo');
   }
 
+  /**
+   * Linha da taxa contratada: estimativa líquida de IR, ou por que ainda não há estimativa.
+   * @param {object} item Da visão com estimativas.
+   * @returns {HTMLElement|null}
+   */
+  function linhaDaTaxa(item) {
+    if (!item.taxa || !aceitaTaxa(item.tipo)) return null;
+    const p = criar('p', { classe: 'fixo-detalhe secundario' });
+    const e = item.estimativa;
+    if (!e) {
+      p.textContent = item.valorAtualEm < '2016-01-01'
+        ? `Taxa: ${textoDaTaxa(item.taxa)} · sem estimativa: o histórico das taxas começa em 2016. Atualize o valor pelo extrato para estimar daqui em diante.`
+        : `Taxa: ${textoDaTaxa(item.taxa)} · a estimativa aparece quando o radar baixar as taxas do Banco Central (abaixo, em "Radar de opções").`;
+      return p;
+    }
+    const ir = e.isento
+      ? 'isento de IR'
+      : `líquido de IR: ${formatarCentavos(e.liquidoCentavos)} (IR de ${String(e.aliquota).replace('.', ',')}% sobre o rendimento)`;
+    // Valor digitado hoje (ou depois do último dado do CDI): ainda não há dias a somar.
+    const partida = e.partiuDe.data === e.ate
+      ? ' · a estimativa soma o rendimento a partir deste valor'
+      : e.partiuDe.data === item.dataAplicacao ? '' : ` · partiu do valor de ${dataLonga(e.partiuDe.data)}`;
+    const projecao = e.ipcaProjetado ? ' · IPCA ainda não divulgado projetado pela média dos últimos 12 meses' : '';
+    p.textContent = `Taxa: ${textoDaTaxa(item.taxa)} · ${ir}${partida}${projecao}.`;
+    return p;
+  }
+
   /** Item de renda fixa, fundo ou imóvel. */
   function itemDeValor({ investimento: item }) {
+    // A lista mostra a visão com estimativas; os formulários usam o que foi digitado.
+    const digitado = investimentosAtivos(obterDados()).find((i) => i.id === item.id) ?? item;
     const li = criar('li', { classe: 'fixo investimento' });
     const topo = criar('div', { classe: 'fixo-topo' });
     const nome = criar('span', { classe: 'fixo-nome', texto: item.nome });
@@ -448,8 +525,11 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
       `${tipoDoInvestimento(item.tipo)?.nome ?? item.tipo} · aplicado ${formatarCentavos(item.valorAplicadoCentavos)} ` +
         `em ${dataLonga(item.dataAplicacao)} · rendeu `,
       trechoDoRendimento(item.valorAplicadoCentavos, item.valorAtualCentavos),
-      ` · valor de ${dataLonga(item.valorAtualEm)}`,
+      item.estimativa && item.estimativa.partiuDe.data !== item.estimativa.ate
+        ? ` · estimado para ${dataLonga(item.valorAtualEm)}`
+        : ` · valor de ${dataLonga(item.valorAtualEm)}`,
     );
+    const taxa = linhaDaTaxa(item);
 
     const erro = criar('span', { classe: 'erro', role: 'alert' });
     const acoes = criar('div', { classe: 'acoes' });
@@ -459,12 +539,14 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
       botao('Atualizar valor', `Atualizar o valor de ${item.nome}`, () => abrir(item.id, 'valor')),
     );
 
-    li.append(topo, detalhe, acoes, erro);
-    if (aberto?.id === item.id && aberto.modo === 'editar') li.append(formularioDoInvestimento(item));
+    li.append(topo, detalhe, ...(taxa ? [taxa] : []), acoes, erro);
+    if (aberto?.id === item.id && aberto.modo === 'editar') li.append(formularioDoInvestimento(digitado));
     if (aberto?.id === item.id && aberto.modo === 'valor') {
       li.append(formularioDeUmValor({
         rotulo: `Valor atual de ${item.nome}`,
-        dica: 'Valor de hoje, como aparece no banco.',
+        dica: item.taxa
+          ? 'Valor de hoje, como aparece no banco. A estimativa recomeça a partir dele.'
+          : 'Valor de hoje, como aparece no banco.',
         inicial: item.valorAtualCentavos,
         aoSalvar: (centavos) => [atualizarValorAtual(obterDados(), item.id, centavos, { hoje: hojeLocal() }), `Valor de "${item.nome}" atualizado.`],
       }));
@@ -560,7 +642,7 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
 
   /** Linha da reserva de emergência: soma dos marcados e quanto da meta isso é. */
   function renderizarReserva() {
-    const reserva = situacaoDaReserva(obterDados(), mesDaData(hojeLocal()));
+    const reserva = situacaoDaReserva(obterDadosEstimados(), mesDaData(hojeLocal()));
     if (reserva.investimentosNaReserva === 0) {
       el.reserva.textContent = 'Reserva de emergência: nenhum investimento marcado. Marque em "Editar" as aplicações de renda fixa ou fundos que são a sua reserva.';
       return;
@@ -599,7 +681,7 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
   }
 
   function renderizar() {
-    const r = resumoDaCarteira(obterDados());
+    const r = resumoDaCarteira(obterDadosEstimados());
     renderizarResumo(r);
 
     const paginaAtual = paginar(r.itens, pagina);
