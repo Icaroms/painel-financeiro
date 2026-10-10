@@ -526,12 +526,19 @@ body {
 .faixa-exemplo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .faixa-exemplo p { margin: 0; }
 
-/* ---------- Aviso "abriu com a cópia guardada" (topo de todas as vistas) ---------- */
-.aviso-copia {
+/* ---------- Avisos do topo (cópia guardada e versão nova), em todas as vistas ---------- */
+.avisos-topo {
   max-width: 440px;
   margin: 0 auto;
-  /* em cima: o espaço do entalhe do iPhone, que a vista abaixo deixa de usar (regra seguinte) */
+  /* em cima: o espaço do entalhe do iPhone, que a vista abaixo deixa de usar (regra mais abaixo) */
   padding: calc(12px + env(safe-area-inset-top)) 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Sem nenhum aviso visível, o bloco some (e não ocupa o espaço do entalhe) */
+.avisos-topo:not(:has(.aviso-topo:not([hidden]))) { display: none; }
+.aviso-topo {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -540,7 +547,8 @@ body {
   font-size: 14px;
   line-height: 1.4;
 }
-.aviso-copia p {
+.aviso-topo[hidden] { display: none; }
+.aviso-topo p {
   flex: 1 1 220px;
   margin: 0;
   padding: 8px 12px;
@@ -548,8 +556,10 @@ body {
   border-radius: 4px;
   background: var(--painel);
 }
-/* Com o aviso visível, a vista abaixo não repete o espaço do entalhe */
-body:has(.aviso-copia:not([hidden])) .tela { padding-top: 16px; min-height: auto; }
+/* Versão nova é notícia boa: a borda fica verde */
+.aviso-versao p { border-left-color: var(--verde); }
+/* Com algum aviso visível, a vista abaixo não repete o espaço do entalhe */
+body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto; }
 
 /* ---------- Boas-vindas (primeiro acesso) ---------- */
 .tela-boas-vindas { justify-content: center; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }

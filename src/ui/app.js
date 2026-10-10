@@ -48,7 +48,9 @@ import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
 import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
-import { numeroDaVersao, textoDoAvisoDaCopia } from '../versao-app.js';
+import {
+  VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
+} from '../versao-app.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -838,40 +840,68 @@ if (carregado.dados === null) {
 pedirArmazenamentoPersistente();
 
 /**
- * Faixa no topo quando o app abriu com a cópia guardada no aparelho.
- * O botão "Entendi" esconde a faixa até a próxima vez que o app abrir.
+ * Mostra ou esconde uma faixa do topo (cópia guardada ou versão nova).
  *
+ * @param {string} id    "aviso-copia" ou "aviso-versao".
  * @param {string|null} texto null esconde a faixa.
  */
-function mostrarAvisoDaCopia(texto) {
-  const faixa = document.getElementById('aviso-copia');
+function mostrarAvisoDoTopo(id, texto) {
+  const faixa = document.getElementById(id);
   if (!faixa) return;
-  document.getElementById('aviso-copia-texto').textContent = texto ?? '';
+  document.getElementById(`${id}-texto`).textContent = texto ?? '';
   faixa.hidden = !texto;
 }
-document.getElementById('aviso-copia-fechar')?.addEventListener('click', () => mostrarAvisoDaCopia(null));
+// "Entendi" esconde o aviso da cópia até a próxima vez que o app abrir.
+document.getElementById('aviso-copia-fechar')?.addEventListener('click', () => mostrarAvisoDoTopo('aviso-copia', null));
+// "Atualizar" recarrega a página: com internet, os arquivos novos vêm do servidor.
+// Os dados não são afetados: eles ficam no IndexedDB, não na página.
+document.getElementById('aviso-versao-atualizar')?.addEventListener('click', () => window.location.reload());
 
 /**
- * Versão do app neste aparelho: pergunta ao service worker que está
- * rodando ("painel-financeiro-v14" vira "v14"). Serve para conferir se o
- * celular e o PC estão na mesma publicação. Na mesma resposta vem se esta
- * página abriu com a cópia guardada (e por quê): aí aparece a faixa de aviso.
+ * Versão do app e avisos do topo.
+ *
+ * - A linha "Versão do app" (fim de Configurar) mostra a VERSAO_APP: a
+ *   versão do código que esta página está rodando ("v15").
+ * - A página pergunta ao service worker a versão DELE. Na resposta vem:
+ *   - se esta página abriu com a cópia guardada (e por quê): faixa amarela;
+ *   - se a versão dele é maior que a da página: faixa verde "versão nova".
+ * - Ela pergunta de novo quando o service worker muda (publicação nova
+ *   instalada) e, quando o app volta para a tela, pede ao navegador para
+ *   conferir se há publicação nova (no máximo a cada 30 minutos).
  */
 function mostrarVersao() {
   const linha = document.getElementById('versao-app');
-  if (!linha) return;
+  if (linha) linha.textContent = `Versão do app: ${numeroDaVersao(VERSAO_APP)}`;
   if (!('serviceWorker' in navigator)) {
-    linha.textContent = 'Versão do app: este navegador não guarda o app para uso sem internet.';
+    if (linha) linha.textContent += ' (este navegador não guarda o app para uso sem internet)';
     return;
   }
+
   navigator.serviceWorker.addEventListener('message', (evento) => {
     if (evento.data?.tipo !== 'versao') return;
-    linha.textContent = `Versão do app: ${numeroDaVersao(evento.data.versao)}`;
-    mostrarAvisoDaCopia(textoDoAvisoDaCopia(evento.data.copia, evento.data.versao));
+    mostrarAvisoDoTopo('aviso-copia', textoDoAvisoDaCopia(evento.data.copia, evento.data.versao));
+    mostrarAvisoDoTopo('aviso-versao', haVersaoNova(evento.data.versao) ? textoDaVersaoNova(evento.data.versao) : null);
   });
+
   // Espera o service worker ficar ativo (na primeira visita ele ainda está instalando).
   navigator.serviceWorker.ready.then((registro) => {
     (navigator.serviceWorker.controller ?? registro.active)?.postMessage('versao');
+  });
+
+  // Um service worker novo assumiu a página (publicação nova instalada): pergunta a versão dele.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    navigator.serviceWorker.controller?.postMessage('versao');
+  });
+
+  // O app voltou para a tela (ex.: iPhone, app aberto em segundo plano há dias):
+  // pede ao navegador para conferir se há publicação nova. Sem internet, não faz nada.
+  let ultimaVerificacao = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !deveVerificarVersao(Date.now(), ultimaVerificacao)) return;
+    ultimaVerificacao = Date.now();
+    navigator.serviceWorker.getRegistration()
+      .then((registro) => registro?.update())
+      .catch(() => { /* sem internet ou servidor fora do ar: tenta na próxima vez */ });
   });
 }
 

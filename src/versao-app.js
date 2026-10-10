@@ -1,14 +1,30 @@
 /**
- * Versão do app e aviso de "cópia guardada".
+ * Versão do app, aviso de "cópia guardada" e aviso de "versão nova".
+ *
+ * VERSAO_APP é a versão do CÓDIGO desta página. Ela é igual à VERSAO_CACHE
+ * do sw.js (um teste confere): as duas mudam juntas a cada entrega (PR).
  *
  * O service worker (sw.js) responde à página com:
- * - a versão que está rodando ("painel-financeiro-v14");
+ * - a versão DELE ("painel-financeiro-v15"). Se for maior que a VERSAO_APP,
+ *   chegou uma publicação nova enquanto a página estava aberta (comum no
+ *   iPhone, onde o app fica dias aberto em segundo plano);
  * - se ESTA página abriu com a cópia guardada no aparelho, e por quê:
  *   'servidor-com-erro' (ex.: site pausado na hospedagem) ou
  *   'sem-internet' (sem internet, ou a internet demorou mais de 3 segundos).
  *
  * Aqui ficam só os textos que a página mostra. Funções puras: testadas no Node.
  */
+
+/** Versão do código desta página. Mude junto com a VERSAO_CACHE do sw.js. */
+export const VERSAO_APP = 'painel-financeiro-v15';
+
+/**
+ * De quanto em quanto tempo, no máximo, o app pergunta ao servidor se há
+ * versão nova quando volta para a tela (30 minutos). O navegador já confere
+ * sozinho quando o app é ABERTO; isto cobre o app que ficou aberto em
+ * segundo plano.
+ */
+export const INTERVALO_VERIFICAR_VERSAO_MS = 30 * 60 * 1000;
 
 /** Motivos que o sw.js informa quando a página abriu com a cópia guardada. */
 export const MOTIVOS_DA_COPIA = Object.freeze({
@@ -46,4 +62,49 @@ export function textoDoAvisoDaCopia(motivo, versao) {
       'Tudo funciona, menos o que precisa de internet, como a IA.';
   }
   return null;
+}
+
+/**
+ * Número inteiro da versão: "painel-financeiro-v15" vira 15.
+ * @returns {number|null} null se o texto não estiver no formato.
+ */
+function numeroInteiro(versao) {
+  const encontrado = /-v(\d+)$/.exec(String(versao ?? ''));
+  return encontrado ? Number(encontrado[1]) : null;
+}
+
+/**
+ * Há versão nova? Só quando a versão do service worker é MAIOR que a desta
+ * página. Se for menor (a página veio da internet antes de o service worker
+ * novo terminar de instalar), não há nada a avisar: ele chega em seguida.
+ *
+ * @param {string} versaoDoServiceWorker Ex.: "painel-financeiro-v16".
+ * @param {string} [versaoDaPagina] Padrão: VERSAO_APP.
+ * @returns {boolean}
+ */
+export function haVersaoNova(versaoDoServiceWorker, versaoDaPagina = VERSAO_APP) {
+  const doServiceWorker = numeroInteiro(versaoDoServiceWorker);
+  const daPagina = numeroInteiro(versaoDaPagina);
+  if (doServiceWorker === null || daPagina === null) return false;
+  return doServiceWorker > daPagina;
+}
+
+/**
+ * Texto da faixa de versão nova.
+ * @param {string} versao Versão nova ("painel-financeiro-v16").
+ * @returns {string}
+ */
+export function textoDaVersaoNova(versao) {
+  return `Há uma versão nova do app (${numeroDaVersao(versao)}). ` +
+    'Toque em Atualizar quando terminar o que está fazendo: os seus dados continuam aqui.';
+}
+
+/**
+ * Já é hora de perguntar de novo se há versão nova?
+ * @param {number} agoraMs Date.now().
+ * @param {number} ultimaMs Momento da última pergunta (Date.now()).
+ * @returns {boolean}
+ */
+export function deveVerificarVersao(agoraMs, ultimaMs) {
+  return agoraMs - ultimaMs >= INTERVALO_VERIFICAR_VERSAO_MS;
 }

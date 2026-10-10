@@ -6,7 +6,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { MOTIVOS_DA_COPIA, numeroDaVersao, textoDoAvisoDaCopia } from '../src/versao-app.js';
+import {
+  VERSAO_APP, INTERVALO_VERIFICAR_VERSAO_MS, MOTIVOS_DA_COPIA,
+  numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
+} from '../src/versao-app.js';
 
 describe('numeroDaVersao', () => {
   it('"painel-financeiro-v14" vira "v14"', () => {
@@ -42,5 +45,52 @@ describe('textoDoAvisoDaCopia', () => {
 
   it('os motivos são os mesmos textos que o sw.js usa', () => {
     assert.deepEqual(Object.values(MOTIVOS_DA_COPIA), ['servidor-com-erro', 'sem-internet']);
+  });
+});
+
+describe('VERSAO_APP', () => {
+  it('no formato "painel-financeiro-vN" (a mesma do sw.js: ver tests/pwa.test.js)', () => {
+    assert.match(VERSAO_APP, /^painel-financeiro-v\d+$/);
+  });
+});
+
+describe('haVersaoNova', () => {
+  it('service worker com versão maior: há versão nova', () => {
+    assert.equal(haVersaoNova('painel-financeiro-v16', 'painel-financeiro-v15'), true);
+    assert.equal(haVersaoNova('painel-financeiro-v100', 'painel-financeiro-v99'), true); // número, não texto
+  });
+
+  it('mesma versão ou menor (o service worker novo ainda vai chegar): nada a avisar', () => {
+    assert.equal(haVersaoNova('painel-financeiro-v15', 'painel-financeiro-v15'), false);
+    assert.equal(haVersaoNova('painel-financeiro-v14', 'painel-financeiro-v15'), false);
+  });
+
+  it('texto fora do formato: nada a avisar', () => {
+    assert.equal(haVersaoNova('teste', 'painel-financeiro-v15'), false);
+    assert.equal(haVersaoNova(undefined, 'painel-financeiro-v15'), false);
+  });
+
+  it('sem a versão da página, compara com a VERSAO_APP', () => {
+    const seguinte = `painel-financeiro-v${Number(/v(\d+)$/.exec(VERSAO_APP)[1]) + 1}`;
+    assert.equal(haVersaoNova(seguinte), true);
+    assert.equal(haVersaoNova(VERSAO_APP), false);
+  });
+});
+
+describe('textoDaVersaoNova', () => {
+  it('diz a versão, o botão e que os dados continuam', () => {
+    assert.equal(
+      textoDaVersaoNova('painel-financeiro-v16'),
+      'Há uma versão nova do app (v16). Toque em Atualizar quando terminar o que está fazendo: os seus dados continuam aqui.',
+    );
+  });
+});
+
+describe('deveVerificarVersao', () => {
+  it('só depois de 30 minutos da última pergunta', () => {
+    assert.equal(INTERVALO_VERIFICAR_VERSAO_MS, 30 * 60 * 1000);
+    const ultima = 1_000_000;
+    assert.equal(deveVerificarVersao(ultima + INTERVALO_VERIFICAR_VERSAO_MS - 1, ultima), false);
+    assert.equal(deveVerificarVersao(ultima + INTERVALO_VERIFICAR_VERSAO_MS, ultima), true);
   });
 });
