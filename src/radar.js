@@ -12,7 +12,12 @@
  *
  * Partes:
  * - 4.3a: Tesouro Direto do dia (taxas do Tesouro Nacional).
- * - 4.3b, 4.3c, 4.3d: ações e FIIs, dividendos e o comentário da IA (próximas).
+ * - 4.3b: ações e FIIs da B3: maiores altas e baixas (semana, mês, 12 meses),
+ *   mais negociados, com filtro por preço de 1 unidade ("cabe no bolso").
+ * - 4.3c, 4.3d: dividendos dos FIIs e o comentário da IA (próximas).
+ *
+ * Cada parte do radar ("tesouro", "mercado") pode faltar (null) quando a
+ * fonte ainda não foi baixada pelo robô; a tela mostra o que houver.
  *
  * Funções puras: testadas no Node. A tela fica em src/ui/radar.js.
  */
@@ -48,12 +53,21 @@ function tituloValido(t) {
     && Number.isSafeInteger(t.precoCompraCentavos) && t.precoCompraCentavos > 0;
 }
 
+/** Um ativo da B3 com os campos que a tela usa. */
+function ativoValido(a) {
+  const variacaoValida = (v) => v === null || Number.isFinite(v);
+  return a && typeof a.codigo === 'string' && typeof a.nome === 'string' && (a.tipo === 'acao' || a.tipo === 'fii')
+    && Number.isSafeInteger(a.precoCentavos) && a.precoCentavos > 0
+    && Number.isSafeInteger(a.volumeCentavos) && a.volumeCentavos >= 0
+    && a.variacoes && ['semana', 'mes', 'ano'].every((p) => variacaoValida(a.variacoes[p]));
+}
+
 /**
  * Confere o arquivo baixado e devolve o radar.
  * Qualquer problema lança ErroValidacao com uma mensagem clara.
  *
  * @param {unknown} dados O JSON já convertido em objeto.
- * @returns {object} O radar.
+ * @returns {object} O radar (com tesouro e mercado; cada um pode ser null).
  */
 export function lerRadar(dados) {
   if (!dados || typeof dados !== 'object' || dados.formato !== FORMATO_RADAR) {
@@ -65,11 +79,18 @@ export function lerRadar(dados) {
   if (Number.isNaN(Date.parse(dados.geradoEm))) {
     throw new ErroValidacao('radar', 'O arquivo do radar não diz quando foi gerado.');
   }
-  const tesouro = dados.tesouro;
-  if (!tesouro || !ehDataValida(tesouro.dataBase) || !Array.isArray(tesouro.titulos) || !tesouro.titulos.every(tituloValido)) {
+  const tesouro = dados.tesouro ?? null;
+  if (tesouro && (!ehDataValida(tesouro.dataBase) || !Array.isArray(tesouro.titulos) || !tesouro.titulos.every(tituloValido))) {
     throw new ErroValidacao('radar', 'A parte do Tesouro Direto do radar está incompleta.');
   }
-  return dados;
+  const mercado = dados.mercado ?? null;
+  if (mercado && (!ehDataValida(mercado.dataBase) || !mercado.referencias || !Array.isArray(mercado.ativos) || !mercado.ativos.every(ativoValido))) {
+    throw new ErroValidacao('radar', 'A parte de ações e FIIs do radar está incompleta.');
+  }
+  if (!tesouro && !mercado) {
+    throw new ErroValidacao('radar', 'O radar veio vazio.');
+  }
+  return { ...dados, tesouro, mercado };
 }
 
 /**
@@ -127,5 +148,88 @@ export function textoDaTaxa({ indexador, taxaCompra }) {
  * @returns {object[]}
  */
 export function titulosDoTesouro(radar, indexador = '') {
-  return radar.tesouro.titulos.filter((t) => !indexador || t.indexador === indexador);
+  return (radar.tesouro?.titulos ?? []).filter((t) => !indexador || t.indexador === indexador);
+}
+
+/* ------------------------------------------------------------------ */
+/* Ações e FIIs (parte 4.3b)                                          */
+/* ------------------------------------------------------------------ */
+
+/** Listas do mercado. */
+export const LISTAS_DO_MERCADO = Object.freeze([
+  Object.freeze({ id: 'altas', nome: 'Maiores altas' }),
+  Object.freeze({ id: 'baixas', nome: 'Maiores baixas' }),
+  Object.freeze({ id: 'negociados', nome: 'Mais negociados' }),
+]);
+
+/** Períodos das variações ("no mês" é o texto que aparece depois da porcentagem). */
+export const PERIODOS = Object.freeze([
+  Object.freeze({ id: 'semana', nome: 'Semana', texto: 'na semana' }),
+  Object.freeze({ id: 'mes', nome: 'Mês', texto: 'no mês' }),
+  Object.freeze({ id: 'ano', nome: '12 meses', texto: 'em 12 meses' }),
+]);
+
+/** Faixas de preço de 1 unidade (centavos). A faixa "investir" é a parte Investir da sobra do mês. */
+export const FAIXAS_DE_PRECO = Object.freeze([
+  Object.freeze({ id: '', nome: 'Qualquer preço', maximoCentavos: null }),
+  Object.freeze({ id: 'ate-10', nome: 'Até R$ 10', maximoCentavos: 1000 }),
+  Object.freeze({ id: 'ate-50', nome: 'Até R$ 50', maximoCentavos: 5000 }),
+  Object.freeze({ id: 'ate-100', nome: 'Até R$ 100', maximoCentavos: 10000 }),
+]);
+
+/** Quantos itens cada lista mostra no máximo (5 por página na tela). */
+export const LIMITE_DA_LISTA = 20;
+
+/** O período tem preço de referência no radar? (o robô pode não ter achado o pregão) */
+export function periodoDisponivel(radar, periodo) {
+  return Boolean(radar.mercado?.referencias?.[periodo]);
+}
+
+/**
+ * Monta uma lista do mercado.
+ * - altas: só variação positiva, da maior para a menor;
+ * - baixas: só variação negativa, da maior queda para a menor;
+ * - negociados: pelo volume do dia, do maior para o menor.
+ *
+ * @param {object} radar
+ * @param {object} filtro
+ * @param {'acao'|'fii'} filtro.tipo
+ * @param {'altas'|'baixas'|'negociados'} filtro.lista
+ * @param {'semana'|'mes'|'ano'} filtro.periodo
+ * @param {number|null} [filtro.precoMaximoCentavos] Preço máximo de 1 unidade (null = qualquer).
+ * @returns {object[]} No máximo LIMITE_DA_LISTA ativos.
+ */
+export function listaDoMercado(radar, { tipo, lista, periodo, precoMaximoCentavos = null }) {
+  const ativos = (radar.mercado?.ativos ?? [])
+    .filter((a) => a.tipo === tipo)
+    .filter((a) => precoMaximoCentavos === null || a.precoCentavos <= precoMaximoCentavos);
+
+  let ordenados;
+  if (lista === 'negociados') {
+    ordenados = [...ativos].sort((a, b) => b.volumeCentavos - a.volumeCentavos);
+  } else {
+    const sinal = lista === 'altas' ? 1 : -1;
+    ordenados = ativos
+      .filter((a) => a.variacoes[periodo] !== null && sinal * a.variacoes[periodo] > 0)
+      .sort((a, b) => sinal * (b.variacoes[periodo] - a.variacoes[periodo]));
+  }
+  return ordenados.slice(0, LIMITE_DA_LISTA);
+}
+
+/** 8.2 → "+8,2%"; -3.1 → "−3,1%"; null → "—". */
+export function textoDaVariacao(valor) {
+  if (valor === null || valor === undefined) return '—';
+  const numero = Math.abs(valor).toFixed(1).replace('.', ',');
+  if (valor > 0) return `+${numero}%`;
+  if (valor < 0) return `−${numero}%`;
+  return `${numero}%`;
+}
+
+/** Volume em reais, curto: "R$ 1,2 bi", "R$ 45,3 mi", "R$ 300 mil". */
+export function textoDoVolume(centavos) {
+  const reais = centavos / 100;
+  const umaCasa = (n) => n.toFixed(1).replace('.', ',');
+  if (reais >= 1e9) return `R$ ${umaCasa(reais / 1e9)} bi`;
+  if (reais >= 1e6) return `R$ ${umaCasa(reais / 1e6)} mi`;
+  return `R$ ${Math.round(reais / 1e3)} mil`;
 }

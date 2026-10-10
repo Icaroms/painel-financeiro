@@ -804,6 +804,10 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .radar-situacao:empty, .radar-fonte:empty { display: none; }
 .radar-fonte a { color: var(--texto); }
 #botao-atualizar-radar { align-self: flex-start; }
+/* Filtros de ações e FIIs: dois por linha no celular */
+.radar-filtros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* "em 12 meses" ao lado da variação: numa linha só */
+#radar-mercado .linha-mes-lado .linha-mes-detalhe { white-space: nowrap; }
 
 /* ---------- Destino da sobra (parte 4.1) ---------- */
 .linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

@@ -1,5 +1,5 @@
 /**
- * Testes do Radar de opções no app (Fase 04, parte 4.3a).
+ * Testes do Radar de opções no app (Fase 04, partes 4.3a e 4.3b).
  * Rodar com: npm test
  *
  * O arquivo do radar é gerado pelo robô (tests/radar-robo.test.js confere
@@ -16,6 +16,14 @@ import {
   HORAS_PARA_BUSCAR_DE_NOVO,
   DIAS_PARA_AVISAR_ATRASO,
   INDEXADORES,
+  LISTAS_DO_MERCADO,
+  PERIODOS,
+  FAIXAS_DE_PRECO,
+  LIMITE_DA_LISTA,
+  periodoDisponivel,
+  listaDoMercado,
+  textoDaVariacao,
+  textoDoVolume,
   lerRadar,
   deveBuscarRadar,
   radarAtrasado,
@@ -45,6 +53,30 @@ const radar = (mudanca = {}) => ({
   ...mudanca,
 });
 
+/** Ativo da B3 de teste. */
+const ativo = (codigo, tipo, preco, volume, semana, mes, ano) => ({
+  codigo, nome: `NOME ${codigo}`, tipo, precoCentavos: preco, volumeCentavos: volume, negocios: 100,
+  variacoes: { semana, mes, ano },
+});
+
+/** Radar com a parte de ações e FIIs (12 meses sem pregão de referência). */
+const comMercado = () => radar({
+  mercado: {
+    fonte: 'B3 (Série Histórica de Cotações)',
+    link: 'https://www.b3.com.br/',
+    dataBase: '2026-10-09',
+    referencias: { semana: '2026-10-02', mes: '2026-09-09', ano: null },
+    ativos: [
+      ativo('AAAA3', 'acao', 3456, 900_000_000, 2.1, 8.2, null),
+      ativo('BBBB4', 'acao', 850, 500_000_000, -1.5, -12.3, null),
+      ativo('CCCC3', 'acao', 15000, 300_000_000, 0.4, 3.0, null),
+      ativo('DDDD3', 'acao', 420, 150_000_000, 5.0, null, null), // desdobramento no mês
+      ativo('FIIA11', 'fii', 9800, 80_000_000, 0.8, 1.9, null),
+      ativo('FIIB11', 'fii', 1050, 40_000_000, -0.6, -2.4, null),
+    ],
+  },
+});
+
 describe('endereço e identificação', () => {
   it('lê o arquivo público que o robô publica na branch radar-dados', () => {
     assert.equal(ENDERECO_RADAR, 'https://raw.githubusercontent.com/Icaroms/painel-financeiro/radar-dados/radar.json');
@@ -54,9 +86,20 @@ describe('endereço e identificação', () => {
 });
 
 describe('lerRadar', () => {
-  it('radar certo volta igual', () => {
+  it('radar certo volta igual; parte que falta vira null', () => {
     const r = radar();
-    assert.equal(lerRadar(r), r);
+    assert.deepEqual(lerRadar(r), { ...r, mercado: null });
+    assert.deepEqual(lerRadar({ ...comMercado(), tesouro: null }).tesouro, null);
+  });
+
+  it('radar sem nenhuma parte é recusado', () => {
+    assert.throws(() => lerRadar({ ...radar(), tesouro: null }), /O radar veio vazio/);
+  });
+
+  it('parte de ações e FIIs incompleta é recusada', () => {
+    const r = comMercado();
+    r.mercado.ativos[0].tipo = 'etf';
+    assert.throws(() => lerRadar(r), /ações e FIIs do radar está incompleta/);
   });
 
   it('erros claros', () => {
@@ -101,5 +144,57 @@ describe('titulosDoTesouro', () => {
     assert.equal(titulosDoTesouro(radar()).length, 3);
     assert.deepEqual(titulosDoTesouro(radar(), 'ipca').map((t) => t.nome), ['Tesouro IPCA+ 2035']);
     assert.deepEqual(INDEXADORES.map((i) => i.id), ['selic', 'prefixado', 'ipca', 'igpm']);
+  });
+});
+
+describe('ações e FIIs (parte 4.3b)', () => {
+  const r = lerRadar(comMercado());
+
+  it('listas, períodos e faixas de preço', () => {
+    assert.deepEqual(LISTAS_DO_MERCADO.map((l) => l.id), ['altas', 'baixas', 'negociados']);
+    assert.deepEqual(PERIODOS.map((p) => p.texto), ['na semana', 'no mês', 'em 12 meses']);
+    assert.deepEqual(FAIXAS_DE_PRECO.map((f) => f.maximoCentavos), [null, 1000, 5000, 10000]);
+    assert.equal(LIMITE_DA_LISTA, 20);
+  });
+
+  it('período sem pregão de referência não está disponível', () => {
+    assert.equal(periodoDisponivel(r, 'mes'), true);
+    assert.equal(periodoDisponivel(r, 'ano'), false);
+    assert.equal(periodoDisponivel(radar(), 'mes'), false); // radar sem a parte de ações
+  });
+
+  it('maiores altas: só quem subiu, da maior alta para a menor (variação vazia fica de fora)', () => {
+    assert.deepEqual(listaDoMercado(r, { tipo: 'acao', lista: 'altas', periodo: 'mes' }).map((a) => a.codigo), ['AAAA3', 'CCCC3']);
+    assert.deepEqual(listaDoMercado(r, { tipo: 'acao', lista: 'altas', periodo: 'semana' }).map((a) => a.codigo), ['DDDD3', 'AAAA3', 'CCCC3']);
+  });
+
+  it('maiores baixas: só quem caiu, da maior queda para a menor', () => {
+    assert.deepEqual(listaDoMercado(r, { tipo: 'acao', lista: 'baixas', periodo: 'mes' }).map((a) => a.codigo), ['BBBB4']);
+    assert.deepEqual(listaDoMercado(r, { tipo: 'fii', lista: 'baixas', periodo: 'mes' }).map((a) => a.codigo), ['FIIB11']);
+  });
+
+  it('mais negociados: pelo volume do dia', () => {
+    assert.deepEqual(listaDoMercado(r, { tipo: 'acao', lista: 'negociados', periodo: 'mes' }).map((a) => a.codigo), ['AAAA3', 'BBBB4', 'CCCC3', 'DDDD3']);
+  });
+
+  it('preço máximo de 1 unidade (ex.: o que cabe na parte Investir do mês)', () => {
+    assert.deepEqual(listaDoMercado(r, { tipo: 'acao', lista: 'negociados', periodo: 'mes', precoMaximoCentavos: 1000 }).map((a) => a.codigo), ['BBBB4', 'DDDD3']);
+    assert.deepEqual(listaDoMercado(r, { tipo: 'fii', lista: 'altas', periodo: 'mes', precoMaximoCentavos: 5000 }).map((a) => a.codigo), []);
+  });
+
+  it('no máximo 20 por lista', () => {
+    const muitos = comMercado();
+    muitos.mercado.ativos = Array.from({ length: 30 }, (_, i) => ativo(`XX${String(i).padStart(2, '0')}3`, 'acao', 1000, 200_000_000 - i, 1, 1, 1));
+    assert.equal(listaDoMercado(lerRadar(muitos), { tipo: 'acao', lista: 'negociados', periodo: 'mes' }).length, 20);
+  });
+
+  it('textos da variação e do volume', () => {
+    assert.equal(textoDaVariacao(8.2), '+8,2%');
+    assert.equal(textoDaVariacao(-12.3), '−12,3%');
+    assert.equal(textoDaVariacao(0), '0,0%');
+    assert.equal(textoDaVariacao(null), '—');
+    assert.equal(textoDoVolume(123_456_789_000), 'R$ 1,2 bi');
+    assert.equal(textoDoVolume(4_530_000_000), 'R$ 45,3 mi');
+    assert.equal(textoDoVolume(30_000_000), 'R$ 300 mil');
   });
 });
