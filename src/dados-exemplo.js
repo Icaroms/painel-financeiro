@@ -11,7 +11,8 @@
 
 import { criarCartao } from './cartoes.js';
 import { criarCategoria, criarFixo, criarLancamento, criarMes, ajustarFixoNoMes } from './modelo.js';
-import { mesDaData } from './datas.js';
+import { mesDaData, somarMeses } from './datas.js';
+import { adicionarInvestimento } from './carteira.js';
 
 /**
  * @param {string} hoje "AAAA-MM-DD".
@@ -21,7 +22,8 @@ import { mesDaData } from './datas.js';
  *   fixos: object[],
  *   lancamentos: object[],
  *   formasPagamento: string[],
- *   cartoes: object[]
+ *   cartoes: object[],
+ *   investimentos: object[]
  * }}
  */
 export function criarDadosDeExemplo(hoje) {
@@ -52,6 +54,12 @@ export function criarDadosDeExemplo(hoje) {
     criarLancamento({ valorCentavos: 4000, categoriaId: diversos.id, formaPagamento: 'Dinheiro', data: primeiroDia }),
   ];
 
+  // Carteira fictícia (parte 4.2a): aplicações feitas meses atrás, com o valor atual conferido no dia 1.
+  const carteira = [
+    { tipo: 'cdb', nome: 'CDB Banco Exemplo', dataAplicacao: `${somarMeses(mes, -6)}-10`, valorAplicadoCentavos: 100000, valorAtualCentavos: 105230, valorAtualEm: primeiroDia },
+    { tipo: 'tesouro', nome: 'Tesouro Selic', dataAplicacao: `${somarMeses(mes, -3)}-05`, valorAplicadoCentavos: 50000, valorAtualCentavos: 51340, valorAtualEm: primeiroDia },
+  ].reduce((estado, dados) => adicionarInvestimento(estado, dados, { hoje }), { investimentos: [] }).investimentos;
+
   return {
     origem: 'exemplo', // a tela mostra a faixa "dados de exemplo" (veja src/inicio.js)
     meses: [registroMes],
@@ -61,5 +69,6 @@ export function criarDadosDeExemplo(hoje) {
     formasPagamento: ['Pix', 'Crédito', 'Débito', 'Dinheiro'],
     // "Crédito" é um cartão: limite de R$ 2.000, fecha dia 3 e vence dia 10.
     cartoes: [criarCartao({ formaPagamento: 'Crédito', limiteCentavos: 200000, diaFechamento: 3, diaVencimento: 10 })],
+    investimentos: carteira,
   };
 }

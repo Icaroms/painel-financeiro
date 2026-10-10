@@ -27,7 +27,7 @@
  * - ao mudar, a cópia antiga dos arquivos é apagada;
  * - uma página aberta com versão menor mostra o aviso "Há uma versão nova".
  */
-const VERSAO_CACHE = 'painel-financeiro-v16';
+const VERSAO_CACHE = 'painel-financeiro-v17';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -49,6 +49,7 @@ const ARQUIVOS = [
   './icones/apple-touch-icon.png',
   './src/analise.js',
   './src/backup.js',
+  './src/carteira.js',
   './src/cartoes.js',
   './src/configuracao.js',
   './src/conversao.js',
@@ -82,6 +83,7 @@ const ARQUIVOS = [
   './src/ui/destino.js',
   './src/ui/explicar.js',
   './src/ui/historico.js',
+  './src/ui/investir.js',
   './src/ui/mes.js',
   './src/ui/simulador.js',
 ];

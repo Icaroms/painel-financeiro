@@ -288,6 +288,31 @@
 
   </main>
 
+  <!-- Vista "Investir" (Fase 04, parte 4.2a): a carteira de investimentos -->
+  <main class="tela tela-investir" id="tela-investir" hidden>
+
+    <header class="cabecalho">
+      <h1>Investir</h1>
+    </header>
+
+    <section class="cartao" aria-labelledby="titulo-carteira">
+      <h2 id="titulo-carteira">Carteira</h2>
+      <p class="investir-total" id="investir-total"></p>
+      <p class="resumo-dinheiro" id="investir-rendimento"></p>
+      <dl class="contas" id="investir-grupos"></dl>
+      <p class="secundario explicacao">Os valores atuais são os que você digita, conferindo no app ou no extrato do banco. O app só mostra números: não indica o que comprar ou vender.</p>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-investimentos">
+      <h2 id="titulo-investimentos">Investimentos</h2>
+      <ul class="lista-fixos" id="lista-investimentos"></ul>
+      <nav class="paginacao" id="paginacao-investimentos" aria-label="Páginas dos investimentos"></nav>
+      <div id="area-investimento"></div>
+      <button type="button" class="botao-secundario" id="botao-novo-investimento">Adicionar investimento</button>
+    </section>
+
+  </main>
+
   <!-- Vista "Simular compra" (Fase 02, parte 2.5): uma consulta, nada é gravado -->
   <main class="tela tela-simular" id="tela-simular" hidden>
 
@@ -538,6 +563,7 @@
     <a href="#lancar" class="aba" id="aba-lancar">Lançar</a>
     <a href="#mes" class="aba" id="aba-mes">Mês</a>
     <a href="#historico" class="aba" id="aba-historico">Histórico</a>
+    <a href="#investir" class="aba" id="aba-investir">Investir</a>
     <a href="#configurar" class="aba" id="aba-configurar">
       Configurar
       <span class="ponto" id="ponto-configurar" hidden></span>
