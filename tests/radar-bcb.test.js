@@ -1,5 +1,5 @@
 /**
- * Testes do robô do Radar: taxas do Banco Central (Fase 04, parte 4.4a).
+ * Testes do robô do Radar: taxas do Banco Central (Fase 04, partes 4.4a e 4.4b).
  * Rodar com: npm test
  *
  * Nenhum teste usa a internet. As respostas imitam a API do SGS do
@@ -18,6 +18,12 @@ import {
   cdiAnual,
   ipca12Meses,
   montarTaxas,
+  INICIO_HISTORICO,
+  enderecoDoPeriodo,
+  periodosDeConsulta,
+  cdiMensal,
+  ipcaMensal,
+  montarHistorico,
 } from '../scripts/radar/bcb.js';
 import { montarRadar } from '../scripts/radar/gerar-radar.js';
 import { lerRadar, linhasDasTaxas } from '../src/radar.js';
@@ -126,5 +132,91 @@ describe('robô → app', () => {
     assert.equal(linhas[1].detalhe, 'taxa de 09/10/2026, em 252 dias úteis');
     assert.match(linhas[2].valor, /^\d+,\d{2}% em 12 meses$/);
     assert.equal(linhas[2].detalhe, '0,48% em setembro de 2026');
+  });
+});
+
+/* ---------------- Histórico mensal (4.4b) ---------------- */
+
+/** CDI diário fictício: 0,05% em todo dia útil (seg a sex) de um período. */
+function cdiDiarioFalso(de, ate, valor = 0.05) {
+  const dias = [];
+  for (let d = new Date(`${de}T12:00:00Z`); d.toISOString().slice(0, 10) <= ate; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) dias.push({ data: d.toISOString().slice(0, 10), valor });
+  }
+  return dias;
+}
+
+/** IPCA mensal fictício de 0,4% de um mês "AAAA-MM" até outro. */
+function ipcaFalso(de, ate, valor = 0.4) {
+  const meses = [];
+  for (let [a, m] = de.split('-').map(Number); `${a}-${String(m).padStart(2, '0')}` <= ate; m === 12 ? (a += 1, m = 1) : (m += 1)) {
+    meses.push({ data: `${a}-${String(m).padStart(2, '0')}-01`, valor });
+  }
+  return meses;
+}
+
+describe('consulta por período', () => {
+  it('endereço com dataInicial e dataFinal em DD/MM/AAAA', () => {
+    assert.equal(
+      enderecoDoPeriodo(12, '2016-01-01', '2020-12-31'),
+      'https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json&dataInicial=01/01/2016&dataFinal=31/12/2020',
+    );
+  });
+
+  it('divide em blocos de 5 anos (a API aceita no máximo 10)', () => {
+    assert.deepEqual(periodosDeConsulta('2016-01-01', '2026-10-10'), [
+      { de: '2016-01-01', ate: '2020-12-31' },
+      { de: '2021-01-01', ate: '2025-12-31' },
+      { de: '2026-01-01', ate: '2026-10-10' },
+    ]);
+    assert.deepEqual(periodosDeConsulta('2016-01-01', '2016-03-01'), [{ de: '2016-01-01', ate: '2016-03-01' }]);
+    assert.equal(INICIO_HISTORICO, '2016-01-01');
+  });
+});
+
+describe('cdiMensal', () => {
+  it('encadeia os dias de cada mês; o último mês vai até o dia do último dado', () => {
+    const meses = cdiMensal(cdiDiarioFalso('2026-08-01', '2026-10-08'));
+    assert.deepEqual(meses.map((m) => [m.mes, m.ultimoDia]), [['2026-08', 31], ['2026-09', 30], ['2026-10', 8]]);
+    // Agosto/2026 tem 21 dias úteis (seg a sex): 1,0005^21 − 1
+    assert.equal(meses[0].percentual, Math.round((1.0005 ** 21 - 1) * 1e8) / 1e6);
+  });
+
+  it('recusa mês faltando e valor fora da faixa', () => {
+    const comBuraco = [...cdiDiarioFalso('2026-07-01', '2026-07-31'), ...cdiDiarioFalso('2026-09-01', '2026-09-30')];
+    assert.throws(() => cdiMensal(comBuraco), /falta o CDI entre 2026-07 e 2026-09/);
+    assert.throws(() => cdiMensal(cdiDiarioFalso('2026-07-01', '2026-08-31', 14.9)), /CDI de 2026-07 fora da faixa/);
+  });
+});
+
+describe('ipcaMensal e montarHistorico', () => {
+  it('IPCA conferido mês a mês', () => {
+    assert.deepEqual(ipcaMensal(ipcaFalso('2026-01', '2026-02')), [{ mes: '2026-01', percentual: 0.4 }, { mes: '2026-02', percentual: 0.4 }]);
+    assert.throws(() => ipcaMensal(ipcaFalso('2026-01', '2026-02', 12)), /IPCA de 2026-01 fora da faixa/);
+    assert.throws(() => ipcaMensal([...ipcaFalso('2026-01', '2026-01'), ...ipcaFalso('2026-03', '2026-03')]), /falta o IPCA/);
+  });
+
+  it('o histórico começa em jan/2016 e passa no lerRadar do app', () => {
+    const historico = montarHistorico({ cdiDiario: cdiDiarioFalso('2016-01-01', '2026-10-08'), ipcaMensal: ipcaFalso('2016-01', '2026-09') });
+    assert.equal(historico.inicio, '2016-01');
+    assert.equal(historico.cdi.length, 130); // jan/2016 a out/2026
+    assert.equal(historico.ipca.length, 129);
+    const taxas = { ...montarTaxas(series()), historico };
+    const lido = lerRadar(JSON.parse(JSON.stringify(montarRadar({ tesouro: null, taxas }))));
+    assert.deepEqual(lido.taxas.historico.cdi.at(-1), historico.cdi.at(-1));
+  });
+
+  it('histórico que não começa em 2016 é recusado pelo robô', () => {
+    assert.throws(
+      () => montarHistorico({ cdiDiario: cdiDiarioFalso('2020-01-01', '2020-03-01'), ipcaMensal: ipcaFalso('2016-01', '2020-02') }),
+      /precisa começar em 2016-01 \(CDI: 2020-01/,
+    );
+  });
+
+  it('o app aceita radar sem histórico e recusa histórico quebrado', () => {
+    const taxas = montarTaxas(series());
+    assert.doesNotThrow(() => lerRadar(montarRadar({ tesouro: null, taxas })));
+    const quebrado = { inicio: '2016-01', cdi: [{ mes: '2016-01', percentual: 1, ultimoDia: 40 }], ipca: [{ mes: '2016-01', percentual: 0.5 }] };
+    assert.throws(() => lerRadar(montarRadar({ tesouro: null, taxas: { ...taxas, historico: quebrado } })), /taxas do Banco Central do radar está incompleta/);
   });
 });

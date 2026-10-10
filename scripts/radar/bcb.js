@@ -1,5 +1,5 @@
 /**
- * Robô do Radar (Fase 04, parte 4.4a): taxas do Banco Central.
+ * Robô do Radar (Fase 04, partes 4.4a e 4.4b): taxas do Banco Central.
  *
  * Fonte oficial e gratuita: SGS (Sistema Gerenciador de Séries Temporais)
  * do Banco Central, pela API pública:
@@ -13,6 +13,12 @@
  * - 12: CDI diário (% ao dia). O CDI anual é calculado em 252 dias úteis.
  * - 433: IPCA, variação do mês (%). O IPCA de 12 meses é calculado
  *   ENCADEANDO os 12 meses (somar subestima o acumulado).
+ *
+ * Histórico (4.4b): CDI e IPCA de cada mês desde INICIO_HISTORICO, para o
+ * app estimar o valor atual da renda fixa pela taxa contratada (4.4c).
+ * Consulta por período: .../dados?formato=json&dataInicial=DD/MM/AAAA&dataFinal=DD/MM/AAAA
+ * Regra conferida em 10/10/2026: no máximo 10 anos por consulta; o robô
+ * pede em blocos de ANOS_POR_CONSULTA anos.
  *
  * Cada valor passa por uma conferência de faixa plausível: se um código
  * estiver errado, a parte das taxas falha com o valor no erro, e o resto
@@ -34,12 +40,25 @@ export const SERIES = Object.freeze({ selicMeta: 432, cdiDiario: 12, ipcaMensal:
 export const enderecoDaSerie = (codigo, ultimos) =>
   `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados/ultimos/${ultimos}?formato=json`;
 
+/** Endereço de uma série num período (datas "AAAA-MM-DD"; no máximo 10 anos). */
+export const enderecoDoPeriodo = (codigo, de, ate) => {
+  const br = (data) => data.split('-').reverse().join('/');
+  return `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados?formato=json&dataInicial=${br(de)}&dataFinal=${br(ate)}`;
+};
+
 /** Faixas plausíveis: valor fora delas indica código errado ou dado quebrado. */
 export const FAIXAS = Object.freeze({
   selicMeta: [2, 30], // % ao ano
   cdiAnual: [2, 30], // % ao ano
   ipcaMensal: [-3, 5], // % no mês
+  cdiMensal: [0.05, 3], // % no mês (em 2020-2021, com a Selic a 2%, o CDI rendeu ~0,15% ao mês)
 });
+
+/** Primeiro dia do histórico (cobre aplicações dos últimos 10 anos). */
+export const INICIO_HISTORICO = '2016-01-01';
+
+/** Anos por consulta (a API aceita no máximo 10). */
+export const ANOS_POR_CONSULTA = 5;
 
 /**
  * Lê a resposta de uma série do SGS.
@@ -114,4 +133,113 @@ export function montarTaxas({ selicMeta, cdiDiario, ipcaMensal }) {
     cdi: { anual: exigirFaixa(cdiAnual(cdi.valor), FAIXAS.cdiAnual, 'CDI anual'), data: cdi.data },
     ipca: { mes: ipcaDoMes.data.slice(0, 7), mensal: ipcaDoMes.valor, acumulado12m: ipca12Meses(ultimos12.map((m) => m.valor)) },
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Histórico mensal (parte 4.4b)                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Divide um período em blocos de no máximo N anos (a API recusa mais de 10).
+ *
+ * @param {string} de "AAAA-MM-DD".
+ * @param {string} ate "AAAA-MM-DD".
+ * @param {number} [anos]
+ * @returns {{ de: string, ate: string }[]}
+ */
+export function periodosDeConsulta(de, ate, anos = ANOS_POR_CONSULTA) {
+  const blocos = [];
+  let inicio = de;
+  while (inicio <= ate) {
+    const ano = Number(inicio.slice(0, 4)) + anos;
+    // Fim do bloco: véspera do mesmo dia N anos depois (ou a data final).
+    const proximo = `${ano}${inicio.slice(4)}`;
+    const vespera = new Date(`${proximo}T12:00:00Z`);
+    vespera.setUTCDate(vespera.getUTCDate() - 1);
+    const fim = vespera.toISOString().slice(0, 10);
+    blocos.push({ de: inicio, ate: fim < ate ? fim : ate });
+    inicio = proximo;
+  }
+  return blocos;
+}
+
+/** Dias do mês "AAAA-MM". */
+const diasDoMes = (mes) => new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).getUTCDate();
+
+/** Mês seguinte: "2026-12" → "2027-01". */
+function mesSeguinte(mes) {
+  const total = Number(mes.slice(0, 4)) * 12 + Number(mes.slice(5, 7));
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+
+/** Confere que os meses vêm em sequência, sem buraco. */
+function exigirSequencia(meses, nome) {
+  for (let i = 1; i < meses.length; i += 1) {
+    if (meses[i].mes !== mesSeguinte(meses[i - 1].mes)) {
+      throw new Error(`BCB: falta o ${nome} entre ${meses[i - 1].mes} e ${meses[i].mes}.`);
+    }
+  }
+}
+
+/** Arredonda em 6 casas (o bastante para fatores de rendimento). */
+const seisCasas = (n) => Math.round(n * 1e6) / 1e6;
+
+/**
+ * CDI de cada mês, encadeando o CDI diário: Π(1 + d/100) − 1, em %.
+ *
+ * ultimoDia: até que dia do mês o valor cobre. Nos meses completos é o
+ * último dia do mês; no mês mais recente é o dia do último dado (o mês
+ * ainda está andando). O app usa isso para fazer a conta proporcional.
+ *
+ * @param {{ data: string, valor: number }[]} diario Lido por lerSerieSgs.
+ * @returns {{ mes: string, percentual: number, ultimoDia: number }[]}
+ */
+export function cdiMensal(diario) {
+  const porMes = new Map();
+  for (const { data, valor } of diario) {
+    const mes = data.slice(0, 7);
+    const atual = porMes.get(mes) ?? { fator: 1, dia: 0 };
+    porMes.set(mes, { fator: atual.fator * (1 + valor / 100), dia: Number(data.slice(8, 10)) });
+  }
+  const meses = [...porMes.entries()].map(([mes, { fator, dia }], i, todos) => {
+    const percentual = seisCasas((fator - 1) * 100);
+    const ultimo = i === todos.length - 1;
+    // O mês mais recente pode estar incompleto: a conferência de faixa só vale para os completos.
+    if (!ultimo) exigirFaixa(percentual, FAIXAS.cdiMensal, `CDI de ${mes}`);
+    return { mes, percentual, ultimoDia: ultimo ? dia : diasDoMes(mes) };
+  });
+  exigirSequencia(meses, 'CDI');
+  return meses;
+}
+
+/**
+ * IPCA de cada mês, conferido.
+ * @param {{ data: string, valor: number }[]} mensal Lido por lerSerieSgs.
+ * @returns {{ mes: string, percentual: number }[]}
+ */
+export function ipcaMensal(mensal) {
+  const meses = mensal.map(({ data, valor }) => ({
+    mes: data.slice(0, 7),
+    percentual: exigirFaixa(valor, FAIXAS.ipcaMensal, `IPCA de ${data.slice(0, 7)}`),
+  }));
+  exigirSequencia(meses, 'IPCA');
+  return meses;
+}
+
+/**
+ * Monta o histórico que vai dentro da parte "taxas" do radar.
+ *
+ * @param {object} series
+ * @param {{ data: string, valor: number }[]} series.cdiDiario Desde INICIO_HISTORICO.
+ * @param {{ data: string, valor: number }[]} series.ipcaMensal Desde INICIO_HISTORICO.
+ * @returns {{ inicio: string, cdi: object[], ipca: object[] }}
+ */
+export function montarHistorico({ cdiDiario, ipcaMensal: ipca }) {
+  const inicio = INICIO_HISTORICO.slice(0, 7);
+  const cdi = cdiMensal(cdiDiario);
+  const ipcaMeses = ipcaMensal(ipca);
+  if (cdi[0]?.mes !== inicio || ipcaMeses[0]?.mes !== inicio) {
+    throw new Error(`BCB: o histórico precisa começar em ${inicio} (CDI: ${cdi[0]?.mes}, IPCA: ${ipcaMeses[0]?.mes}).`);
+  }
+  return { inicio, cdi, ipca: ipcaMeses };
 }
