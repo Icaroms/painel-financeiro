@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
+import { VERSAO_APP } from '../src/versao-app.js';
+
 const RAIZ = fileURLToPath(new URL('..', import.meta.url));
 const ler = (caminho) => readFileSync(join(RAIZ, caminho), 'utf8');
 
@@ -61,6 +63,11 @@ describe('sw.js (service worker)', () => {
 
   it('tem uma versão de cache', () => {
     assert.match(ler('sw.js'), /const VERSAO_CACHE = 'painel-financeiro-v\d+';/);
+  });
+
+  it('a versão do sw.js é igual à VERSAO_APP de src/versao-app.js (mudam juntas)', () => {
+    const versaoDoSw = /const VERSAO_CACHE = '([^']+)';/.exec(ler('sw.js'))[1];
+    assert.equal(versaoDoSw, VERSAO_APP, 'mude a VERSAO_CACHE do sw.js e a VERSAO_APP de src/versao-app.js juntas');
   });
 
   it('todo arquivo da lista existe', () => {
@@ -111,10 +118,15 @@ describe('index.html', () => {
     }
   });
 
-  it('tem a faixa de aviso da cópia guardada, fora das vistas', () => {
-    assert.match(html, /<body>\s*<!--[\s\S]*?-->\s*<div class="aviso-copia" id="aviso-copia" role="status" hidden>/);
-    assert.match(html, /id="aviso-copia-texto"/);
-    assert.match(html, /id="aviso-copia-fechar"/);
+  it('tem os avisos do topo (cópia guardada e versão nova), antes das vistas', () => {
+    const avisos = html.indexOf('<div class="avisos-topo">');
+    assert.ok(avisos > html.indexOf('<body>'), 'os avisos ficam dentro do body');
+    assert.ok(avisos < html.indexOf('<main'), 'os avisos ficam antes da primeira vista');
+    for (const id of ['aviso-copia', 'aviso-copia-texto', 'aviso-copia-fechar', 'aviso-versao', 'aviso-versao-texto', 'aviso-versao-atualizar']) {
+      assert.match(html, new RegExp(`id="${id}"`));
+    }
+    assert.match(html, /<div class="aviso-topo aviso-copia" id="aviso-copia" role="status" hidden>/);
+    assert.match(html, /<div class="aviso-topo aviso-versao" id="aviso-versao" role="status" hidden>/);
   });
 });
 
