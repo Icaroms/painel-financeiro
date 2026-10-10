@@ -33,7 +33,9 @@ import { criarDadosIniciais, ehExemplo } from '../inicio.js';
 import { registrarBackup, situacaoDoBackup } from '../lembrete-backup.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
-import { lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA } from './banco.js';
+import {
+  lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA, lerAnaliseMes, gravarAnaliseMes,
+} from './banco.js';
 import { iniciarConfigIA } from './configurar-ia.js';
 import { configuracaoVazia } from '../ia.js';
 import { mensagemDaCompra } from '../explicacoes.js';
@@ -635,7 +637,23 @@ async function salvarConfigIA(config) {
 }
 
 const configuracaoIA = iniciarConfigIA({ obterConfigIA: () => configIA, salvarConfigIA });
-const analiseMes = iniciarAnaliseMes({ obterDados: () => dados, obterConfigIA: () => configIA });
+/** Última análise do mês (lida do aparelho no início; fora do backup). */
+let ultimaAnalise = null;
+
+const analiseMes = iniciarAnaliseMes({
+  obterDados: () => dados,
+  obterConfigIA: () => configIA,
+  obterUltimaAnalise: () => ultimaAnalise,
+  // Guardar é um extra: se falhar, a análise continua na tela.
+  guardarAnalise: async (analise) => {
+    ultimaAnalise = analise;
+    try {
+      await gravarAnaliseMes(analise);
+    } catch {
+      // sem gravação: na próxima vez, a pessoa pede de novo
+    }
+  },
+});
 
 // Atalho do Lançar para o simulador: leva o valor digitado e o cartão escolhido.
 el.linkSimular.addEventListener('click', () => {
@@ -692,7 +710,7 @@ function mostrarVista() {
 
   if (vista === 'mes') {
     resumo.renderizar();
-    analiseMes.renderizar(); // a análise começa vazia: os números podem ter mudado
+    analiseMes.renderizar(); // mostra a última análise do mês, com a hora em que foi feita
   }
   if (vista === 'historico') historico.renderizar();
   if (vista === 'configurar') {
@@ -757,6 +775,11 @@ try {
   configIA = { ...configuracaoVazia(), ...((await lerConfigIA()) ?? {}) };
 } catch {
   configIA = configuracaoVazia();
+}
+try {
+  ultimaAnalise = (await lerAnaliseMes()) ?? null;
+} catch {
+  ultimaAnalise = null;
 }
 montarMarcas();
 montarParcelas();

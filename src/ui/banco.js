@@ -10,7 +10,9 @@
  *     - um registro de chave "atual", com o pacote inteiro
  *       (o envelope de src/persistencia.js);
  *     - um registro de chave "config-ia", com a configuração da IA
- *       (Fase 03). Ele fica fora do backup de propósito.
+ *       (Fase 03). Ele fica fora do backup de propósito;
+ *     - um registro de chave "analise-mes", com a última análise do mês
+ *       feita pela IA (Fase 03). Também fora do backup.
  *
  * Guardar tudo num registro só é simples e seguro para o volume de um
  * app pessoal: cada gravação substitui o pacote inteiro de uma vez.
@@ -27,6 +29,8 @@ const CHAVE = 'atual';
 // Configuração da IA (Fase 03): numa chave separada, para NÃO entrar no
 // backup, que exporta só o pacote "atual". A chave do Gemini fica só no aparelho.
 const CHAVE_CONFIG_IA = 'config-ia';
+// Última análise do mês feita pela IA (Fase 03): também fora do backup.
+const CHAVE_ANALISE_MES = 'analise-mes';
 
 /** Guarda a conexão aberta, para não abrir o banco a cada gravação. */
 let conexao = null;
@@ -122,6 +126,23 @@ export async function gravarConfigIA(config) {
   await naGaveta('readwrite', (gaveta) => (config === null
     ? gaveta.delete(CHAVE_CONFIG_IA)
     : gaveta.put(config, CHAVE_CONFIG_IA)));
+}
+
+/**
+ * Lê a última análise do mês feita pela IA.
+ * @returns {Promise<object|undefined>}
+ */
+export function lerAnaliseMes() {
+  return naGaveta('readonly', (gaveta) => gaveta.get(CHAVE_ANALISE_MES));
+}
+
+/**
+ * Grava a última análise do mês (substitui a anterior).
+ * @param {object} analise { mes, texto, geradaEm }
+ * @returns {Promise<void>}
+ */
+export async function gravarAnaliseMes(analise) {
+  await naGaveta('readwrite', (gaveta) => gaveta.put(analise, CHAVE_ANALISE_MES));
 }
 
 /**

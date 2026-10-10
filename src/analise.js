@@ -10,13 +10,16 @@
  *    elementos a partir desses blocos, sempre como TEXTO, nunca como HTML.
  * 3. textoParaCopiar: a resposta em texto limpo, para o botão Copiar
  *    (ex.: colar numa conversa ou numa nota).
+ * 4. criarAnaliseGuardada / analiseDoMes / quandoFoiFeita: a última análise
+ *    fica guardada no aparelho (fora do backup), para não gastar um pedido
+ *    da cota do Gemini cada vez que a aba Mês é aberta.
  *
  * Por decisão de 10/10/2026, podem ir nomes de categorias, de contas e de
  * cartões, junto com os números. Nunca vão nome, e-mail ou senhas.
  */
 
 import { formatarCentavos } from './dinheiro.js';
-import { tituloDoMes, mesDaData } from './datas.js';
+import { tituloDoMes, mesDaData, hojeLocal, somarDias } from './datas.js';
 import { LIMITES_PADRAO } from './veredito.js';
 import { resumoDoMes } from './resumo-mes.js';
 import { dadosDoMes } from './meses.js';
@@ -236,4 +239,50 @@ export function textoParaCopiar(blocos) {
     if (b.tipo === 'lista') return b.itens.map((item) => `• ${juntar(item)}`).join('\n');
     return juntar(b.trechos);
   }).join('\n\n');
+}
+
+/* ------------------------------------------------------------------ */
+/* Última análise guardada                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Monta o registro da última análise (o que fica guardado no aparelho).
+ *
+ * @param {string} mes   "AAAA-MM" analisado.
+ * @param {string} texto A resposta da IA, como veio.
+ * @param {Date}   [agora]
+ * @returns {{ mes: string, texto: string, geradaEm: string }}
+ */
+export function criarAnaliseGuardada(mes, texto, agora = new Date()) {
+  return { mes, texto, geradaEm: agora.toISOString() };
+}
+
+/**
+ * A análise guardada, se ela for do mês pedido (a de outro mês não vale mais).
+ *
+ * @param {object|null|undefined} guardada
+ * @param {string} mes "AAAA-MM".
+ * @returns {object|null}
+ */
+export function analiseDoMes(guardada, mes) {
+  if (!guardada || guardada.mes !== mes || typeof guardada.texto !== 'string' || guardada.texto === '') return null;
+  return guardada;
+}
+
+/**
+ * Quando a análise foi feita, em palavras: "hoje às 14:52", "ontem às 09:10"
+ * ou "em 08/10 às 14:52" (horário do aparelho).
+ *
+ * @param {string} geradaEm ISO 8601.
+ * @param {Date}   [agora]
+ * @returns {string}
+ */
+export function quandoFoiFeita(geradaEm, agora = new Date()) {
+  const momento = new Date(geradaEm);
+  const dia = hojeLocal(momento);
+  const hoje = hojeLocal(agora);
+  const hora = `${String(momento.getHours()).padStart(2, '0')}:${String(momento.getMinutes()).padStart(2, '0')}`;
+  if (dia === hoje) return `hoje às ${hora}`;
+  if (dia === somarDias(hoje, -1)) return `ontem às ${hora}`;
+  return `em ${dia.slice(8, 10)}/${dia.slice(5, 7)} às ${hora}`;
 }
