@@ -328,6 +328,34 @@
       <ul class="lista-mes" id="radar-tesouro"></ul>
       <nav class="paginacao" id="paginacao-radar-tesouro" aria-label="Páginas dos títulos do Tesouro"></nav>
 
+      <!-- Parte 4.3b: ações e FIIs da B3 -->
+      <h3 class="subtitulo-secao">Ações e FIIs</h3>
+      <p class="secundario radar-fonte" id="radar-mercado-fonte"></p>
+      <div class="radar-filtros" id="radar-mercado-filtros">
+        <label class="campo">
+          <span class="secundario">Tipo</span>
+          <select id="radar-mercado-tipo">
+            <option value="acao">Ações</option>
+            <option value="fii">FIIs</option>
+          </select>
+        </label>
+        <label class="campo">
+          <span class="secundario">Lista</span>
+          <select id="radar-mercado-lista"></select>
+        </label>
+        <label class="campo" id="radar-mercado-periodo-campo">
+          <span class="secundario">Período</span>
+          <select id="radar-mercado-periodo"></select>
+        </label>
+        <label class="campo">
+          <span class="secundario">Preço de 1 unidade</span>
+          <select id="radar-mercado-preco"></select>
+        </label>
+      </div>
+      <ul class="lista-mes" id="radar-mercado"></ul>
+      <nav class="paginacao" id="paginacao-radar-mercado" aria-label="Páginas das ações e FIIs"></nav>
+      <p class="secundario radar-fonte" id="radar-mercado-nota">Só entram papéis com bastante negociação no dia (ações acima de R$ 1 milhão; FIIs acima de R$ 300 mil). A variação é só do preço: não inclui dividendos e rendimentos pagos, e fica vazia quando a ação teve desdobramento ou grupamento. Ações podem ser compradas de 1 em 1 no mercado fracionário (código com "F", como PETR4F).</p>
+
       <button type="button" class="botao-pequeno" id="botao-atualizar-radar">Atualizar radar</button>
     </section>
 

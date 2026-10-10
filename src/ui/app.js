@@ -51,6 +51,7 @@ import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
 import { iniciarInvestir } from './investir.js';
 import { iniciarRadar } from './radar.js';
+import { dividirSobra } from '../destino.js';
 import {
   VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
   RESULTADOS_DA_PROCURA, textoDaProcura,
@@ -651,7 +652,16 @@ const configurar = iniciarConfigurar({
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
 const investir = iniciarInvestir({ obterDados: () => dados, aplicarMudanca });
-const radar = iniciarRadar({ lerGuardado: lerRadarGuardado, guardar: gravarRadarGuardado });
+const radar = iniciarRadar({
+  lerGuardado: lerRadarGuardado,
+  guardar: gravarRadarGuardado,
+  // Filtro "cabe no Investir deste mês" do radar: a parte Investir do destino da sobra.
+  obterInvestirCentavos: () => {
+    if (!dados) return 0;
+    const hoje = hojeLocal();
+    return dividirSobra(dados, mesDaData(hoje), hoje).investirCentavos;
+  },
+});
 const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
 const destinoMes = iniciarDestinoMes({ obterDados: () => dados });
