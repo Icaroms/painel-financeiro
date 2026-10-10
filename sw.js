@@ -22,11 +22,12 @@
 
 /**
  * Versão do app. Mude a cada entrega (cada PR), não só quando a LISTA de
- * arquivos mudar: ela aparece em Configurar como "Versão do app" (para
- * conferir se o aparelho está na última publicação) e, ao mudar, a cópia
- * antiga dos arquivos é apagada.
+ * arquivos mudar, e SEMPRE junto com a VERSAO_APP de src/versao-app.js
+ * (o teste tests/pwa.test.js confere que as duas são iguais):
+ * - ao mudar, a cópia antiga dos arquivos é apagada;
+ * - uma página aberta com versão menor mostra o aviso "Há uma versão nova".
  */
-const VERSAO_CACHE = 'painel-financeiro-v14';
+const VERSAO_CACHE = 'painel-financeiro-v15';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
