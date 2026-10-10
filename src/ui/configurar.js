@@ -1,6 +1,7 @@
 /**
  * Vista "Configurar": dinheiro do mês, contas fixas, categorias, formas
- * de pagamento e cartões de crédito.
+ * de pagamento, cartões de crédito e a conversão das parcelas antigas
+ * em compras no cartão.
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As mudanças nos dados
  * são feitas pelas funções puras de src/configuracao.js (testadas no Node).
@@ -18,6 +19,7 @@ import { buscarMes } from '../meses.js';
 import { tituloDoMes } from '../painel.js';
 import { ehPrimeiroMes } from '../inicio.js';
 import { cartaoDaForma, salvarCartao, removerCartao, faturaDaCompra } from '../cartoes.js';
+import { contasParaConverter, converterFixo, comprasConvertidas, desfazerConversao } from '../conversao.js';
 import {
   textoDoValor,
   lerValorComSinal,
@@ -95,6 +97,9 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca }) {
     listaCartoes: elemento('lista-cartoes'),
     areaCartao: elemento('area-cartao'),
     botaoNovoCartao: elemento('botao-novo-cartao'),
+    listaConversao: elemento('lista-conversao'),
+    tituloConvertidas: elemento('titulo-convertidas'),
+    listaConvertidas: elemento('lista-convertidas'),
   };
 
   const mesAtual = () => mesDaData(hojeLocal());
@@ -748,12 +753,21 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     const editar = criar('button', {
       classe: 'botao-pequeno', type: 'button', texto: 'Editar', 'aria-label': `Editar o cartão ${cartao.formaPagamento}`,
     });
+    const erro = criar('span', { classe: 'erro' });
     remover.addEventListener('click', async () => {
+      mostrarErro(erro, null, '');
       const pergunta = `"${cartao.formaPagamento}" deixa de ser cartão?\n\nEla continua como forma de pagamento.`;
       if (!window.confirm(pergunta)) return;
-      await aplicarMudanca(removerCartao(obterDados(), cartao.formaPagamento), `"${cartao.formaPagamento}" não é mais cartão.`);
+      try {
+        await aplicarMudanca(removerCartao(obterDados(), cartao.formaPagamento), `"${cartao.formaPagamento}" não é mais cartão.`);
+      } catch (falha) {
+        // Ex.: o cartão tem parcelas convertidas de contas fixas.
+        if (!(falha instanceof ErroValidacao)) throw falha;
+        mostrarErro(erro, null, falha.message);
+        return;
+      }
       cartaoAberto = null;
-      renderizarCartoes();
+      renderizar();
     });
     editar.addEventListener('click', () => {
       cartaoAberto = cartao.formaPagamento;
@@ -761,7 +775,7 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     });
     acoes.append(remover, editar);
 
-    li.append(topo, detalhe, acoes);
+    li.append(topo, detalhe, acoes, erro);
     if (cartaoAberto === cartao.formaPagamento) li.append(formularioDoCartao(cartao));
     return li;
   }
@@ -780,12 +794,158 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     const cadastrando = cartaoAberto === 'novo' && livres.length > 0;
     el.botaoNovoCartao.hidden = cadastrando || livres.length === 0;
     el.areaCartao.replaceChildren(...(cadastrando ? [formularioDoCartao(null)] : []));
+    // Cadastrar ou remover um cartão muda quais contas podem ser convertidas.
+    renderizarConversao();
   }
 
   el.botaoNovoCartao.addEventListener('click', () => {
     cartaoAberto = 'novo';
     renderizarCartoes();
   });
+
+  /* ---------------- Parcelas antigas no cartão (parte 2.3) ---------------- */
+
+  /** id da conta fixa com a confirmação aberta, ou null. */
+  let conversaoAberta = null;
+
+  /** "2026-10" → "outubro de 2026". */
+  const mesPorExtenso = (mes) => tituloDoMes(mes).toLowerCase();
+
+  /** "outubro de 2026 a julho de 2027" ou só "outubro de 2026". */
+  const periodo = (inicio, fim) => (inicio === fim ? mesPorExtenso(inicio) : `${mesPorExtenso(inicio)} a ${mesPorExtenso(fim)}`);
+
+  /** "Parcelas 3 a 12 de 12" ou "Parcela 4 de 4". */
+  const quaisParcelas = (primeira, total) =>
+    (primeira === total ? `Parcela ${total} de ${total}` : `Parcelas ${primeira} a ${total} de ${total}`);
+
+  /** Confirmação da conversão: diz exatamente o que vai mudar antes de mudar. */
+  function confirmacaoDaConversao(plano) {
+    const caixa = criar('div', { classe: 'form-fixo confirmacao-conversao' });
+    const { fixo } = plano;
+    const mes = mesAtual();
+
+    const linhas = [
+      `Vira uma compra de ${plano.total} x ${formatarCentavos(plano.valorParcelaCentavos)} no ${fixo.formaPagamento}.`,
+      `${quaisParcelas(plano.primeiraParcela, plano.total)} (${formatarCentavos(plano.valorRestanteCentavos)}) ` +
+        `entram nas faturas de ${periodo(plano.mesPrimeira, plano.mesUltima)}.`,
+    ];
+    if (fixo.mesInicial <= mes && plano.mesPrimeira > mes) {
+      linhas.push(`A parcela de ${mesPorExtenso(mes)} já está paga e continua como conta fixa.`);
+    }
+    linhas.push(plano.fixoTerminaEm
+      ? `A conta fixa termina em ${mesPorExtenso(plano.fixoTerminaEm)}; os meses anteriores não mudam.`
+      : 'A conta fixa sai da lista: nenhuma parcela dela foi paga como conta fixa.');
+
+    const acoes = criar('div', { classe: 'acoes' });
+    const cancelar = criar('button', { classe: 'botao-pequeno', type: 'button', texto: 'Cancelar' });
+    const confirmar = criar('button', { classe: 'botao-pequeno', type: 'button', texto: 'Confirmar conversão' });
+    const erro = criar('span', { classe: 'erro' });
+    cancelar.addEventListener('click', () => {
+      conversaoAberta = null;
+      renderizarConversao();
+    });
+    confirmar.addEventListener('click', async () => {
+      try {
+        const { estado } = converterFixo(obterDados(), fixo.id, mes, { hoje: hojeLocal() });
+        conversaoAberta = null;
+        await aplicarMudanca(estado, `"${fixo.nome}" agora é uma compra parcelada no ${fixo.formaPagamento}.`);
+        renderizar(); // a conta fixa mudou: a lista de contas também
+      } catch (falha) {
+        if (!(falha instanceof ErroValidacao)) throw falha;
+        mostrarErro(erro, null, falha.message);
+      }
+    });
+    acoes.append(cancelar, confirmar);
+
+    caixa.append(...linhas.map((texto) => criar('p', { texto })), erro, acoes);
+    return caixa;
+  }
+
+  /** Item de uma conta que pode ser convertida. */
+  function itemParaConverter(plano) {
+    const li = criar('li', { classe: 'fixo' });
+    const topo = criar('div', { classe: 'fixo-topo' });
+    topo.append(
+      criar('span', { classe: 'fixo-nome', texto: plano.fixo.nome }),
+      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(plano.valorParcelaCentavos) }),
+    );
+    const detalhe = criar('p', {
+      classe: 'fixo-detalhe secundario',
+      texto: `${quaisParcelas(plano.primeiraParcela, plano.total)} · ${plano.fixo.formaPagamento} · ` +
+        `${periodo(plano.mesPrimeira, plano.mesUltima)}`,
+    });
+    li.append(topo, detalhe);
+
+    if (plano.motivo) {
+      li.append(criar('p', { classe: 'fixo-detalhe secundario', texto: plano.motivo }));
+      return li;
+    }
+    if (conversaoAberta === plano.fixo.id) {
+      li.append(confirmacaoDaConversao(plano));
+      return li;
+    }
+    const acoes = criar('div', { classe: 'acoes' });
+    const converter = criar('button', {
+      classe: 'botao-pequeno', type: 'button', texto: 'Converter', 'aria-label': `Converter ${plano.fixo.nome} em compra no cartão`,
+    });
+    converter.addEventListener('click', () => {
+      conversaoAberta = plano.fixo.id;
+      renderizarConversao();
+    });
+    acoes.append(converter);
+    li.append(acoes);
+    return li;
+  }
+
+  /** Item de uma compra já convertida, com o botão Desfazer. */
+  function itemConvertido(item) {
+    const { lancamento } = item;
+    const li = criar('li', { classe: 'fixo' });
+    const topo = criar('div', { classe: 'fixo-topo' });
+    topo.append(
+      criar('span', { classe: 'fixo-nome', texto: lancamento.descricao }),
+      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(item.valorParcelaCentavos) }),
+    );
+    const detalhe = criar('p', {
+      classe: 'fixo-detalhe secundario',
+      texto: `${quaisParcelas(item.parcelasPagas + 1, item.total)} nas faturas do ${lancamento.formaPagamento} · ` +
+        `${periodo(item.mesPrimeira, item.mesUltima)}`,
+    });
+
+    const acoes = criar('div', { classe: 'acoes' });
+    const desfazer = criar('button', {
+      classe: 'botao-pequeno', type: 'button', texto: 'Desfazer', 'aria-label': `Desfazer a conversão de ${lancamento.descricao}`,
+    });
+    desfazer.addEventListener('click', async () => {
+      const pergunta = `Desfazer a conversão de "${lancamento.descricao}"?\n\n` +
+        'A compra sai das faturas e a conta fixa volta como era.';
+      if (!window.confirm(pergunta)) return;
+      await aplicarMudanca(desfazerConversao(obterDados(), lancamento.id), `"${lancamento.descricao}" voltou a ser conta fixa.`);
+      renderizar();
+    });
+    acoes.append(desfazer);
+
+    li.append(topo, detalhe, acoes);
+    return li;
+  }
+
+  function renderizarConversao() {
+    const dados = obterDados();
+    const planos = contasParaConverter(dados, mesAtual(), hojeLocal());
+    el.listaConversao.replaceChildren(
+      ...(planos.length === 0
+        ? [criar('li', {
+            classe: 'lista-vazia secundario',
+            texto: 'Nenhuma conta parcelada num cartão cadastrado. A conta aparece aqui quando a forma de pagamento dela é um cartão.',
+          })]
+        : planos.map(itemParaConverter)),
+    );
+
+    const convertidas = comprasConvertidas(dados);
+    el.tituloConvertidas.hidden = convertidas.length === 0;
+    el.listaConvertidas.hidden = convertidas.length === 0;
+    el.listaConvertidas.replaceChildren(...convertidas.map(itemConvertido));
+  }
 
   /* ---------------- Tudo ---------------- */
 
@@ -794,7 +954,7 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     renderizarFixos();
     renderizarCategorias();
     renderizarFormas();
-    renderizarCartoes();
+    renderizarCartoes(); // também redesenha as parcelas antigas no cartão
   }
 
   return { renderizar };

@@ -189,9 +189,13 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     const itens = criar('ul', { classe: 'itens-fatura secundario' });
     for (const item of fatura.itens.slice(0, 5)) {
       const parcela = item.total > 1 ? ` · ${item.numero}/${item.total}` : '';
+      // Compra convertida de conta fixa: mostra o nome da conta (ex.: "Remador · 3/12").
+      const origem = item.lancamento.conversao
+        ? item.lancamento.descricao
+        : `${nomes.get(item.lancamento.categoriaId) ?? 'Sem categoria'} ${dataCurta(item.lancamento.data)}`;
       const li2 = criar('li');
       li2.append(
-        criar('span', { texto: `${nomes.get(item.lancamento.categoriaId) ?? 'Sem categoria'} ${dataCurta(item.lancamento.data)}${parcela}` }),
+        criar('span', { texto: `${origem}${parcela}` }),
         criar('span', { texto: formatarCentavos(item.valorCentavos) }),
       );
       itens.append(li2);
