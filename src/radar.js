@@ -17,6 +17,8 @@
  * - 4.3c: FIIs pelos dividendos de 12 meses informados à CVM, com o P/VP.
  * - 4.3d: o comentário da IA (src/radar-ia.js).
  * - 4.4a: taxas do Banco Central (meta da Selic, CDI e IPCA).
+ * - 4.4b: dentro das taxas, o histórico mensal do CDI e do IPCA desde 2016
+ *   ("historico", opcional), para estimar o valor atual da renda fixa.
  *
  * Cada parte do radar ("tesouro", "mercado", "fiis", "taxas") pode faltar (null) quando a
  * fonte ainda não foi baixada pelo robô; a tela mostra o que houver.
@@ -76,7 +78,21 @@ function fiiValido(f) {
 function taxasValidas(t) {
   return t && Number.isFinite(t.selicMeta?.valor) && ehDataValida(t.selicMeta?.data)
     && Number.isFinite(t.cdi?.anual) && ehDataValida(t.cdi?.data)
-    && Number.isFinite(t.ipca?.mensal) && Number.isFinite(t.ipca?.acumulado12m) && /^\d{4}-\d{2}$/.test(t.ipca?.mes ?? '');
+    && Number.isFinite(t.ipca?.mensal) && Number.isFinite(t.ipca?.acumulado12m) && /^\d{4}-\d{2}$/.test(t.ipca?.mes ?? '')
+    && historicoValido(t.historico);
+}
+
+/**
+ * Histórico mensal das taxas (4.4b), opcional: radares antigos não têm.
+ * Meses em sequência, CDI com o "até que dia" do mês.
+ */
+function historicoValido(h) {
+  if (h === undefined || h === null) return true;
+  const mesOk = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m ?? '');
+  return mesOk(h.inicio) && Array.isArray(h.cdi) && Array.isArray(h.ipca) && h.cdi.length > 0 && h.ipca.length > 0
+    && h.cdi.every((c) => mesOk(c?.mes) && Number.isFinite(c.percentual) && Number.isInteger(c.ultimoDia) && c.ultimoDia >= 1 && c.ultimoDia <= 31)
+    && h.ipca.every((i) => mesOk(i?.mes) && Number.isFinite(i.percentual))
+    && h.cdi[0].mes === h.inicio && h.ipca[0].mes === h.inicio;
 }
 
 /**
