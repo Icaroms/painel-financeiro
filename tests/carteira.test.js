@@ -10,6 +10,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  GRUPO_DA_RESERVA,
+  podeSerReserva,
+  reservaDaCarteira,
   GRUPOS_DE_INVESTIMENTO,
   TIPOS_DE_INVESTIMENTO,
   TAMANHO_MAXIMO_NOME,
@@ -61,7 +64,7 @@ describe('adicionarInvestimento', () => {
     assert.deepEqual(estado.investimentos, [{
       id: 'inv-1', criadoEm: AGORA.toISOString(), atualizadoEm: AGORA.toISOString(), excluidoEm: null,
       tipo: 'cdb', nome: 'CDB Banco X 2028', dataAplicacao: '2026-03-10',
-      valorAplicadoCentavos: 100000, valorAtualCentavos: 105000, valorAtualEm: '2026-10-01',
+      valorAplicadoCentavos: 100000, valorAtualCentavos: 105000, valorAtualEm: '2026-10-01', reserva: false,
     }]);
   });
 
@@ -192,5 +195,45 @@ describe('backup e dados de exemplo', () => {
       const datas = item.operacoes ? item.operacoes.map((o) => o.data) : [item.dataAplicacao, item.valorAtualEm];
       assert.ok(datas.every((d) => d <= HOJE), item.nome);
     }
+  });
+});
+
+describe('reserva de emergência (parte 4.2c)', () => {
+  const opcoes = () => ({ hoje: HOJE, gerarId: gerador() });
+
+  it('só renda fixa e fundos podem ser reserva', () => {
+    assert.equal(GRUPO_DA_RESERVA, 'renda-fixa');
+    assert.equal(podeSerReserva('poupanca'), true);
+    assert.equal(podeSerReserva('fundo'), true);
+    assert.equal(podeSerReserva('imovel'), false);
+    assert.equal(podeSerReserva('acao'), false);
+    assert.throws(
+      () => adicionarInvestimento(vazio(), { ...cdb, tipo: 'imovel', reserva: true }, opcoes()),
+      /Só renda fixa e fundos podem ser a reserva de emergência/,
+    );
+  });
+
+  it('a marca é guardada, continua ao atualizar o valor e pode ser tirada ao editar', () => {
+    let estado = adicionarInvestimento(vazio(), { ...cdb, reserva: true }, opcoes());
+    assert.equal(estado.investimentos[0].reserva, true);
+    estado = atualizarValorAtual(estado, 'inv-1', 107000, { hoje: HOJE });
+    assert.equal(estado.investimentos[0].reserva, true);
+    estado = editarInvestimento(estado, 'inv-1', { ...cdb, reserva: false }, { hoje: HOJE });
+    assert.equal(estado.investimentos[0].reserva, false);
+  });
+
+  it('soma só os marcados que existem; investimento antigo sem a marca não conta', () => {
+    const o = opcoes();
+    let estado = adicionarInvestimento(vazio(), { ...cdb, nome: 'Reserva 1', reserva: true }, o); // atual 1.050,00
+    estado = adicionarInvestimento(estado, { ...cdb, nome: 'Reserva 2', tipo: 'poupanca', valorAtualCentavos: 20000, reserva: true }, o);
+    estado = adicionarInvestimento(estado, { ...cdb, nome: 'Fora' }, o);
+    estado = adicionarInvestimento(estado, { ...cdb, nome: 'Removido', reserva: true }, o);
+    estado = removerInvestimento(estado, 'inv-4');
+    const { reserva: _, ...semMarca } = estado.investimentos[2];
+    estado = { ...estado, investimentos: [...estado.investimentos, { ...semMarca, id: 'antigo' }] };
+
+    const r = reservaDaCarteira(estado);
+    assert.equal(r.totalCentavos, 105000 + 20000);
+    assert.deepEqual(r.itens.map((i) => i.nome), ['Reserva 1', 'Reserva 2']);
   });
 });
