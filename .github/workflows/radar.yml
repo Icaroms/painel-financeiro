@@ -31,7 +31,7 @@ concurrency:
 jobs:
   gerar:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Baixar o código do app
         uses: actions/checkout@v5

@@ -1,16 +1,20 @@
 /**
- * Robô do Radar de opções (Fase 04, parte 4.3a).
+ * Robô do Radar de opções (Fase 04, partes 4.3a e 4.3b).
  *
  * Roda no GitHub Actions (.github/workflows/radar.yml), uma vez por dia:
- * 1. baixa os dados públicos (por enquanto, as taxas do Tesouro Direto);
+ * 1. baixa os dados públicos:
+ *    - taxas do Tesouro Direto (Tesouro Nacional);
+ *    - cotações de ações e FIIs (B3): o pregão mais recente e os de
+ *      1 semana, 1 mês e 12 meses antes, para as variações;
  * 2. monta o arquivo radar.json;
  * 3. o workflow publica esse arquivo na branch "radar-dados", e o app lê de lá.
  *
- * Se alguma fonte falhar, o robô termina com erro e NÃO publica nada: o app
- * continua com o último radar bom (o da branch e o guardado no aparelho).
+ * Cada fonte é independente: se uma falhar (site fora do ar), o robô
+ * mantém essa parte do radar anterior e publica o resto. Se TODAS falharem,
+ * ele termina com erro e não publica nada.
  *
  * Uso: node scripts/radar/gerar-radar.js <caminho-do-radar.json>
- * Teste local (sem internet): as partes puras ficam em tests/radar-robo.test.js.
+ * As partes puras são testadas em tests/radar-robo.test.js e tests/radar-b3.test.js.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -18,48 +22,94 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { FONTE_TESOURO, lerCsvTesouro } from './tesouro.js';
+import { enderecoDoDia, lerCotahist, montarMercado } from './b3.js';
+import { datasDosPeriodos, hojeEmBrasilia, pregaoMaisProximo } from './baixar.js';
 
 /** Identificação do arquivo. O app (src/radar.js) confere estes dois valores. */
 export const FORMATO_RADAR = 'painel-financeiro-radar';
 export const VERSAO_RADAR = 1;
 
-/** Tempo máximo esperando cada download (2 minutos: o CSV do Tesouro tem uns 14 MB). */
+/** Tempo máximo esperando cada download feito com fetch (o CSV do Tesouro tem uns 14 MB). */
 const TEMPO_LIMITE_MS = 120_000;
 
 /**
- * Monta o radar a partir dos dados já lidos.
+ * Monta o radar a partir das partes já lidas. Uma parte pode ser null
+ * (fonte fora do ar e sem radar anterior).
  *
  * @param {object} partes
- * @param {{ dataBase: string, titulos: object[] }} partes.tesouro
+ * @param {{ dataBase: string, titulos: object[] }|null} partes.tesouro Títulos lidos do CSV,
+ *   ou a parte "tesouro" de um radar anterior (já com fonte e link).
+ * @param {object|null} [partes.mercado] Resultado de montarMercado (ou o do radar anterior).
  * @param {Date} [partes.agora]
  * @returns {object} O conteúdo do radar.json.
  */
-export function montarRadar({ tesouro, agora = new Date() }) {
+export function montarRadar({ tesouro, mercado = null, agora = new Date() }) {
   return {
     formato: FORMATO_RADAR,
     versao: VERSAO_RADAR,
     geradoEm: agora.toISOString(),
-    tesouro: {
-      fonte: FONTE_TESOURO.nome,
-      link: FONTE_TESOURO.pagina,
-      dataBase: tesouro.dataBase,
-      titulos: tesouro.titulos,
-    },
+    tesouro: tesouro
+      ? { fonte: FONTE_TESOURO.nome, link: FONTE_TESOURO.pagina, dataBase: tesouro.dataBase, titulos: tesouro.titulos }
+      : null,
+    mercado,
   };
 }
 
-/** Baixa um texto com tempo limite e erro claro. */
+/** Baixa um texto com fetch, tempo limite e erro claro (usado para o Tesouro). */
 async function baixarTexto(endereco) {
   const resposta = await fetch(endereco, {
     signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
     headers: { 'User-Agent': 'painel-financeiro-radar (github.com/Icaroms/painel-financeiro)' },
   });
   if (!resposta.ok) throw new Error(`Download falhou (${resposta.status}): ${endereco}`);
-  // O CSV do Tesouro vem em Latin-1 (ISO-8859-1) em alguns dias e em UTF-8 em outros:
+  // O CSV do Tesouro vem em Latin-1 em alguns dias e em UTF-8 em outros:
   // tenta UTF-8 e, se aparecerem caracteres inválidos, lê de novo como Latin-1.
   const bytes = new Uint8Array(await resposta.arrayBuffer());
   const utf8 = new TextDecoder('utf-8').decode(bytes);
   return utf8.includes('�') ? new TextDecoder('latin1').decode(bytes) : utf8;
+}
+
+/** Radar publicado ontem (para reaproveitar uma parte cuja fonte falhar hoje). */
+async function radarAnterior() {
+  const repositorio = process.env.GITHUB_REPOSITORY ?? 'Icaroms/painel-financeiro';
+  try {
+    const resposta = await fetch(`https://raw.githubusercontent.com/${repositorio}/radar-dados/radar.json`, {
+      signal: AbortSignal.timeout(30_000),
+    });
+    return resposta.ok ? await resposta.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Tesouro Direto: lê o CSV do dia. */
+async function parteDoTesouro() {
+  console.log('Baixando as taxas do Tesouro Direto…');
+  const tesouro = lerCsvTesouro(await baixarTexto(FONTE_TESOURO.arquivo));
+  console.log(`Tesouro: ${tesouro.titulos.length} títulos à venda em ${tesouro.dataBase}.`);
+  return tesouro;
+}
+
+/** B3: pregão mais recente + os de referência das variações. */
+async function parteDoMercado() {
+  console.log('Baixando as cotações da B3…');
+  const atual = await pregaoMaisProximo(hojeEmBrasilia(), enderecoDoDia, lerCotahist);
+  console.log(`B3: pregão de ${atual.data} com ${atual.papeis.size} ações e FIIs.`);
+
+  const referencias = {};
+  for (const [periodo, data] of Object.entries(datasDosPeriodos(atual.data))) {
+    try {
+      referencias[periodo] = await pregaoMaisProximo(data, enderecoDoDia, lerCotahist);
+      console.log(`B3 (${periodo}): pregão de ${referencias[periodo].data}.`);
+    } catch (erro) {
+      // Sem esse pregão, a variação desse período fica vazia (o resto continua).
+      console.warn(`Aviso: sem o pregão de referência de ${periodo} (${data}): ${erro.message}`);
+    }
+  }
+
+  const mercado = montarMercado({ atual, referencias });
+  console.log(`B3: ${mercado.ativos.length} ativos com liquidez entram no radar.`);
+  return mercado;
 }
 
 /** Ponto de entrada do robô. */
@@ -67,13 +117,32 @@ async function principal() {
   const saida = process.argv[2];
   if (!saida) throw new Error('Informe onde gravar o radar: node scripts/radar/gerar-radar.js <arquivo.json>');
 
-  console.log('Baixando as taxas do Tesouro Direto…');
-  const tesouro = lerCsvTesouro(await baixarTexto(FONTE_TESOURO.arquivo));
-  console.log(`Tesouro: ${tesouro.titulos.length} títulos à venda em ${tesouro.dataBase}.`);
+  const anterior = await radarAnterior();
+  let novas = 0;
 
-  const radar = montarRadar({ tesouro });
+  let tesouro = null;
+  try {
+    tesouro = await parteDoTesouro();
+    novas += 1;
+  } catch (erro) {
+    console.warn(`Aviso: Tesouro Direto falhou (${erro.message}). ${anterior?.tesouro ? 'Mantendo a parte do radar anterior.' : ''}`);
+    tesouro = anterior?.tesouro ?? null;
+  }
+
+  let mercado = null;
+  try {
+    mercado = await parteDoMercado();
+    novas += 1;
+  } catch (erro) {
+    console.warn(`Aviso: B3 falhou (${erro.message}). ${anterior?.mercado ? 'Mantendo a parte do radar anterior.' : ''}`);
+    mercado = anterior?.mercado ?? null;
+  }
+
+  if (novas === 0) throw new Error('Todas as fontes falharam: nada foi publicado (o app continua com o último radar).');
+
+  const radar = montarRadar({ tesouro, mercado });
   await mkdir(dirname(saida), { recursive: true });
-  await writeFile(saida, `${JSON.stringify(radar, null, 2)}\n`, 'utf8');
+  await writeFile(saida, `${JSON.stringify(radar)}\n`, 'utf8');
   console.log(`Radar gravado em ${saida}.`);
 }
 
