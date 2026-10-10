@@ -55,7 +55,8 @@ const campo = (linha, inicio, fim) => linha.slice(inicio - 1, fim);
  * @param {string} linha
  * @returns {{ data: string, codbdi: string, codigo: string, tpmerc: string, nome: string,
  *   especificacao: string, precoCentavos: number, negocios: number, volumeCentavos: number,
- *   fator: number }|null} precoCentavos: último preço do dia, já por 1 unidade (FATCOT).
+ *   fator: number, isin: string }|null} precoCentavos: último preço do dia, já por 1 unidade (FATCOT).
+ *   isin: código ISIN (CODISI, 231-242), que liga o FII ao informe da CVM (parte 4.3c).
  */
 export function lerLinhaCotahist(linha) {
   if (linha.length < 217 || campo(linha, 1, 2) !== '01') return null;
@@ -73,6 +74,7 @@ export function lerLinhaCotahist(linha) {
     negocios: Number(campo(linha, 148, 152)),
     volumeCentavos: Number(campo(linha, 171, 188)),
     fator,
+    isin: campo(linha, 231, 242).trim(),
   };
 }
 
@@ -148,6 +150,7 @@ export function montarMercado({ atual, referencias }) {
       precoCentavos: p.precoCentavos,
       volumeCentavos: p.volumeCentavos,
       negocios: p.negocios,
+      isin: p.isin,
       variacoes: Object.fromEntries(periodos.map((periodo) => [
         periodo,
         variacao(referencias[periodo]?.papeis.get(p.codigo)?.precoCentavos, p.precoCentavos),

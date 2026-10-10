@@ -1,5 +1,5 @@
 /**
- * Seção "Radar de opções" da aba Investir (Fase 04, partes 4.3a e 4.3b).
+ * Seção "Radar de opções" da aba Investir (Fase 04, partes 4.3a, 4.3b e 4.3c).
  *
  * - Ao abrir a aba, mostra o radar guardado no aparelho e, se a última
  *   busca tiver mais de 6 horas, busca o arquivo novo que o robô publicou.
@@ -9,6 +9,8 @@
  * - Ações e FIIs (B3): maiores altas, maiores baixas e mais negociados, com
  *   filtros de período e de preço de 1 unidade (inclusive "cabe na parte
  *   Investir deste mês", do destino da sobra). 5 por página.
+ * - FIIs por dividendos de 12 meses (informados à CVM), com o P/VP: a lista
+ *   "Dividendos" aparece quando o tipo é FII.
  *
  * A busca é só leitura de um arquivo público: nenhum dado da pessoa sai
  * do aparelho. Como em toda a pasta src/ui, aqui só fica a TELA; as regras
@@ -34,6 +36,10 @@ import {
   listaDoMercado,
   textoDaVariacao,
   textoDoVolume,
+  listaDeDividendos,
+  textoDosDividendos,
+  textoDoPvp,
+  textoDoMes,
 } from '../radar.js';
 
 /** Tempo máximo esperando o arquivo do radar. */
@@ -235,6 +241,31 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
     return li;
   }
 
+  /** Linha de um FII na lista de dividendos. */
+  function linhaDoFii(fii) {
+    const li = criar('li', { classe: 'linha-mes' });
+    const info = criar('div', { classe: 'linha-mes-info' });
+    info.append(
+      criar('span', { classe: 'linha-mes-nome', texto: `${fii.codigo} · ${fii.nome}` }),
+      criar('span', { classe: 'linha-mes-detalhe secundario', texto: `${formatarCentavos(fii.precoCentavos)} por cota · ${textoDoPvp(fii.pvp)}` }),
+    );
+    const lado = criar('div', { classe: 'linha-mes-lado' });
+    lado.append(
+      criar('span', { classe: 'linha-mes-valor', texto: textoDosDividendos(fii.dividendos12m) }),
+      criar('span', { classe: 'linha-mes-detalhe secundario', texto: 'em 12 meses' }),
+    );
+    li.append(info, lado);
+    return li;
+  }
+
+  /** Opções da Lista conforme o tipo (a de dividendos é só de FIIs). */
+  function preencherListas() {
+    const escolhida = el.mercado.lista.value;
+    const listas = LISTAS_DO_MERCADO.filter((l) => l.tipos.includes(el.mercado.tipo.value));
+    el.mercado.lista.replaceChildren(...listas.map((l) => criar('option', { value: l.id, texto: l.nome })));
+    el.mercado.lista.value = listas.some((l) => l.id === escolhida) ? escolhida : listas[0].id;
+  }
+
   /** Parte de ações e FIIs. */
   function desenharMercado(radar) {
     const m = el.mercado;
@@ -246,10 +277,31 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
       m.paginacao.replaceChildren();
       return;
     }
-    linhaDaFonte(m.fonte, `Fechamento de ${dataLonga(radar.mercado.dataBase)}`, radar.mercado);
     m.filtros.hidden = false;
     m.nota.hidden = false;
+    preencherListas();
     preencherPrecos();
+
+    // Lista de dividendos (FIIs): dados da CVM + preço da B3, sem período.
+    if (m.lista.value === 'dividendos') {
+      m.campoPeriodo.hidden = true;
+      if (!radar.fiis) {
+        m.fonte.textContent = '';
+        m.itens.replaceChildren(vazio('Ainda não há os dividendos dos FIIs neste aparelho.'));
+        m.paginacao.replaceChildren();
+        return;
+      }
+      const ate = radar.fiis.mesReferencia ? `até ${textoDoMes(radar.fiis.mesReferencia)}` : '';
+      linhaDaFonte(m.fonte, `Dividendos informados à CVM ${ate} · preços de ${dataLonga(radar.fiis.dataBase)}`, radar.fiis);
+      const fiis = listaDeDividendos(radar, { precoMaximoCentavos: precoMaximo() });
+      const paginaFiis = paginar(fiis, paginaMercado);
+      paginaMercado = paginaFiis.pagina;
+      m.itens.replaceChildren(...(fiis.length === 0 ? [vazio('Nenhum FII com esses filtros.')] : paginaFiis.itens.map(linhaDoFii)));
+      montarPaginacao(m.paginacao, paginaFiis, (nova) => { paginaMercado = nova; desenhar(); });
+      return;
+    }
+
+    linhaDaFonte(m.fonte, `Fechamento de ${dataLonga(radar.mercado.dataBase)}`, radar.mercado);
 
     // Períodos que o robô conseguiu calcular; a lista "Mais negociados" não usa período.
     const periodos = PERIODOS.filter((p) => periodoDisponivel(radar, p.id));
@@ -333,8 +385,8 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
   for (const filtro of [el.mercado.tipo, el.mercado.lista, el.mercado.periodo, el.mercado.preco]) {
     filtro.addEventListener('change', () => { paginaMercado = 1; desenhar(); });
   }
-  // Opções fixas de Tipo e Lista (as de Período e Preço dependem do radar e do mês).
-  el.mercado.lista.replaceChildren(...LISTAS_DO_MERCADO.map((l) => criar('option', { value: l.id, texto: l.nome })));
+  // Opções da Lista desde o começo (depois elas acompanham o Tipo escolhido).
+  preencherListas();
 
   /** Mostra o guardado e, se já passou da hora, busca o novo. */
   async function renderizar() {

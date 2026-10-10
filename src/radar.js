@@ -14,9 +14,10 @@
  * - 4.3a: Tesouro Direto do dia (taxas do Tesouro Nacional).
  * - 4.3b: ações e FIIs da B3: maiores altas e baixas (semana, mês, 12 meses),
  *   mais negociados, com filtro por preço de 1 unidade ("cabe no bolso").
- * - 4.3c, 4.3d: dividendos dos FIIs e o comentário da IA (próximas).
+ * - 4.3c: FIIs pelos dividendos de 12 meses informados à CVM, com o P/VP.
+ * - 4.3d: o comentário da IA (próxima).
  *
- * Cada parte do radar ("tesouro", "mercado") pode faltar (null) quando a
+ * Cada parte do radar ("tesouro", "mercado", "fiis") pode faltar (null) quando a
  * fonte ainda não foi baixada pelo robô; a tela mostra o que houver.
  *
  * Funções puras: testadas no Node. A tela fica em src/ui/radar.js.
@@ -62,12 +63,20 @@ function ativoValido(a) {
     && a.variacoes && ['semana', 'mes', 'ano'].every((p) => variacaoValida(a.variacoes[p]));
 }
 
+/** Um FII da parte de dividendos com os campos que a tela usa. */
+function fiiValido(f) {
+  const numeroOuNulo = (v) => v === null || Number.isFinite(v);
+  return f && typeof f.codigo === 'string' && typeof f.nome === 'string'
+    && Number.isSafeInteger(f.precoCentavos) && f.precoCentavos > 0
+    && numeroOuNulo(f.dividendos12m) && numeroOuNulo(f.pvp) && /^\d{4}-\d{2}$/.test(f.ultimoMes ?? '');
+}
+
 /**
  * Confere o arquivo baixado e devolve o radar.
  * Qualquer problema lança ErroValidacao com uma mensagem clara.
  *
  * @param {unknown} dados O JSON já convertido em objeto.
- * @returns {object} O radar (com tesouro e mercado; cada um pode ser null).
+ * @returns {object} O radar (com tesouro, mercado e fiis; cada um pode ser null).
  */
 export function lerRadar(dados) {
   if (!dados || typeof dados !== 'object' || dados.formato !== FORMATO_RADAR) {
@@ -87,10 +96,14 @@ export function lerRadar(dados) {
   if (mercado && (!ehDataValida(mercado.dataBase) || !mercado.referencias || !Array.isArray(mercado.ativos) || !mercado.ativos.every(ativoValido))) {
     throw new ErroValidacao('radar', 'A parte de ações e FIIs do radar está incompleta.');
   }
-  if (!tesouro && !mercado) {
+  const fiis = dados.fiis ?? null;
+  if (fiis && (!ehDataValida(fiis.dataBase) || !Array.isArray(fiis.itens) || !fiis.itens.every(fiiValido))) {
+    throw new ErroValidacao('radar', 'A parte de dividendos dos FIIs do radar está incompleta.');
+  }
+  if (!tesouro && !mercado && !fiis) {
     throw new ErroValidacao('radar', 'O radar veio vazio.');
   }
-  return { ...dados, tesouro, mercado };
+  return { ...dados, tesouro, mercado, fiis };
 }
 
 /**
@@ -155,11 +168,12 @@ export function titulosDoTesouro(radar, indexador = '') {
 /* Ações e FIIs (parte 4.3b)                                          */
 /* ------------------------------------------------------------------ */
 
-/** Listas do mercado. */
+/** Listas do mercado e para que tipos cada uma vale (a de dividendos é só de FIIs). */
 export const LISTAS_DO_MERCADO = Object.freeze([
-  Object.freeze({ id: 'altas', nome: 'Maiores altas' }),
-  Object.freeze({ id: 'baixas', nome: 'Maiores baixas' }),
-  Object.freeze({ id: 'negociados', nome: 'Mais negociados' }),
+  Object.freeze({ id: 'altas', nome: 'Maiores altas', tipos: Object.freeze(['acao', 'fii']) }),
+  Object.freeze({ id: 'baixas', nome: 'Maiores baixas', tipos: Object.freeze(['acao', 'fii']) }),
+  Object.freeze({ id: 'negociados', nome: 'Mais negociados', tipos: Object.freeze(['acao', 'fii']) }),
+  Object.freeze({ id: 'dividendos', nome: 'Dividendos', tipos: Object.freeze(['fii']) }),
 ]);
 
 /** Períodos das variações ("no mês" é o texto que aparece depois da porcentagem). */
@@ -232,4 +246,41 @@ export function textoDoVolume(centavos) {
   if (reais >= 1e9) return `R$ ${umaCasa(reais / 1e9)} bi`;
   if (reais >= 1e6) return `R$ ${umaCasa(reais / 1e6)} mi`;
   return `R$ ${Math.round(reais / 1e3)} mil`;
+}
+
+/* ------------------------------------------------------------------ */
+/* FIIs por dividendos (parte 4.3c)                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * FIIs pelos dividendos de 12 meses (informados à CVM), do maior para o menor.
+ * FIIs sem 12 meses de informe ficam de fora.
+ *
+ * @param {object} radar
+ * @param {object} [filtro]
+ * @param {number|null} [filtro.precoMaximoCentavos] Preço máximo de 1 cota (null = qualquer).
+ * @returns {object[]} No máximo LIMITE_DA_LISTA FIIs.
+ */
+export function listaDeDividendos(radar, { precoMaximoCentavos = null } = {}) {
+  return (radar.fiis?.itens ?? [])
+    .filter((f) => f.dividendos12m !== null)
+    .filter((f) => precoMaximoCentavos === null || f.precoCentavos <= precoMaximoCentavos)
+    .sort((a, b) => b.dividendos12m - a.dividendos12m)
+    .slice(0, LIMITE_DA_LISTA);
+}
+
+/** 10.4 → "10,40%" (dividendos de 12 meses, 2 casas). */
+export function textoDosDividendos(valor) {
+  return `${valor.toFixed(2).replace('.', ',')}%`;
+}
+
+/** 0.9 → "P/VP 0,90"; sem valor → "P/VP —". */
+export function textoDoPvp(pvp) {
+  return pvp === null || pvp === undefined ? 'P/VP —' : `P/VP ${pvp.toFixed(2).replace('.', ',')}`;
+}
+
+/** "2026-08" → "ago/2026". */
+export function textoDoMes(mes) {
+  const nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  return `${nomes[Number(mes.slice(5, 7)) - 1]}/${mes.slice(0, 4)}`;
 }

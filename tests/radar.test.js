@@ -1,5 +1,5 @@
 /**
- * Testes do Radar de opções no app (Fase 04, partes 4.3a e 4.3b).
+ * Testes do Radar de opções no app (Fase 04, partes 4.3a, 4.3b e 4.3c).
  * Rodar com: npm test
  *
  * O arquivo do radar é gerado pelo robô (tests/radar-robo.test.js confere
@@ -24,6 +24,10 @@ import {
   listaDoMercado,
   textoDaVariacao,
   textoDoVolume,
+  listaDeDividendos,
+  textoDosDividendos,
+  textoDoPvp,
+  textoDoMes,
   lerRadar,
   deveBuscarRadar,
   radarAtrasado,
@@ -88,7 +92,7 @@ describe('endereço e identificação', () => {
 describe('lerRadar', () => {
   it('radar certo volta igual; parte que falta vira null', () => {
     const r = radar();
-    assert.deepEqual(lerRadar(r), { ...r, mercado: null });
+    assert.deepEqual(lerRadar(r), { ...r, mercado: null, fiis: null });
     assert.deepEqual(lerRadar({ ...comMercado(), tesouro: null }).tesouro, null);
   });
 
@@ -151,7 +155,8 @@ describe('ações e FIIs (parte 4.3b)', () => {
   const r = lerRadar(comMercado());
 
   it('listas, períodos e faixas de preço', () => {
-    assert.deepEqual(LISTAS_DO_MERCADO.map((l) => l.id), ['altas', 'baixas', 'negociados']);
+    assert.deepEqual(LISTAS_DO_MERCADO.map((l) => l.id), ['altas', 'baixas', 'negociados', 'dividendos']);
+    assert.deepEqual(LISTAS_DO_MERCADO.find((l) => l.id === 'dividendos').tipos, ['fii']);
     assert.deepEqual(PERIODOS.map((p) => p.texto), ['na semana', 'no mês', 'em 12 meses']);
     assert.deepEqual(FAIXAS_DE_PRECO.map((f) => f.maximoCentavos), [null, 1000, 5000, 10000]);
     assert.equal(LIMITE_DA_LISTA, 20);
@@ -196,5 +201,42 @@ describe('ações e FIIs (parte 4.3b)', () => {
     assert.equal(textoDoVolume(123_456_789_000), 'R$ 1,2 bi');
     assert.equal(textoDoVolume(4_530_000_000), 'R$ 45,3 mi');
     assert.equal(textoDoVolume(30_000_000), 'R$ 300 mil');
+  });
+});
+
+describe('FIIs por dividendos (parte 4.3c)', () => {
+  const fii = (codigo, preco, dividendos12m, pvp) => ({
+    codigo, nome: `FII ${codigo}`, precoCentavos: preco, volumeCentavos: 50_000_000, dividendos12m, pvp, ultimoMes: '2026-09',
+  });
+  const comFiis = () => radar({
+    fiis: {
+      fonte: 'CVM (Informe Mensal dos FIIs) e B3', link: 'https://dados.cvm.gov.br/', dataBase: '2026-10-09', mesReferencia: '2026-09',
+      itens: [fii('ALFA11', 8550, 10.4, 0.9), fii('BETA11', 980, 12.1, 1.02), fii('GAMA11', 16200, 8.3, null), fii('NOVO11', 1000, null, 0.95)],
+    },
+  });
+
+  it('do maior dividendo para o menor; sem 12 meses fica de fora', () => {
+    assert.deepEqual(listaDeDividendos(lerRadar(comFiis())).map((f) => f.codigo), ['BETA11', 'ALFA11', 'GAMA11']);
+  });
+
+  it('com preço máximo de 1 cota', () => {
+    assert.deepEqual(listaDeDividendos(lerRadar(comFiis()), { precoMaximoCentavos: 10000 }).map((f) => f.codigo), ['BETA11', 'ALFA11']);
+  });
+
+  it('radar sem a parte dos FIIs: lista vazia', () => {
+    assert.deepEqual(listaDeDividendos(lerRadar(radar())), []);
+  });
+
+  it('parte dos FIIs incompleta é recusada', () => {
+    const r = comFiis();
+    r.fiis.itens[0].ultimoMes = 'setembro';
+    assert.throws(() => lerRadar(r), /dividendos dos FIIs do radar está incompleta/);
+  });
+
+  it('textos', () => {
+    assert.equal(textoDosDividendos(10.4), '10,40%');
+    assert.equal(textoDoPvp(0.9), 'P/VP 0,90');
+    assert.equal(textoDoPvp(null), 'P/VP —');
+    assert.equal(textoDoMes('2026-09'), 'set/2026');
   });
 });
