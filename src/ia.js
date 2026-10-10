@@ -106,6 +106,12 @@ export function nomeDoModelo(id) {
  * A chave vai no cabeçalho "x-goog-api-key" (não no endereço), como na
  * documentação do Gemini: assim ela não aparece em históricos de endereço.
  *
+ * referrerPolicy "strict-origin": o app inteiro não informa a outros sites
+ * de onde a pessoa veio (netlify.toml, Referrer-Policy: no-referrer). Só
+ * neste pedido o navegador envia a ORIGEM do app (ex.: https://meuapp.netlify.app/,
+ * sem caminho). É isso que permite restringir a chave ao endereço do app
+ * no Google Cloud: um pedido sem origem seria recusado pela chave restrita.
+ *
  * @param {object} config     { chave, modelo }
  * @param {object} mensagem
  * @param {string} mensagem.instrucoes O papel da IA e as regras de resposta.
@@ -118,6 +124,7 @@ export function montarPedido(config, { instrucoes, conteudo }) {
     opcoes: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.chave },
+      referrerPolicy: 'strict-origin',
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: instrucoes }] },
         contents: [{ role: 'user', parts: [{ text: conteudo }] }],
