@@ -16,6 +16,7 @@ import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { criarLancamento } from '../src/modelo.js';
 import { removerCategoria } from '../src/configuracao.js';
 import { adicionarFixo, definirStatusDoFixo } from '../src/fixos.js';
+import { definirStatusDaFatura } from '../src/fluxo.js';
 import { sobraDoMes } from '../src/meses.js';
 
 const MES = '2026-11';
@@ -23,18 +24,21 @@ const exemplo = () => criarDadosDeExemplo('2026-11-01');
 const categoria = (estado, nome) => estado.categorias.find((c) => c.nome === nome);
 
 describe('resumoDoMes: os grandes números', () => {
-  it('sem nada marcado: as contas estão previstas e só os gastos já foram pagos', () => {
+  it('sem nada marcado: contas e fatura previstas; só os gastos à vista já foram pagos', () => {
     const resumo = resumoDoMes(exemplo(), MES, '2026-11-10');
 
     assert.equal(resumo.dinheiroDoMesCentavos, 150000);
     assert.equal(resumo.jaPago.fixosCentavos, 0);
-    assert.equal(resumo.jaPago.gastosCentavos, 35000);
-    assert.equal(resumo.jaPago.totalCentavos, 35000);
-    // Previstas: Consulta 250 + Academia 99,90 + Streaming 39,90 = 389,80
-    assert.equal(resumo.previstoCentavos, 38980);
-    // 1500 − 389,80 − 350 = 760,20
+    // À vista: Lanches 100 (Pix) + Transporte 60 (Débito) + Diversos 40 (Dinheiro) = 200.
+    // O Mercado de 150 foi no "Crédito", um cartão: sai na fatura do dia 10.
+    assert.equal(resumo.jaPago.gastosCentavos, 20000);
+    assert.equal(resumo.jaPago.faturasCentavos, 0);
+    assert.equal(resumo.jaPago.totalCentavos, 20000);
+    // Previstas: contas 389,80 + fatura do Crédito 150 = 539,80
+    assert.equal(resumo.previstoCentavos, 38980 + 15000);
+    // 1500 − 389,80 − 350 = 760,20 (o fim do mês não muda: a fatura vence neste mês)
     assert.equal(resumo.deveSobrarCentavos, 76020);
-    assert.equal(resumo.naContaAgoraCentavos, 115000);
+    assert.equal(resumo.naContaAgoraCentavos, 130000);
     assert.equal(resumo.corSaldo, 'verde');
   });
 
@@ -44,8 +48,8 @@ describe('resumoDoMes: os grandes números', () => {
     const r = resumoDoMes(definirStatusDoFixo(base, MES, academia.id, 'pago'), MES, '2026-11-10');
 
     assert.equal(r.jaPago.fixosCentavos, 9990);
-    assert.equal(r.previstoCentavos, 38980 - 9990);
-    assert.equal(r.naContaAgoraCentavos, 150000 - 9990 - 35000);
+    assert.equal(r.previstoCentavos, 38980 - 9990 + 15000);
+    assert.equal(r.naContaAgoraCentavos, 150000 - 9990 - 20000);
     assert.equal(r.deveSobrarCentavos, 76020); // o fim do mês não muda: a conta só trocou de lado
   });
 
@@ -217,5 +221,38 @@ describe('resumoDoMes: conta dispensada', () => {
     assert.ok(r.fixos.some((f) => f.fixo.nome === 'Consulta' && f.status === 'dispensado'));
     assert.equal(r.previstoCentavos, antes.previstoCentavos - 25000);
     assert.equal(r.deveSobrarCentavos, antes.deveSobrarCentavos + 25000);
+  });
+});
+
+describe('resumoDoMes: faturas do cartão', () => {
+  it('a fatura do mês aparece com o total, o vencimento e a situação', () => {
+    const r = resumoDoMes(exemplo(), MES, '2026-11-08');
+    assert.equal(r.faturas.length, 1);
+    assert.deepEqual(
+      [r.faturas[0].formaPagamento, r.faturas[0].vencimento, r.faturas[0].totalCentavos, r.faturas[0].status],
+      ['Crédito', '2026-11-10', 15000, 'previsto'],
+    );
+    assert.equal(r.faturas[0].atrasada, false);
+  });
+
+  it('fatura paga passa para já pago; passou do vencimento sem pagar = atrasada', () => {
+    const pago = resumoDoMes(definirStatusDaFatura(exemplo(), MES, 'Crédito', 'pago'), MES, '2026-11-12');
+    assert.equal(pago.jaPago.faturasCentavos, 15000);
+    assert.equal(pago.previstoCentavos, 38980);
+    assert.equal(resumoDoMes(exemplo(), MES, '2026-11-12').faturas[0].atrasada, true);
+  });
+
+  it('compra no cartão depois do fechamento: conta na categoria, mas não no saldo deste mês', () => {
+    const base = exemplo();
+    const compra = criarLancamento({
+      valorCentavos: 30000, categoriaId: categoria(base, 'Mercado').id, formaPagamento: 'Crédito', data: '2026-11-05',
+    });
+    const antes = resumoDoMes(base, MES, '2026-11-10');
+    const depois = resumoDoMes({ ...base, lancamentos: [...base.lancamentos, compra] }, MES, '2026-11-10');
+
+    assert.equal(depois.deveSobrarCentavos, antes.deveSobrarCentavos); // vence em 10/12
+    const mercado = depois.categorias.find((c) => c.categoria.nome === 'Mercado');
+    assert.equal(mercado.gastoCentavos, 15000 + 30000);
+    assert.equal(depois.gastos.length, antes.gastos.length + 1);
   });
 });

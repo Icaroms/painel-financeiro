@@ -37,9 +37,10 @@ export function criarDadosDeExemplo(hoje) {
   const streaming = criarFixo({ nome: 'Streaming', valorCentavos: 3990, diaVencimento: 12, formaPagamento: 'Crédito', mesInicial: mes });
   const consulta = criarFixo({ nome: 'Consulta', valorCentavos: 0, diaVencimento: 1, formaPagamento: 'Pix', mesInicial: mes });
 
-  // Saldo inicial de R$ 1.500,00; a consulta custa R$ 250,00 só neste mês.
+  // R$ 300,00 na conta + R$ 1.200,00 de renda = R$ 1.500,00 no mês; a consulta custa R$ 250,00 só neste mês.
+  // A renda faz a projeção dos meses seguintes (compras parceladas no cartão) ter dinheiro entrando.
   const registroMes = ajustarFixoNoMes(
-    criarMes({ mes, saldoInicialCentavos: 150000 }),
+    criarMes({ mes, saldoInicialCentavos: 30000, rendaPrevistaCentavos: 120000 }),
     consulta,
     25000,
   );
