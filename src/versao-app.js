@@ -16,7 +16,7 @@
  */
 
 /** Versão do código desta página. Mude junto com a VERSAO_CACHE do sw.js. */
-export const VERSAO_APP = 'painel-financeiro-v15';
+export const VERSAO_APP = 'painel-financeiro-v16';
 
 /**
  * De quanto em quanto tempo, no máximo, o app pergunta ao servidor se há
@@ -107,4 +107,35 @@ export function textoDaVersaoNova(versao) {
  */
 export function deveVerificarVersao(agoraMs, ultimaMs) {
   return agoraMs - ultimaMs >= INTERVALO_VERIFICAR_VERSAO_MS;
+}
+
+/** Resultados do botão "Procurar atualização" (Configurar). */
+export const RESULTADOS_DA_PROCURA = Object.freeze({
+  ultima: 'ultima',           // já está na última versão
+  nova: 'nova',               // há versão nova pronta: falta tocar em Atualizar
+  instalando: 'instalando',   // achou versão nova e ela está instalando agora
+  erro: 'erro',               // sem internet ou servidor fora do ar
+  semSuporte: 'sem-suporte',  // navegador sem service worker
+});
+
+/**
+ * Texto mostrado depois de tocar em "Procurar atualização".
+ *
+ * @param {string} resultado Um dos RESULTADOS_DA_PROCURA.
+ * @param {string} [versao] Versão desta página (padrão: VERSAO_APP).
+ * @returns {string}
+ */
+export function textoDaProcura(resultado, versao = VERSAO_APP) {
+  switch (resultado) {
+    case RESULTADOS_DA_PROCURA.ultima:
+      return `Você já está na última versão (${numeroDaVersao(versao)}).`;
+    case RESULTADOS_DA_PROCURA.nova:
+      return 'Há uma versão nova: toque em Atualizar, no topo da tela.';
+    case RESULTADOS_DA_PROCURA.instalando:
+      return 'Versão nova encontrada. Em instantes aparece o botão Atualizar, no topo da tela.';
+    case RESULTADOS_DA_PROCURA.erro:
+      return 'Não deu para procurar agora: sem internet ou servidor fora do ar. Tente mais tarde.';
+    default:
+      return 'Este navegador não instala atualizações do app sozinho: recarregue a página para pegar a versão nova.';
+  }
 }

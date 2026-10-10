@@ -782,6 +782,8 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 
 /* Linha "Versão do app" no fim de Configurar */
 .versao-app { margin: 0; font-size: 13px; text-align: center; }
+.versao-app-bloco { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.versao-app:empty { display: none; }
 
 /* ---------- Destino da sobra (parte 4.1) ---------- */
 .linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
