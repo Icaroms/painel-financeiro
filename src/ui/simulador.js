@@ -20,6 +20,8 @@ import { ErroValidacao } from '../erros.js';
 import { MAXIMO_PARCELAS_COMPRA } from '../modelo.js';
 import { dadosDoMes } from '../meses.js';
 import { simularCompra, MAXIMO_OPCOES, MESES_DE_ESPERA_MAXIMOS } from '../simulador.js';
+import { mensagemDaOpcaoSimulada } from '../explicacoes.js';
+import { blocoExplicar } from './explicar.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -60,9 +62,10 @@ const SELO = { verde: 'Cabe', amarelo: 'Atenção', vermelho: 'Passou' };
  *
  * @param {object} opcoes
  * @param {() => object} opcoes.obterDados
+ * @param {() => object} [opcoes.obterConfigIA] Configuração da IA (botão "Explicar esta opção").
  * @returns {{ renderizar: () => void, preencher: (inicial: object) => void }}
  */
-export function iniciarSimulador({ obterDados }) {
+export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
   const el = {
     semCartao: elemento('simular-sem-cartao'),
     cartao: elemento('simular-cartao'),
@@ -217,7 +220,7 @@ export function iniciarSimulador({ obterDados }) {
   }
 
   /** A ficha de uma opção simulada. */
-  function fichaDaOpcao(opcao, formaPagamento) {
+  function fichaDaOpcao(opcao, formaPagamento, aVistaCentavos) {
     const ficha = criar('section', { classe: 'cartao opcao-simulada', 'data-cor': opcao.cor });
 
     const titulo = opcao.parcelas === 1
@@ -263,6 +266,14 @@ export function iniciarSimulador({ obterDados }) {
       opcao.piorMes.sobraCentavos < 0 ? 'linha-alerta' : undefined);
 
     ficha.append(topo, linhas, quadroQuandoComprar(opcao.melhorMomento), tabelaMesAMes(opcao.meses));
+
+    // IA (Fase 03): explica esta opção com os números da ficha. Só aparece com a IA ligada.
+    const explicar = blocoExplicar({
+      obterConfigIA,
+      rotulo: 'Explicar esta opção com IA',
+      montarMensagem: () => mensagemDaOpcaoSimulada(opcao, { formaPagamento, aVistaCentavos, hoje: hojeLocal() }),
+    });
+    if (explicar) ficha.append(explicar);
     return ficha;
   }
 
@@ -285,7 +296,7 @@ export function iniciarSimulador({ obterDados }) {
     try {
       const visao = dadosDoMes(dados, mesDaData(hojeLocal()));
       const { opcoes } = simularCompra(visao, lerEntrada(aVistaCentavos));
-      el.resultado.replaceChildren(...opcoes.map((o) => fichaDaOpcao(o, el.cartao.value)));
+      el.resultado.replaceChildren(...opcoes.map((o) => fichaDaOpcao(o, el.cartao.value, aVistaCentavos)));
     } catch (falha) {
       // Erros de digitação (ex.: total parcelado "12,3,4") viram mensagem; outros são defeito.
       if (!(falha instanceof ErroValidacao)) throw falha;

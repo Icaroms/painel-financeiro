@@ -91,6 +91,10 @@ describe('montarPedido', () => {
     assert.equal(opcoes.headers['Content-Type'], 'application/json');
   });
 
+  it('envia só a origem do app (para a chave poder ser restrita ao endereço do app)', () => {
+    assert.equal(montarPedido(CONFIG, MENSAGEM).opcoes.referrerPolicy, 'strict-origin');
+  });
+
   it('as instruções vão como systemInstruction e o conteúdo como mensagem do usuário', () => {
     const corpo = JSON.parse(montarPedido(CONFIG, MENSAGEM).opcoes.body);
     assert.deepEqual(corpo, {
