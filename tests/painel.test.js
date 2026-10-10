@@ -162,3 +162,36 @@ describe('data do gasto', () => {
     assert.equal(problemaNaDataDoGasto('2026-11-31', HOJE), 'Escolha uma data válida para o gasto.');
   });
 });
+
+describe('compra no cartão no painel', () => {
+  // No exemplo, "Crédito" é um cartão que fecha dia 3 e vence dia 10.
+  function noCartao(valorTexto, parcelas) {
+    const dados = exemploDeNovembro();
+    const diversos = dados.categorias.find((c) => c.nome === 'Diversos');
+    return calcularPainel({
+      dados, valorTexto, categoriaId: diversos.id, formaPagamento: 'Crédito', hoje: HOJE, parcelas,
+    });
+  }
+
+  it('mostra as parcelas e quando a 1ª é paga', () => {
+    const p = noCartao('300', 3);
+    assert.equal(p.ehCartao, true);
+    assert.equal(p.lancamento.parcelas, 3);
+    assert.equal(p.cartaoTexto, '3x de R$ 100,00 · 1ª parcela paga em 10/12');
+  });
+
+  it('o saldo julgado é o do mês da fatura, como estimativa', () => {
+    const p = noCartao('50', 1);
+    assert.equal(p.cartaoTexto, 'À vista no cartão · paga em 10/12');
+    assert.match(p.linhaSaldo, /^Com esta compra, dezembro de 2026 deve fechar em .+ \(estimativa\)$/);
+  });
+
+  it('forma que não é cartão ignora as parcelas', () => {
+    const dados = exemploDeNovembro();
+    const diversos = dados.categorias.find((c) => c.nome === 'Diversos');
+    const p = calcularPainel({ dados, valorTexto: '50', categoriaId: diversos.id, formaPagamento: 'Pix', hoje: HOJE, parcelas: 3 });
+    assert.equal(p.ehCartao, false);
+    assert.equal(p.lancamento.parcelas, 1);
+    assert.equal(p.cartaoTexto, '');
+  });
+});

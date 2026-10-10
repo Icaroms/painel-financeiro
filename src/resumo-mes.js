@@ -2,8 +2,9 @@
  * Resumo do mês: tudo o que a vista "Mês" mostra.
  *
  * - Quanto dinheiro o mês tem (saldo inicial + renda prevista);
- * - quanto já foi PAGO (concretizado): contas marcadas como pagas + gastos lançados;
- * - quanto ainda está PREVISTO (estipulado): contas que ainda vão sair;
+ * - quanto já foi PAGO (concretizado): contas pagas + gastos à vista + faturas pagas;
+ * - quanto ainda está PREVISTO (estipulado): contas e faturas que ainda vão sair;
+ * - as faturas de cartão que vencem no mês;
  * - quanto deve sobrar no fim do mês;
  * - quanto deve estar na conta agora (para conferir com o banco);
  * - a situação de cada categoria, com as mesmas regras do veredito;
@@ -17,6 +18,7 @@ import { mesDaData, diaDaData, diasNoMes } from './datas.js';
 import { excluirRegistro } from './modelo.js';
 import { buscarMes } from './meses.js';
 import { fixosDoMes, diaDeReferencia } from './fixos.js';
+import { saidasNoMes, faturasDoMes } from './fluxo.js';
 import { categoriasAtivas } from './configuracao.js';
 import {
   LIMITES_PADRAO,
@@ -73,10 +75,21 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
   const somar = (lista, campo) => lista.reduce((soma, item) => soma + item[campo], 0);
   const fixosPagos = somar(fixos.filter((f) => f.status === 'pago'), 'valorCentavos');
   const fixosPrevistos = somar(fixos.filter((f) => f.status === 'previsto'), 'valorCentavos');
-  const totalLancamentos = somar(lancamentos, 'valorCentavos');
+
+  // O que sai da conta no mês: gastos à vista (na data deles) e faturas (no vencimento).
+  // Uma compra no cartão aparece nos gastos e nas categorias do mês da compra,
+  // mas o dinheiro dela só sai na fatura.
+  const cartoes = estado.cartoes ?? [];
+  const saidas = saidasNoMes(estado.lancamentos, cartoes, mes);
+  const gastosAVista = somar(saidas.filter((s) => !s.cartao), 'valorCentavos');
+  const faturas = faturasDoMes(estado.lancamentos, cartoes, registro)
+    .map((f) => ({ ...f, atrasada: f.status === 'previsto' && diaDaData(f.vencimento) < dia }));
+  const faturasPagas = somar(faturas.filter((f) => f.status === 'pago'), 'totalCentavos');
+  const faturasPrevistas = somar(faturas.filter((f) => f.status === 'previsto'), 'totalCentavos');
 
   const dinheiroDoMes = registro.saldoInicialCentavos + registro.rendaPrevistaCentavos;
-  const { saldoProjetadoCentavos } = calcularSaldoProjetado(registro, estado.fixos, lancamentos, 0);
+  const { saldoProjetadoCentavos } = calcularSaldoProjetado(registro, estado.fixos, saidas, 0);
+  const jaPagoTotal = fixosPagos + gastosAVista + faturasPagas;
 
   let corSaldo = 'verde';
   if (saldoProjetadoCentavos < 0) corSaldo = 'vermelho';
@@ -117,14 +130,16 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
     // Concretizado: o que já saiu de verdade.
     jaPago: {
       fixosCentavos: fixosPagos,
-      gastosCentavos: totalLancamentos,
-      totalCentavos: fixosPagos + totalLancamentos,
+      gastosCentavos: gastosAVista,
+      faturasCentavos: faturasPagas,
+      totalCentavos: jaPagoTotal,
     },
-    // Estipulado: contas que ainda vão sair (as dispensadas não contam).
-    previstoCentavos: fixosPrevistos,
+    // Estipulado: contas e faturas que ainda vão sair (as contas dispensadas não contam).
+    previstoCentavos: fixosPrevistos + faturasPrevistas,
     deveSobrarCentavos: saldoProjetadoCentavos,
     // Dinheiro do mês menos o que já foi pago: deve bater com o saldo do banco.
-    naContaAgoraCentavos: dinheiroDoMes - fixosPagos - totalLancamentos,
+    naContaAgoraCentavos: dinheiroDoMes - jaPagoTotal,
+    faturas,
     contagemFixos: {
       previstas: fixos.filter((f) => f.status === 'previsto').length,
       atrasadas: fixos.filter((f) => f.atrasado).length,

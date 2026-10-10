@@ -22,6 +22,7 @@
 
 import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
+import { MAXIMO_PARCELAS_COMPRA } from '../modelo.js';
 import { ErroValidacao } from '../erros.js';
 import { marcasDaEscala } from '../mostrador.js';
 import { criarDadosDeExemplo } from '../dados-exemplo.js';
@@ -73,6 +74,9 @@ const el = {
   chipsPagamento: elemento('chips-pagamento'),
   botaoLancar: elemento('botao-lancar'),
   rodapeTexto: elemento('rodape-texto'),
+  linhaCartao: elemento('linha-cartao'),
+  parcelas: elemento('parcelas'),
+  infoCartao: elemento('info-cartao'),
   campoData: elemento('campo-data'),
   dataGasto: elemento('data-gasto'),
   dataTexto: elemento('data-texto'),
@@ -296,6 +300,18 @@ function montarChips() {
   );
 }
 
+/** Preenche a escolha de parcelas: 1x (à vista) até 24x. */
+function montarParcelas() {
+  el.parcelas.replaceChildren(
+    ...Array.from({ length: MAXIMO_PARCELAS_COMPRA }, (_, i) => {
+      const opcao = document.createElement('option');
+      opcao.value = String(i + 1);
+      opcao.textContent = i === 0 ? 'À vista' : `${i + 1}x`;
+      return opcao;
+    }),
+  );
+}
+
 /** Mostra a faixa "dados de exemplo" na vista de lançamento, só com os dados fictícios. */
 function atualizarFaixaExemplo() {
   el.faixaExemplo.hidden = !ehExemplo(dados);
@@ -352,7 +368,12 @@ function atualizar() {
     formaPagamento: el.formulario.elements.pagamento.value,
     hoje,
     data: el.dataGasto.value,
+    parcelas: Number(el.parcelas.value) || 1,
   });
+
+  // Compra no cartão: escolha das parcelas e quando a fatura é paga.
+  el.linhaCartao.hidden = !painel.ehCartao;
+  el.infoCartao.textContent = painel.cartaoTexto;
 
   el.dataTexto.textContent = painel.dataTexto;
   el.campoData.classList.toggle('anterior', painel.dataAnterior);
@@ -396,7 +417,9 @@ el.formulario.addEventListener('submit', async (evento) => {
   dados = { ...dados, lancamentos: [...dados.lancamentos, painel.lancamento] };
 
   const categoria = dados.categorias.find((c) => c.id === painel.lancamento.categoriaId);
+  const parcelasTexto = painel.lancamento.parcelas > 1 ? ` em ${painel.lancamento.parcelas}x` : '';
   el.valor.value = '';
+  el.parcelas.value = '1'; // a próxima compra volta a ser à vista
   atualizar();
   el.valor.focus();
 
@@ -405,7 +428,7 @@ el.formulario.addEventListener('submit', async (evento) => {
   const doDia = painel.dataAnterior ? `, ${painel.dataTexto.replace('Gasto do dia', 'no dia')}` : '';
   const gravou = await gravar(dados);
   el.rodapeTexto.textContent = gravou
-    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)} em ${categoria.nome}${doDia}.`
+    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)}${parcelasTexto} em ${categoria.nome}${doDia}.`
     : avisoSemGravacao();
 });
 
@@ -649,6 +672,7 @@ el.botaoVerExemplo.addEventListener('click', async () => {
 // "await" no nível do módulo: a tela só é montada depois de ler o aparelho.
 const carregado = await carregarDados();
 montarMarcas();
+montarParcelas();
 
 if (carregado.dados === null) {
   mostrarVista(); // primeiro acesso: boas-vindas

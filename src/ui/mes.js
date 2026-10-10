@@ -23,6 +23,7 @@ import { tituloDoMes } from '../painel.js';
 import { resumoDoMes, excluirLancamento } from '../resumo-mes.js';
 import { gastoDaSemanaAtual, paginar } from '../historico.js';
 import { definirStatusDoFixo } from '../fixos.js';
+import { definirStatusDaFatura } from '../fluxo.js';
 import { ErroValidacao } from '../erros.js';
 import { textoDoValor } from '../configuracao.js';
 
@@ -66,6 +67,8 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     naConta: elemento('mes-na-conta'),
     contagemFixos: elemento('mes-contagem-fixos'),
     paginacaoFixos: elemento('paginacao-mes-fixos'),
+    secaoFaturas: elemento('secao-faturas'),
+    faturas: elemento('mes-faturas'),
     linhaSobra: elemento('mes-linha-sobra'),
     sobra: elemento('mes-sobra'),
     avisoSaldo: elemento('mes-aviso-saldo'),
@@ -161,6 +164,57 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
       texto: `Nesta semana (${dataCurta(semana.inicio)} a ${dataCurta(semana.fim)}): ${formatarCentavos(semana.totalCentavos)}`,
     }));
 
+    return li;
+  }
+
+  /** Linha de uma fatura: cartão, vencimento, total, as compras dela e Previsto | Pago. */
+  function itemDaFatura(fatura) {
+    const status = fatura.status;
+    const li = criar('li', { classe: `fixo-mes status-${status}` });
+    if (fatura.atrasada) li.classList.add('atrasada');
+
+    const linha = criar('div', { classe: 'linha-mes' });
+    const info = criar('div', { classe: 'linha-mes-info' });
+    const situacao = status === 'pago'
+      ? 'Paga'
+      : (fatura.atrasada ? `Atrasada: venceu ${dataCurta(fatura.vencimento)}` : `Vence ${dataCurta(fatura.vencimento)}`);
+    info.append(
+      criar('span', { classe: 'linha-mes-nome', texto: fatura.formaPagamento }),
+      criar('span', { classe: 'situacao-fixo', texto: situacao }),
+    );
+    linha.append(info, criar('span', { classe: 'linha-mes-valor', texto: formatarCentavos(fatura.totalCentavos) }));
+
+    // As compras da fatura, com a parcela de cada uma (até 5; o resto resumido).
+    const nomes = new Map(obterDados().categorias.map((c) => [c.id, c.nome]));
+    const itens = criar('ul', { classe: 'itens-fatura secundario' });
+    for (const item of fatura.itens.slice(0, 5)) {
+      const parcela = item.total > 1 ? ` · ${item.numero}/${item.total}` : '';
+      const li2 = criar('li');
+      li2.append(
+        criar('span', { texto: `${nomes.get(item.lancamento.categoriaId) ?? 'Sem categoria'} ${dataCurta(item.lancamento.data)}${parcela}` }),
+        criar('span', { texto: formatarCentavos(item.valorCentavos) }),
+      );
+      itens.append(li2);
+    }
+    if (fatura.itens.length > 5) itens.append(criar('li', { texto: `e mais ${fatura.itens.length - 5} compra(s)` }));
+
+    const grupo = criar('div', { classe: 'seletor-status duas', role: 'group', 'aria-label': `Situação da fatura ${fatura.formaPagamento}` });
+    for (const [valor, rotulo] of [['previsto', 'Previsto'], ['pago', 'Pago']]) {
+      const botao = criar('button', {
+        classe: 'opcao-status', type: 'button', texto: rotulo, 'aria-pressed': String(status === valor),
+      });
+      botao.addEventListener('click', async () => {
+        const mes = mesDaData(hojeLocal());
+        await aplicarMudanca(
+          definirStatusDaFatura(obterDados(), mes, fatura.formaPagamento, valor),
+          valor === 'pago' ? `Fatura ${fatura.formaPagamento} paga.` : `Fatura ${fatura.formaPagamento} voltou para prevista.`,
+        );
+        renderizar();
+      });
+      grupo.append(botao);
+    }
+
+    li.append(linha, itens, grupo);
     return li;
   }
 
@@ -263,7 +317,7 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
   function itemDoGasto({ lancamento, nomeCategoria }) {
     const li = criar('li', { classe: 'linha-mes' });
     const info = criar('div', { classe: 'linha-mes-info' });
-    const detalhe = [dataCurta(lancamento.data), lancamento.formaPagamento, lancamento.descricao || null]
+    const detalhe = [dataCurta(lancamento.data), lancamento.formaPagamento + ((lancamento.parcelas ?? 1) > 1 ? ` em ${lancamento.parcelas}x` : ''), lancamento.descricao || null]
       .filter(Boolean).join(' · ');
     info.append(
       criar('span', { classe: 'linha-mes-nome', texto: nomeCategoria }),
@@ -305,8 +359,15 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
 
     el.dinheiro.textContent = formatarCentavos(r.dinheiroDoMesCentavos);
     el.jaPago.textContent = `− ${formatarCentavos(r.jaPago.totalCentavos)}`;
-    el.jaPagoDetalhe.textContent =
-      `contas ${formatarCentavos(r.jaPago.fixosCentavos)} + gastos ${formatarCentavos(r.jaPago.gastosCentavos)}`;
+    el.jaPagoDetalhe.textContent = [
+      `contas ${formatarCentavos(r.jaPago.fixosCentavos)}`,
+      `gastos à vista ${formatarCentavos(r.jaPago.gastosCentavos)}`,
+      r.faturas.length > 0 ? `faturas ${formatarCentavos(r.jaPago.faturasCentavos)}` : null,
+    ].filter(Boolean).join(' + ');
+
+    // Faturas do cartão que vencem neste mês (a seção some quando não há nenhuma).
+    el.secaoFaturas.hidden = r.faturas.length === 0;
+    el.faturas.replaceChildren(...r.faturas.map(itemDaFatura));
     el.previsto.textContent = `− ${formatarCentavos(r.previstoCentavos)}`;
     el.naConta.replaceChildren(
       'Pelo app, a conta deve ter agora ',

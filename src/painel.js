@@ -7,20 +7,15 @@
  */
 
 import { ErroValidacao } from './erros.js';
-import { mesDaData, diaDaData, diasNoMes, ehDataValida } from './datas.js';
+import { mesDaData, diaDaData, diasNoMes, ehDataValida, tituloDoMes } from './datas.js';
 import { reaisParaCentavos, formatarCentavos } from './dinheiro.js';
 import { criarLancamento } from './modelo.js';
 import { avaliarGasto, calcularMargemCategoria, calcularSaldoProjetado } from './veredito.js';
 import { geometriaMostrador } from './mostrador.js';
+import { saidasNoMes } from './fluxo.js';
 
-const nomeDoMes = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-
-/** "2026-11" → "Novembro de 2026". */
-export function tituloDoMes(mes) {
-  const [ano, numero] = mes.split('-').map(Number);
-  const texto = nomeDoMes.format(new Date(Date.UTC(ano, numero - 1, 1)));
-  return texto.charAt(0).toUpperCase() + texto.slice(1);
-}
+// O título do mês mora em datas.js (o veredito também usa); daqui ele é repassado.
+export { tituloDoMes } from './datas.js';
 
 /**
  * Converte o texto digitado em centavos, ou null se estiver vazio,
@@ -56,6 +51,21 @@ export function problemaNaDataDoGasto(data, hoje) {
   return null;
 }
 
+/**
+ * Texto curto de uma compra no cartão, a partir das saídas dela.
+ * Ex.: "3x de R$ 40,00 · 1ª parcela paga em 10/11" ou "À vista no cartão · paga em 10/11".
+ *
+ * @param {object[]} saidas Saídas da compra (src/fluxo.js).
+ * @returns {string}
+ */
+function textoDoCartao(saidas) {
+  const primeira = saidas[0];
+  const data = dataCurta(primeira.vencimento);
+  if (saidas.length === 1) return `À vista no cartão · paga em ${data}`;
+  // A 1ª parcela pode ter alguns centavos a mais (resto da divisão): mostra o valor das demais.
+  return `${saidas.length}x de ${formatarCentavos(saidas[1].valorCentavos)} · 1ª parcela paga em ${data}`;
+}
+
 /** "2026-10-03" → "03/10". */
 function dataCurta(data) {
   return `${data.slice(8, 10)}/${data.slice(5, 7)}`;
@@ -71,8 +81,10 @@ function dataCurta(data) {
  * @returns {object} Tudo o que a tela mostra; `lancamento` é o gasto pronto
  *                   para gravar, ou null quando não há valor válido.
  */
-export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento, hoje, data = hoje }) {
+export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento, hoje, data = hoje, parcelas = 1 }) {
   const { registroMes, categorias, fixos, lancamentos } = dados;
+  const cartoes = dados.cartoes ?? [];
+  const ehCartao = cartoes.some((c) => c.formaPagamento === formaPagamento);
 
   const categoria = categorias.find((c) => c.id === categoriaId);
   if (!categoria) {
@@ -89,19 +101,19 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
   let lancamento = null;
   let saldoProjetado;
   let margem = null;
+  let numerosVeredito = null;
 
   if (valor !== null && problemaData === null) {
     // Há valor: o veredito completo, com as regras do app.
     // O gasto é guardado com a data escolhida, mas o veredito julga o mês
     // como ele está HOJE: o ritmo compara o que já foi gasto com o dia de hoje.
-    lancamento = criarLancamento({ valorCentavos: valor, categoriaId, formaPagamento, data });
-    const resultado = avaliarGasto({
-      lancamento: { ...lancamento, data: hoje },
-      categoria,
-      registroMes,
-      fixos,
-      lancamentos,
+    lancamento = criarLancamento({
+      valorCentavos: valor, categoriaId, formaPagamento, data, parcelas: ehCartao ? parcelas : 1,
     });
+    const resultado = avaliarGasto({
+      lancamento, categoria, registroMes, fixos, lancamentos, cartoes, categorias, hoje,
+    });
+    numerosVeredito = resultado.numeros;
     cor = resultado.cor;
     frase = resultado.frase;
     saldoProjetado = resultado.numeros.saldoProjetadoCentavos;
@@ -113,7 +125,9 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     );
     cor = 'neutro';
     frase = problemaData ?? 'Digite um valor para ver o veredito.';
-    saldoProjetado = calcularSaldoProjetado(registroMes, fixos, doMes, 0).saldoProjetadoCentavos;
+    // Saldo: o que sai da conta no mês (à vista e faturas). Orçamento: o que foi consumido.
+    const saidas = saidasNoMes(lancamentos, cartoes, registroMes.mes);
+    saldoProjetado = calcularSaldoProjetado(registroMes, fixos, saidas, 0).saldoProjetadoCentavos;
     margem = temOrcamento ? calcularMargemCategoria(categoria, doMes, 0) : null;
   }
 
@@ -138,7 +152,14 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     diaTexto: `Dia ${dia} de ${dias}`,
     dataAnterior,
     dataTexto: dataAnterior ? `Gasto do dia ${dataCurta(data)}` : 'Hoje',
-    linhaSaldo: lancamento !== null
+    ehCartao,
+    // Compra no cartão: "3x de R$ 40,00 · 1ª parcela paga em 10/11".
+    cartaoTexto: ehCartao && numerosVeredito
+      ? textoDoCartao(numerosVeredito.saidas)
+      : (ehCartao ? 'No cartão: entra na fatura, não sai da conta hoje.' : ''),
+    linhaSaldo: numerosVeredito?.estimativa
+      ? `Com esta compra, ${tituloDoMes(numerosVeredito.mesDoSaldo).toLowerCase()} deve fechar em ${formatarCentavos(saldoProjetado)} (estimativa)`
+      : lancamento !== null
       ? `Com este gasto, o mês fecha em ${formatarCentavos(saldoProjetado)}`
       : `O mês fecha em ${formatarCentavos(saldoProjetado)}`,
     numero: formatarCentavos(temOrcamento ? margem.margemCentavos : saldoProjetado),

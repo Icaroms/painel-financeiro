@@ -196,6 +196,9 @@ export function ajustarValorFixo(fixo, novoValorCentavos, { agora = new Date() }
 /* Lançamento                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Limite de parcelas de uma compra no cartão. */
+export const MAXIMO_PARCELAS_COMPRA = 24;
+
 /**
  * Cria o lançamento de um gasto.
  *
@@ -205,13 +208,18 @@ export function ajustarValorFixo(fixo, novoValorCentavos, { agora = new Date() }
  * @param {string} dados.formaPagamento Ex.: "Pix".
  * @param {string} [dados.data]         "AAAA-MM-DD". Se omitida, é hoje (fuso local).
  * @param {string} [dados.descricao]    Texto livre opcional.
+ * @param {number} [dados.parcelas]     1 a 24 (só conta em compra no cartão). Padrão: 1.
  * @param {object} [opcoes]             { agora, gerarId }
  */
 export function criarLancamento(
-  { valorCentavos, categoriaId, formaPagamento, data, descricao = '' },
+  { valorCentavos, categoriaId, formaPagamento, data, descricao = '', parcelas = 1 },
   opcoes = {},
 ) {
   const dataFinal = data ?? hojeLocal(opcoes.agora);
+
+  if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > MAXIMO_PARCELAS_COMPRA) {
+    throw new ErroValidacao('parcelas', `O número de parcelas deve ser de 1 a ${MAXIMO_PARCELAS_COMPRA}.`);
+  }
 
   if (!ehDataValida(dataFinal)) {
     throw new ErroValidacao('data', `Data inválida: "${dataFinal}". Use o formato AAAA-MM-DD.`);
@@ -227,6 +235,9 @@ export function criarLancamento(
     formaPagamento: exigirTexto(formaPagamento, 'formaPagamento', 'A forma de pagamento'),
     data: dataFinal,
     descricao: descricao.trim(),
+    // Só faz diferença numa compra no cartão: o valor é dividido nas faturas
+    // seguintes (src/fluxo.js). Lançamentos antigos, sem o campo, valem 1.
+    parcelas,
   };
 }
 

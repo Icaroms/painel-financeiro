@@ -25,9 +25,10 @@
  */
 
 import { ErroValidacao } from './erros.js';
-import { mesDaData, diaDaData, diasNoMes } from './datas.js';
+import { mesDaData, diaDaData, diasNoMes, tituloDoMes } from './datas.js';
 import { formatarCentavos } from './dinheiro.js';
 import { fixoAtivoNoMes, valorDoFixoNoMes } from './modelo.js';
+import { saidasDoLancamento, saidasNoMes, projetarMeses, mesesAteAUltimaSaida } from './fluxo.js';
 
 /**
  * Limites escolhidos para o MVP. Ficam num objeto só para poderem
@@ -155,6 +156,11 @@ export function lancamentosValidosDoMes(lancamentos, mes) {
 /**
  * Julga um gasto novo.
  *
+ * - O ORÇAMENTO e o RITMO da categoria olham o mês da compra, com o valor inteiro.
+ * - O SALDO olha o mês em que o dinheiro sai: à vista, o mês atual; no
+ *   cartão, o mês de cada fatura com parcela da compra. Para uma compra no
+ *   cartão, vale o pior desses meses (projeção em src/fluxo.js).
+ *
  * @param {object}   contexto
  * @param {object}   contexto.lancamento  O gasto novo (criado por criarLancamento).
  * @param {object}   contexto.categoria   A categoria do gasto.
@@ -163,6 +169,9 @@ export function lancamentosValidosDoMes(lancamentos, mes) {
  * @param {object[]} contexto.lancamentos Lançamentos já registrados. Os excluídos,
  *                                        os de outros meses e o próprio gasto novo
  *                                        (se estiver na lista) são ignorados.
+ * @param {object[]} [contexto.cartoes]   Cartões cadastrados. Sem eles, tudo é à vista.
+ * @param {object[]} [contexto.categorias] Todas as categorias (para estimar os meses seguintes).
+ * @param {string}   [contexto.hoje]      "AAAA-MM-DD" usado no ritmo. Padrão: a data do gasto.
  * @param {object}   [limites]            Padrão: LIMITES_PADRAO.
  * @returns {{
  *   cor: 'verde' | 'amarelo' | 'vermelho',
@@ -172,7 +181,7 @@ export function lancamentosValidosDoMes(lancamentos, mes) {
  * }}
  */
 export function avaliarGasto(
-  { lancamento, categoria, registroMes, fixos, lancamentos },
+  { lancamento, categoria, registroMes, fixos, lancamentos, cartoes = [], categorias = [], hoje = lancamento.data },
   limites = LIMITES_PADRAO,
 ) {
   if (lancamento.categoriaId !== categoria.id) {
@@ -182,37 +191,72 @@ export function avaliarGasto(
     throw new ErroValidacao('data', `O lançamento é de outro mês (esperado ${registroMes.mes}).`);
   }
 
-  // Só entram lançamentos válidos do mesmo mês, sem o próprio gasto novo
-  // (evita contar o mesmo gasto duas vezes).
-  const lancamentosDoMes = lancamentosValidosDoMes(lancamentos, registroMes.mes)
-    .filter((l) => l.id !== lancamento.id);
+  // Lançamentos já registrados, sem o próprio gasto novo (evita contar duas vezes).
+  const outros = lancamentos.filter((l) => l.id !== lancamento.id);
+  // Orçamento: o que foi CONSUMIDO no mês (data do gasto), à vista ou no cartão.
+  const consumidosNoMes = lancamentosValidosDoMes(outros, registroMes.mes);
 
   const valor = lancamento.valorCentavos;
   const temOrcamento = categoria.orcamentoCentavos > 0;
 
-  const saldo = calcularSaldoProjetado(registroMes, fixos, lancamentosDoMes, valor);
-  const margem = temOrcamento ? calcularMargemCategoria(categoria, lancamentosDoMes, valor) : null;
+  // Saldo: o que SAI da conta. O gasto novo pode sair agora ou em faturas futuras.
+  const saidasNovas = saidasDoLancamento(lancamento, cartoes);
+  const noCartao = saidasNovas[0].cartao;
+  const saidaNoMesAtual = saidasNovas
+    .filter((s) => s.mes === registroMes.mes)
+    .reduce((soma, s) => soma + s.valorCentavos, 0);
+  const saldo = calcularSaldoProjetado(
+    registroMes, fixos, saidasNoMes(outros, cartoes, registroMes.mes), saidaNoMesAtual,
+  );
+
+  // No cartão: o pior mês entre os meses das parcelas, já contando a compra.
+  let mesDoSaldo = registroMes.mes;
+  let saldoJulgado = saldo.saldoProjetadoCentavos;
+  if (noCartao) {
+    const visao = { registroMes, fixos, categorias, cartoes };
+    const aFrente = mesesAteAUltimaSaida(saidasNovas, registroMes.mes);
+    const comCompra = projetarMeses({ ...visao, lancamentos: [...outros, lancamento] }, aFrente);
+    const mesesDaCompra = new Set(saidasNovas.map((s) => s.mes));
+    const pior = comCompra
+      .filter((m) => mesesDaCompra.has(m.mes))
+      .reduce((menor, m) => (m.sobraCentavos < menor.sobraCentavos ? m : menor));
+    mesDoSaldo = pior.mes;
+    saldoJulgado = pior.sobraCentavos;
+  }
+
+  const margem = temOrcamento ? calcularMargemCategoria(categoria, consumidosNoMes, valor) : null;
   const ritmo = temOrcamento
     ? calcularRitmo(
         categoria.orcamentoCentavos,
         margem.gastoDepoisCentavos,
-        lancamento.data,
+        hoje,
         limites.toleranciaRitmoPontos,
       )
     : null;
 
-  const numeros = { ...saldo, margem, ritmo };
-  const saldoTexto = formatarCentavos(saldo.saldoProjetadoCentavos);
+  const numeros = {
+    ...saldo,
+    saldoProjetadoCentavos: saldoJulgado,
+    mesDoSaldo,
+    estimativa: mesDoSaldo !== registroMes.mes,
+    saidas: saidasNovas,
+    margem,
+    ritmo,
+  };
+  const saldoTexto = formatarCentavos(saldoJulgado);
+  // "o saldo fecha o mês" (à vista) ou "dezembro deve fechar" (fatura futura).
+  const ondeFecha = numeros.estimativa
+    ? `${tituloDoMes(mesDoSaldo).replace(/ de \d{4}$/, '').toLowerCase()} deve fechar`
+    : 'o saldo fecha o mês';
 
-  if (saldo.saldoProjetadoCentavos < 0) {
+  if (saldoJulgado < 0) {
     return {
       cor: 'vermelho',
       motivo: 'saldo-negativo',
-      frase: `Passou: o saldo fecha o mês em ${saldoTexto}.`,
+      frase: `Passou: ${ondeFecha} em ${saldoTexto}.`,
       numeros,
     };
   }
-
   if (temOrcamento && margem.margemCentavos < 0) {
     return {
       cor: 'vermelho',
@@ -231,11 +275,11 @@ export function avaliarGasto(
     };
   }
 
-  if (saldo.saldoProjetadoCentavos < limites.colchaoSaldoCentavos) {
+  if (saldoJulgado < limites.colchaoSaldoCentavos) {
     return {
       cor: 'amarelo',
       motivo: 'saldo-apertado',
-      frase: `Atenção: o saldo fecha o mês em ${saldoTexto}.`,
+      frase: `Atenção: ${ondeFecha} em ${saldoTexto}.`,
       numeros,
     };
   }
@@ -245,7 +289,7 @@ export function avaliarGasto(
     motivo: 'dentro-do-previsto',
     frase: temOrcamento
       ? `Ainda cabe: sobram ${formatarCentavos(margem.margemCentavos)} em ${categoria.nome}.`
-      : `Ainda cabe: o saldo fecha o mês em ${saldoTexto}.`,
+      : `Ainda cabe: ${ondeFecha} em ${saldoTexto}.`,
     numeros,
   };
 }

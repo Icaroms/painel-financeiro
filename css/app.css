@@ -712,3 +712,19 @@ body {
 /* ---------- Cartões de crédito (vista Configurar) ---------- */
 .lista-cartoes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 #botao-novo-cartao { align-self: stretch; }
+
+/* ---------- Compra no cartão (vista Lançar) ---------- */
+.linha-cartao { display: flex; align-items: center; gap: 12px; }
+.campo-parcelas { display: flex; flex-direction: column; gap: 4px; font-size: 14px; flex: 0 0 auto; }
+.campo-parcelas select {
+  min-height: 44px; min-width: 88px; padding: 0 10px; border: 1px solid var(--linha); border-radius: 12px;
+  background: transparent; color: var(--texto); font-family: var(--fonte-numero); font-size: 16px;
+}
+.campo-parcelas select:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.info-cartao { margin: 18px 0 0; font-size: 14px; line-height: 1.4; }
+
+/* ---------- Faturas (aba Mês) ---------- */
+.seletor-status.duas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.itens-fatura { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.itens-fatura li { display: flex; justify-content: space-between; gap: 8px; }
+.itens-fatura li span:last-child { font-family: var(--fonte-numero); white-space: nowrap; }

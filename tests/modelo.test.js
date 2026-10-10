@@ -228,6 +228,14 @@ describe('criarLancamento', () => {
     );
   });
 
+  it('parcelas: 1 por padrão, até 24', () => {
+    assert.equal(criarLancamento(DADOS, OPCOES).parcelas, 1);
+    assert.equal(criarLancamento({ ...DADOS, parcelas: 12 }, OPCOES).parcelas, 12);
+    for (const parcelas of [0, 25, 1.5]) {
+      assert.throws(() => criarLancamento({ ...DADOS, parcelas }, OPCOES), { name: 'ErroValidacao', campo: 'parcelas' });
+    }
+  });
+
   it('rejeita lançamento sem categoria', () => {
     assert.throws(
       () => criarLancamento({ ...DADOS, categoriaId: '' }, OPCOES),

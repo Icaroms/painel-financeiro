@@ -20,7 +20,8 @@
 import { ErroValidacao } from './erros.js';
 import { ehMesValido } from './datas.js';
 import { criarMes } from './modelo.js';
-import { calcularSaldoProjetado, lancamentosValidosDoMes } from './veredito.js';
+import { calcularSaldoProjetado } from './veredito.js';
+import { saidasNoMes } from './fluxo.js';
 
 /**
  * Procura o registro de um mês.
@@ -54,12 +55,13 @@ export function dadosDoMes(estado, mes) {
     fixos: estado.fixos,
     lancamentos: estado.lancamentos,
     formasPagamento: estado.formasPagamento,
+    cartoes: estado.cartoes ?? [],
   };
 }
 
 /**
  * Quanto sobra no fim de um mês, com o que já foi lançado:
- * saldo inicial + renda prevista − fixos − lançamentos.
+ * saldo inicial + renda prevista − fixos − saídas (gastos à vista e faturas do mês).
  *
  * @param {object} estado
  * @param {string} mes "AAAA-MM".
@@ -71,8 +73,9 @@ export function sobraDoMes(estado, mes) {
     throw new ErroValidacao('mes', `O mês ${mes} não existe nos dados.`);
   }
 
-  const doMes = lancamentosValidosDoMes(estado.lancamentos, mes);
-  return calcularSaldoProjetado(registroMes, estado.fixos, doMes, 0).saldoProjetadoCentavos;
+  // Conta o que SAI da conta no mês: gastos à vista e as faturas que vencem nele.
+  const saidas = saidasNoMes(estado.lancamentos, estado.cartoes ?? [], mes);
+  return calcularSaldoProjetado(registroMes, estado.fixos, saidas, 0).saldoProjetadoCentavos;
 }
 
 /**
