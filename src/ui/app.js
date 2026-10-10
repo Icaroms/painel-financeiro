@@ -655,6 +655,8 @@ const investir = iniciarInvestir({ obterDados: () => dados, aplicarMudanca });
 const radar = iniciarRadar({
   lerGuardado: lerRadarGuardado,
   guardar: gravarRadarGuardado,
+  obterDados: () => dados,
+  obterConfigIA: () => configIA,
   // Filtro "cabe no Investir deste mês" do radar: a parte Investir do destino da sobra.
   obterInvestirCentavos: () => {
     if (!dados) return 0;
