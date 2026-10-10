@@ -50,6 +50,7 @@ import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
 import {
   VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
+  RESULTADOS_DA_PROCURA, textoDaProcura,
 } from '../versao-app.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -857,6 +858,42 @@ document.getElementById('aviso-copia-fechar')?.addEventListener('click', () => m
 // Os dados não são afetados: eles ficam no IndexedDB, não na página.
 document.getElementById('aviso-versao-atualizar')?.addEventListener('click', () => window.location.reload());
 
+/** Última versão que o service worker informou (usada pelo botão "Procurar atualização"). */
+let versaoDoServiceWorker = null;
+
+/**
+ * Botão "Procurar atualização" (fim de Configurar): pede ao navegador para
+ * conferir AGORA se há publicação nova, sem esperar os 30 minutos.
+ * - Achou e está instalando: a faixa "versão nova" aparece sozinha em seguida.
+ * - O service worker já tem versão maior que a página: falta tocar em Atualizar.
+ * - Nada novo: "Você já está na última versão".
+ */
+async function procurarAtualizacao() {
+  const botao = document.getElementById('botao-procurar-atualizacao');
+  const saida = document.getElementById('procura-atualizacao');
+  if (!botao || !saida) return;
+  if (!('serviceWorker' in navigator)) {
+    saida.textContent = textoDaProcura(RESULTADOS_DA_PROCURA.semSuporte);
+    return;
+  }
+  botao.disabled = true;
+  saida.textContent = 'Procurando…';
+  let resultado;
+  try {
+    const registro = await navigator.serviceWorker.getRegistration();
+    if (!registro) throw new Error('Service worker não instalado.');
+    await registro.update();
+    if (registro.installing || registro.waiting) resultado = RESULTADOS_DA_PROCURA.instalando;
+    else if (haVersaoNova(versaoDoServiceWorker)) resultado = RESULTADOS_DA_PROCURA.nova;
+    else resultado = RESULTADOS_DA_PROCURA.ultima;
+  } catch {
+    resultado = RESULTADOS_DA_PROCURA.erro;
+  }
+  saida.textContent = textoDaProcura(resultado);
+  botao.disabled = false;
+}
+document.getElementById('botao-procurar-atualizacao')?.addEventListener('click', procurarAtualizacao);
+
 /**
  * Versão do app e avisos do topo.
  *
@@ -879,6 +916,7 @@ function mostrarVersao() {
 
   navigator.serviceWorker.addEventListener('message', (evento) => {
     if (evento.data?.tipo !== 'versao') return;
+    versaoDoServiceWorker = evento.data.versao;
     mostrarAvisoDoTopo('aviso-copia', textoDoAvisoDaCopia(evento.data.copia, evento.data.versao));
     mostrarAvisoDoTopo('aviso-versao', haVersaoNova(evento.data.versao) ? textoDaVersaoNova(evento.data.versao) : null);
   });

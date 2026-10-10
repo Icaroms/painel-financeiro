@@ -522,7 +522,12 @@
     </section>
 
     <!-- Versão que está rodando neste aparelho (vem do service worker): para comparar celular e PC -->
-    <p class="secundario versao-app" id="versao-app">Versão do app: verificando…</p>
+    <!-- Versão do código desta página e o botão que pergunta ao servidor se há publicação nova -->
+    <div class="versao-app-bloco">
+      <p class="secundario versao-app" id="versao-app">Versão do app: verificando…</p>
+      <button type="button" class="botao-pequeno" id="botao-procurar-atualizacao">Procurar atualização</button>
+      <p class="secundario versao-app" id="procura-atualizacao" role="status"></p>
+    </div>
 
   </main>
 
