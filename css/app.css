@@ -733,6 +733,12 @@ body {
 /* Sobra menos de 10% do limite depois da compra: cor âmbar, como o saldo apertado */
 .linha-limite.apertado { color: var(--amarelo); font-weight: 600; }
 
+/* ---------- IA (Gemini) na vista Configurar (parte 3.1) ---------- */
+.acoes-ia { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ia-teste { margin: 0; font-size: 14px; }
+.ia-teste[data-cor="verde"] { color: var(--verde); font-weight: 600; }
+.ia-teste[data-cor="vermelho"] { color: var(--vermelho); font-weight: 600; }
+
 /* ---------- Simulador de compras (parte 2.5) ---------- */
 .link-simular { align-self: flex-start; color: var(--texto); font-size: 14px; font-weight: 600; }
 .link-voltar { display: inline-flex; align-items: center; text-decoration: none; color: var(--texto); }
