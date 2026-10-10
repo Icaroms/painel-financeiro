@@ -297,3 +297,44 @@ describe('contas fixas no cartão ocupam o limite', () => {
     assert.equal(r.contasFixasCentavos, 22000);
   });
 });
+
+describe('faturasDoMes: conferência com a fatura do banco', () => {
+  // CARTAO: Cartão Nubank, vence dia 10. Outubro de 2026.
+  const outubro = (extra = {}) => ({ ...criarMes({ mes: '2026-10', saldoInicialCentavos: 0 }), ...extra });
+  const fixo = (nome, valorCentavos, formaPagamento = 'Cartão Nubank') => criarFixo({
+    nome, valorCentavos, diaVencimento: 10, formaPagamento, mesInicial: '2026-01',
+  });
+
+  it('lista as contas fixas do cartão fora do total, e soma tudo no "total no banco"', () => {
+    const claude = fixo('Claude', 11000);
+    const academia = fixo('Academia', 9990, 'Pix');
+    const [fatura] = faturasDoMes([compra(5000, '2026-09-20')], [CARTAO], outubro(), [claude, academia]);
+
+    assert.equal(fatura.totalCentavos, 5000); // só as compras: o saldo já conta o Claude como conta fixa
+    assert.deepEqual(fatura.contasFixas.map((c) => [c.fixo.nome, c.valorCentavos]), [['Claude', 11000]]);
+    assert.equal(fatura.contasFixasCentavos, 11000);
+    assert.equal(fatura.totalNoBancoCentavos, 16000);
+  });
+
+  it('cartão só com contas fixas também tem fatura (sem compras)', () => {
+    const [fatura] = faturasDoMes([], [CARTAO], outubro(), [fixo('Claude', 11000)]);
+    assert.equal(fatura.itens.length, 0);
+    assert.equal(fatura.totalCentavos, 0);
+    assert.equal(fatura.totalNoBancoCentavos, 11000);
+  });
+
+  it('conta dispensada no mês fica de fora; valor ajustado vale', () => {
+    const claude = fixo('Claude', 11000);
+    const anel = fixo('Anel', 9250);
+    const mes = outubro({ statusFixos: { [anel.id]: 'dispensado' }, ajustesFixos: { [claude.id]: 12000 } });
+    const [fatura] = faturasDoMes([], [CARTAO], mes, [claude, anel]);
+    assert.deepEqual(fatura.contasFixas.map((c) => [c.fixo.nome, c.valorCentavos]), [['Claude', 12000]]);
+  });
+
+  it('sem a lista de fixos: igual a antes (nenhuma conta fixa, cartão sem compra não aparece)', () => {
+    assert.deepEqual(faturasDoMes([], [CARTAO], outubro()), []);
+    const [fatura] = faturasDoMes([compra(5000, '2026-09-20')], [CARTAO], outubro());
+    assert.deepEqual(fatura.contasFixas, []);
+    assert.equal(fatura.totalNoBancoCentavos, 5000);
+  });
+});
