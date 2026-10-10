@@ -11,6 +11,8 @@
  *   Investir deste mês", do destino da sobra). 5 por página.
  * - FIIs por dividendos de 12 meses (informados à CVM), com o P/VP: a lista
  *   "Dividendos" aparece quando o tipo é FII.
+ * - "Comentar esta lista com IA" (4.3d): a IA comenta a lista da tela com a
+ *   carteira (src/radar-ia.js). Mudou um filtro, o comentário antigo some.
  *
  * A busca é só leitura de um arquivo público: nenhum dado da pessoa sai
  * do aparelho. Como em toda a pasta src/ui, aqui só fica a TELA; as regras
@@ -18,6 +20,11 @@
  */
 
 import { formatarCentavos } from '../dinheiro.js';
+import { hojeLocal } from '../datas.js';
+import { chamarGemini, iaDisponivel } from '../ia.js';
+import { blocosDaResposta } from '../analise.js';
+import { mensagemDoRadar } from '../radar-ia.js';
+import { elementosDosBlocos } from './blocos-ia.js';
 import { ErroValidacao } from '../erros.js';
 import { paginar } from '../historico.js';
 import { quandoFoiFeita } from '../analise.js';
@@ -71,10 +78,15 @@ const dataLonga = (data) => data.split('-').reverse().join('/');
  * @param {() => Promise<{ radar: object, buscadoEm: string }|undefined>} opcoes.lerGuardado
  * @param {(guardado: { radar: object, buscadoEm: string }) => Promise<void>} opcoes.guardar
  * @param {() => number} [opcoes.obterInvestirCentavos] Parte "Investir" da sobra deste mês (destino da sobra).
+ * @param {() => object} [opcoes.obterDados] Dados do app (a carteira vai no comentário da IA).
+ * @param {() => object} [opcoes.obterConfigIA] Configuração da IA (o botão só aparece com a IA disponível).
  * @param {typeof fetch} [opcoes.buscar] Para testes; padrão: fetch do navegador.
  * @returns {{ renderizar: () => void }}
  */
-export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () => 0, buscar = (...args) => fetch(...args) }) {
+export function iniciarRadar({
+  lerGuardado, guardar, obterInvestirCentavos = () => 0, obterDados = () => null, obterConfigIA = () => null,
+  buscar = (...args) => fetch(...args),
+}) {
   const el = {
     situacao: elemento('radar-situacao'),
     fonte: elemento('radar-tesouro-fonte'),
@@ -94,7 +106,17 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
       paginacao: elemento('paginacao-radar-mercado'),
       nota: elemento('radar-mercado-nota'),
     },
+    ia: {
+      bloco: elemento('radar-ia'),
+      pedir: elemento('radar-ia-pedir'),
+      resposta: elemento('radar-ia-resposta'),
+    },
   };
+
+  /** A lista que está na tela (vai para a IA): filtros e itens. null sem lista. */
+  let visaoAtual = null;
+  /** Assinatura da lista comentada: se a lista mudar, o comentário some. */
+  let comentada = '';
 
   /** O que está guardado no aparelho: { radar, buscadoEm } ou null. */
   let guardado = null;
@@ -294,6 +316,7 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
       const ate = radar.fiis.mesReferencia ? `até ${textoDoMes(radar.fiis.mesReferencia)}` : '';
       linhaDaFonte(m.fonte, `Dividendos informados à CVM ${ate} · preços de ${dataLonga(radar.fiis.dataBase)}`, radar.fiis);
       const fiis = listaDeDividendos(radar, { precoMaximoCentavos: precoMaximo() });
+      visaoAtual = { tipo: 'fii', lista: 'dividendos', periodo: 'mes', precoMaximoCentavos: precoMaximo(), itens: fiis };
       const paginaFiis = paginar(fiis, paginaMercado);
       paginaMercado = paginaFiis.pagina;
       m.itens.replaceChildren(...(fiis.length === 0 ? [vazio('Nenhum FII com esses filtros.')] : paginaFiis.itens.map(linhaDoFii)));
@@ -315,6 +338,7 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
     const itens = (lista !== 'negociados' && periodos.length === 0)
       ? []
       : listaDoMercado(radar, { tipo: m.tipo.value, lista, periodo, precoMaximoCentavos: precoMaximo() });
+    visaoAtual = { tipo: m.tipo.value, lista, periodo, precoMaximoCentavos: precoMaximo(), itens };
     const paginaAtual = paginar(itens, paginaMercado);
     paginaMercado = paginaAtual.pagina;
     m.itens.replaceChildren(...(itens.length === 0
@@ -323,13 +347,57 @@ export function iniciarRadar({ lerGuardado, guardar, obterInvestirCentavos = () 
     montarPaginacao(m.paginacao, paginaAtual, (nova) => { paginaMercado = nova; desenhar(); });
   }
 
+  /** Assinatura da lista na tela (filtros + códigos), para saber se o comentário ainda vale. */
+  const assinatura = (visao) => (visao
+    ? JSON.stringify([visao.tipo, visao.lista, visao.periodo, visao.precoMaximoCentavos, visao.itens.map((i) => i.codigo)])
+    : '');
+
+  /** Botão da IA: só com a IA disponível e uma lista na tela; comentário velho some. */
+  function desenharIA(radar) {
+    const disponivel = iaDisponivel(obterConfigIA()) && Boolean(radar?.mercado) && visaoAtual !== null;
+    el.ia.bloco.hidden = !disponivel;
+    if (!disponivel || assinatura(visaoAtual) !== comentada) {
+      el.ia.resposta.hidden = true;
+      el.ia.resposta.replaceChildren();
+      el.ia.pedir.textContent = 'Comentar esta lista com IA';
+      comentada = '';
+    }
+  }
+
   /** Desenha o radar guardado (ou o aviso de que ainda não há radar). */
   function desenhar() {
     el.botao.disabled = buscando;
     const radar = guardado?.radar ?? null;
+    visaoAtual = null;
     desenharTesouro(radar);
     desenharMercado(radar);
+    desenharIA(radar);
   }
+
+  el.ia.pedir.addEventListener('click', async () => {
+    if (!guardado?.radar || !visaoAtual) return;
+    const visao = visaoAtual;
+    el.ia.pedir.disabled = true;
+    el.ia.resposta.hidden = false;
+    el.ia.resposta.dataset.estado = 'carregando';
+    el.ia.resposta.replaceChildren(criar('p', { texto: 'Comentando a lista…' }));
+
+    const resultado = await chamarGemini(obterConfigIA(), mensagemDoRadar(guardado.radar, visao, obterDados(), hojeLocal()));
+
+    el.ia.pedir.disabled = false;
+    el.ia.pedir.textContent = 'Comentar de novo';
+    if (!resultado.ok) {
+      el.ia.resposta.dataset.estado = 'erro';
+      el.ia.resposta.replaceChildren(criar('p', { texto: resultado.erro }));
+      return;
+    }
+    comentada = assinatura(visao);
+    el.ia.resposta.dataset.estado = 'ok';
+    el.ia.resposta.replaceChildren(
+      ...elementosDosBlocos(blocosDaResposta(resultado.texto)),
+      criar('p', { classe: 'ia-selo', texto: 'Texto gerado por IA com a lista e a carteira deste momento. Não é recomendação de investimento: confira os números no app.' }),
+    );
+  });
 
   /** Linha de situação: quando o robô gerou o radar, e aviso se está atrasado. */
   function textoDaSituacao(complemento = '') {

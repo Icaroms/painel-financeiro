@@ -13,6 +13,9 @@ import {
   enderecoDoAno,
   MESES_MINIMOS,
   DY_MES_MAXIMO,
+  PVP_MINIMO,
+  PVP_MAXIMO,
+  pvpDentroDaFaixa,
   lerCsvCvm,
   acharColuna,
   numeroCvm,
@@ -135,5 +138,19 @@ describe('resumoDoFundo e montarFiis', () => {
     });
     const radar = JSON.parse(JSON.stringify(montarRadar({ tesouro: null, mercado: null, fiis })));
     assert.equal(lerRadar(radar).fiis.itens[0].pvp, 0.9);
+  });
+});
+
+describe('dados errados que vêm da CVM (vistos no primeiro radar real)', () => {
+  it(`P/VP fora de ${PVP_MINIMO} a ${PVP_MAXIMO} fica vazio (valor patrimonial informado errado)`, () => {
+    assert.equal(pvpDentroDaFaixa(8550, 9500), 0.9);
+    assert.equal(pvpDentroDaFaixa(900, 10000), null); // 0,09
+    assert.equal(pvpDentroDaFaixa(958700, 10000), null); // 95,87
+    assert.equal(pvpDentroDaFaixa(1000, null), null);
+  });
+
+  it('dividendo zerado nos 12 meses: o fundo não preencheu (fica vazio, não 0%)', () => {
+    const meses = new Map(MESES.map((m) => [m, { dy: 0, vpCota: 10 }]));
+    assert.equal(resumoDoFundo(meses).dividendos12m, null);
   });
 });

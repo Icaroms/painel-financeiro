@@ -39,6 +39,13 @@ export const MESES_MINIMOS = 10;
 /** Dividend yield de UM mês acima disto (em %) é tratado como erro de digitação do fundo e ignorado. */
 export const DY_MES_MAXIMO = 5;
 
+/**
+ * P/VP fora desta faixa vem de valor patrimonial informado errado pelo fundo
+ * (no primeiro radar real apareceram 0,09 e 95,87): fica vazio.
+ */
+export const PVP_MINIMO = 0.2;
+export const PVP_MAXIMO = 5;
+
 /** "Código ISIN" → "codigo isin" (sem acento, minúsculo, "_" e espaços iguais). */
 function normalizar(texto) {
   return String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/[\s_]+/g, '_');
@@ -173,7 +180,8 @@ function mesMenos(mes, n) {
  *
  * @param {Map<string, { dy: number|null, vpCota: number|null }>} meses
  * @returns {{ ultimoMes: string, dividendos12m: number|null, mesesComDados: number, vpCotaCentavos: number|null }|null}
- *   dividendos12m em %, com 2 casas; null com menos de MESES_MINIMOS meses.
+ *   dividendos12m em %, com 2 casas; null com menos de MESES_MINIMOS meses, ou quando
+ *   todos os meses vieram zerados (o fundo não preencheu o campo; não quer dizer que não pagou).
  */
 export function resumoDoFundo(meses) {
   const ordenados = [...meses.keys()].sort();
@@ -187,10 +195,17 @@ export function resumoDoFundo(meses) {
   const vp = meses.get(ultimoMes)?.vpCota;
   return {
     ultimoMes,
-    dividendos12m: validos.length >= MESES_MINIMOS ? Math.round(soma * 100) / 100 : null,
+    dividendos12m: validos.length >= MESES_MINIMOS && soma > 0 ? Math.round(soma * 100) / 100 : null,
     mesesComDados: validos.length,
     vpCotaCentavos: vp && vp > 0 ? Math.round(vp * 100) : null,
   };
+}
+
+/** P/VP com 2 casas, ou null sem valor patrimonial ou fora da faixa plausível. */
+export function pvpDentroDaFaixa(precoCentavos, vpCotaCentavos) {
+  if (!vpCotaCentavos) return null;
+  const pvp = Math.round((precoCentavos / vpCotaCentavos) * 100) / 100;
+  return pvp >= PVP_MINIMO && pvp <= PVP_MAXIMO ? pvp : null;
 }
 
 /**
@@ -220,7 +235,7 @@ export function montarFiis({ ativos, dataBase, fundos }) {
       precoCentavos: ativo.precoCentavos,
       volumeCentavos: ativo.volumeCentavos,
       dividendos12m: resumo.dividendos12m,
-      pvp: resumo.vpCotaCentavos ? Math.round((ativo.precoCentavos / resumo.vpCotaCentavos) * 100) / 100 : null,
+      pvp: pvpDentroDaFaixa(ativo.precoCentavos, resumo.vpCotaCentavos),
       ultimoMes: resumo.ultimoMes,
     }))
     .sort((a, b) => (b.dividendos12m ?? -1) - (a.dividendos12m ?? -1));

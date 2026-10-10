@@ -18,6 +18,7 @@ import { chamarGemini, iaDisponivel } from '../ia.js';
 import {
   mensagemDoMes, blocosDaResposta, textoParaCopiar, criarAnaliseGuardada, analiseDoMes, quandoFoiFeita,
 } from '../analise.js';
+import { elementosDosBlocos } from './blocos-ia.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -32,27 +33,6 @@ function criar(tag, { classe, texto } = {}) {
   if (classe) novo.className = classe;
   if (texto !== undefined) novo.textContent = texto;
   return novo;
-}
-
-/** Trechos (negrito ou não) dentro de um elemento: <strong> só onde a IA marcou. */
-function preencher(destino, trechos) {
-  for (const trecho of trechos) {
-    destino.append(trecho.negrito ? criar('strong', { texto: trecho.texto }) : trecho.texto);
-  }
-  return destino;
-}
-
-/** Converte os blocos da resposta em elementos da página. */
-function elementosDosBlocos(blocos) {
-  return blocos.map((bloco) => {
-    if (bloco.tipo === 'titulo') return preencher(criar('h3'), bloco.trechos);
-    if (bloco.tipo === 'lista') {
-      const lista = criar('ul');
-      for (const item of bloco.itens) lista.append(preencher(criar('li'), item));
-      return lista;
-    }
-    return preencher(criar('p'), bloco.trechos);
-  });
 }
 
 /**
