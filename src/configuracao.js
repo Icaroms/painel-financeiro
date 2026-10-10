@@ -13,6 +13,7 @@ import { ErroValidacao } from './erros.js';
 import { reaisParaCentavos } from './dinheiro.js';
 import { criarCategoria, excluirRegistro } from './modelo.js';
 import { buscarMes } from './meses.js';
+import { temComprasConvertidas } from './cartoes.js';
 
 /** Compara nomes sem diferenciar maiúsculas, minúsculas e espaços nas pontas. */
 function mesmoNome(a, b) {
@@ -265,7 +266,14 @@ export function removerFormaPagamento(estado, nome) {
   if (estado.formasPagamento.length === 1) {
     throw new ErroValidacao('formaPagamento', 'Mantenha pelo menos uma forma de pagamento.');
   }
-  // Se a forma era um cartão, o cadastro do cartão sai junto.
+  // Se a forma era um cartão, o cadastro do cartão sai junto, mas não se
+  // ele tiver parcelas convertidas de contas fixas (elas sumiriam do saldo).
+  if (temComprasConvertidas(estado, nome)) {
+    throw new ErroValidacao(
+      'formaPagamento',
+      `"${nome}" tem parcelas convertidas de contas fixas. Desfaça a conversão antes de remover.`,
+    );
+  }
   return {
     ...estado,
     formasPagamento: estado.formasPagamento.filter((f) => f !== nome),

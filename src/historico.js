@@ -13,10 +13,15 @@
 
 import { somarDias, inicioDaSemana } from './datas.js';
 import { categoriasAtivas } from './configuracao.js';
+import { contaComoConsumo } from './modelo.js';
 
-/** Lançamentos que contam (não excluídos). */
+/**
+ * Lançamentos que contam como gasto: não excluídos e que não vieram da
+ * conversão de uma conta fixa (a compra convertida aconteceu antes de o
+ * app existir; ela aparece só nas faturas, não no histórico de gastos).
+ */
 function gastosValidos(estado) {
-  return estado.lancamentos.filter((l) => l.excluidoEm === null);
+  return estado.lancamentos.filter(contaComoConsumo);
 }
 
 /** Filtra por categoria; null = todas. */

@@ -15,8 +15,9 @@
  * - a fatura vence no primeiro dia de vencimento depois do fechamento.
  * Ex.: fecha dia 3, vence dia 10; compra em 20/09 → fecha 03/10 → paga em 10/10.
  *
- * Nesta parte, o cartão só é cadastrado e a fatura só é CALCULADA para
- * mostrar na tela. As compras passam a pesar na fatura na parte 2.2.
+ * As compras no cartão pesam na fatura (parte 2.2, src/fluxo.js) e as
+ * contas fixas parceladas podem virar compras no cartão (parte 2.3,
+ * src/conversao.js).
  *
  * Funções puras: testadas no Node. A tela fica em src/ui/configurar.js.
  */
@@ -108,7 +109,34 @@ export function salvarCartao(estado, dados, opcoes = {}) {
 }
 
 /**
+ * Diz se um cartão tem compras convertidas de contas fixas (parte 2.3).
+ * Essas compras só existem nas faturas: sem o cartão, as parcelas
+ * sumiriam do saldo. Por isso o cartão não pode deixar de existir antes
+ * de a conversão ser desfeita.
+ *
+ * @param {object} estado
+ * @param {string} formaPagamento
+ * @returns {boolean}
+ */
+export function temComprasConvertidas(estado, formaPagamento) {
+  return estado.lancamentos.some(
+    (l) => l.excluidoEm === null && l.conversao && l.formaPagamento === formaPagamento,
+  );
+}
+
+/** Mensagem de quando o cartão tem compras convertidas. */
+function exigirSemConvertidas(estado, formaPagamento) {
+  if (temComprasConvertidas(estado, formaPagamento)) {
+    throw new ErroValidacao(
+      'formaPagamento',
+      `"${formaPagamento}" tem parcelas convertidas de contas fixas. Desfaça a conversão em "Parcelas antigas no cartão" antes.`,
+    );
+  }
+}
+
+/**
  * Deixa uma forma de pagamento de ser cartão (ela continua na lista de formas).
+ * Não é permitido enquanto o cartão tiver compras convertidas.
  *
  * @param {object} estado
  * @param {string} formaPagamento
@@ -118,6 +146,7 @@ export function removerCartao(estado, formaPagamento) {
   if (!cartaoDaForma(estado, formaPagamento)) {
     throw new ErroValidacao('formaPagamento', `"${formaPagamento}" não é um cartão cadastrado.`);
   }
+  exigirSemConvertidas(estado, formaPagamento);
   return { ...estado, cartoes: estado.cartoes.filter((c) => c.formaPagamento !== formaPagamento) };
 }
 

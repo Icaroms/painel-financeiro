@@ -713,6 +713,12 @@ body {
 .lista-cartoes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 #botao-novo-cartao { align-self: stretch; }
 
+/* ---------- Parcelas antigas no cartão (vista Configurar, parte 2.3) ---------- */
+.subtitulo-secao { margin: 8px 0 0; font-size: 15px; font-weight: 600; }
+.confirmacao-conversao { display: flex; flex-direction: column; gap: 8px; }
+.confirmacao-conversao p { margin: 0; font-size: 14px; line-height: 1.4; }
+.confirmacao-conversao .acoes { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
 /* ---------- Compra no cartão (vista Lançar) ---------- */
 .linha-cartao { display: flex; align-items: center; gap: 12px; }
 .campo-parcelas { display: flex; flex-direction: column; gap: 4px; font-size: 14px; flex: 0 0 auto; }

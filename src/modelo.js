@@ -241,6 +241,23 @@ export function criarLancamento(
   };
 }
 
+/**
+ * Diz se um lançamento conta como CONSUMO (orçamento da categoria, ritmo,
+ * histórico e lista de gastos do mês).
+ *
+ * Não contam:
+ * - lançamentos excluídos;
+ * - compras que vieram da conversão de uma conta fixa parcelada (parte 2.3,
+ *   src/conversao.js): a compra aconteceu antes de o app existir, então ela
+ *   só pesa no SALDO, pelas parcelas que ainda faltam nas faturas.
+ *
+ * @param {object} lancamento
+ * @returns {boolean}
+ */
+export function contaComoConsumo(lancamento) {
+  return lancamento.excluidoEm === null && !lancamento.conversao;
+}
+
 /* ------------------------------------------------------------------ */
 /* Mês                                                                */
 /* ------------------------------------------------------------------ */
