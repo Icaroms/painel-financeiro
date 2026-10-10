@@ -442,7 +442,7 @@ body {
   border-radius: 14px;
   color: var(--secundario);
   font-family: var(--fonte-numero);
-  font-size: 15px; /* quatro abas precisam caber lado a lado no iPhone */
+  font-size: 14px; /* cinco abas precisam caber lado a lado no iPhone */
   font-weight: 600;
   text-decoration: none;
 }
@@ -784,6 +784,14 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .versao-app { margin: 0; font-size: 13px; text-align: center; }
 .versao-app-bloco { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .versao-app:empty { display: none; }
+
+/* ---------- Investir: carteira (parte 4.2a) ---------- */
+.investir-total { margin: 0; font-family: var(--fonte-numero); font-size: 34px; font-weight: 600; line-height: 1.1; }
+/* Rendimento: verde quando ganhou, vermelho quando perdeu (como as luzes do painel) */
+.ganho { color: var(--verde); }
+.perda { color: var(--vermelho); }
+.resumo-dinheiro strong.ganho, .resumo-dinheiro strong.perda { font-size: 15px; }
+#botao-novo-investimento { align-self: stretch; }
 
 /* ---------- Destino da sobra (parte 4.1) ---------- */
 .linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

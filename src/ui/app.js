@@ -5,6 +5,7 @@
  * - #lancar (padrão): lançar gasto com o veredito ao vivo (este arquivo);
  * - #mes: o resumo do mês, as categorias e as listas (./mes.js);
  * - #historico: todos os gastos e os totais por semana (./historico.js);
+ * - #investir: a carteira de investimentos (./investir.js);
  * - #configurar: dinheiro do mês, contas fixas, categorias, pagamentos e
  *   backup (a parte da configuração fica em ./configurar.js).
  * No primeiro acesso (nada gravado no aparelho), aparece antes a vista de
@@ -48,6 +49,7 @@ import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
 import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
+import { iniciarInvestir } from './investir.js';
 import {
   VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
   RESULTADOS_DA_PROCURA, textoDaProcura,
@@ -106,6 +108,8 @@ const el = {
   abaMes: elemento('aba-mes'),
   telaHistorico: elemento('tela-historico'),
   abaHistorico: elemento('aba-historico'),
+  telaInvestir: elemento('tela-investir'),
+  abaInvestir: elemento('aba-investir'),
   pontoConfigurar: elemento('ponto-configurar'),
   telaBoasVindas: elemento('tela-boas-vindas'),
   botaoComecarZero: elemento('botao-comecar-zero'),
@@ -645,6 +649,7 @@ const configurar = iniciarConfigurar({
 });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
+const investir = iniciarInvestir({ obterDados: () => dados, aplicarMudanca });
 const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
 const destinoMes = iniciarDestinoMes({ obterDados: () => dados });
@@ -705,7 +710,7 @@ el.linkSimular.addEventListener('click', () => {
 /* ------------------------------------------------------------------ */
 
 /**
- * Mostra a vista indicada no endereço: #mes, #historico, #configurar
+ * Mostra a vista indicada no endereço: #mes, #historico, #investir, #configurar
  * ou, para qualquer outro valor, a vista de lançamento. Usar o endereço permite voltar
  * com o botão "voltar" do navegador e abrir direto numa vista.
  */
@@ -718,24 +723,29 @@ function mostrarVista() {
     el.tela.hidden = true;
     el.telaMes.hidden = true;
     el.telaHistorico.hidden = true;
+    el.telaInvestir.hidden = true;
     el.telaConfigurar.hidden = true;
     el.telaSimular.hidden = true;
     return;
   }
 
-  const vistas = { '#mes': 'mes', '#historico': 'historico', '#configurar': 'configurar', '#simular': 'simular' };
+  const vistas = {
+    '#mes': 'mes', '#historico': 'historico', '#investir': 'investir', '#configurar': 'configurar', '#simular': 'simular',
+  };
   const vista = vistas[location.hash] ?? 'lancar';
 
   el.tela.hidden = vista !== 'lancar';
   el.telaMes.hidden = vista !== 'mes';
   el.telaHistorico.hidden = vista !== 'historico';
+  el.telaInvestir.hidden = vista !== 'investir';
   el.telaConfigurar.hidden = vista !== 'configurar';
   el.telaSimular.hidden = vista !== 'simular';
   el.configMensagem.hidden = true;
 
   // aria-current="page" marca a aba ativa (para o estilo e para leitores de tela).
   const abas = [
-    [el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaHistorico, 'historico'], [el.abaConfigurar, 'configurar'],
+    [el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaHistorico, 'historico'], [el.abaInvestir, 'investir'],
+    [el.abaConfigurar, 'configurar'],
   ];
   // O simulador não tem aba própria: ele é aberto pelo Lançar, que fica marcado.
   const abaAtiva = vista === 'simular' ? 'lancar' : vista;
@@ -750,6 +760,7 @@ function mostrarVista() {
     analiseMes.renderizar(); // mostra a última análise do mês, com a hora em que foi feita
   }
   if (vista === 'historico') historico.renderizar();
+  if (vista === 'investir') investir.renderizar();
   if (vista === 'configurar') {
     configurar.renderizar();
     destinoConfig.renderizar();
