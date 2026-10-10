@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import {
   VERSAO_APP, INTERVALO_VERIFICAR_VERSAO_MS, MOTIVOS_DA_COPIA,
   numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
+  RESULTADOS_DA_PROCURA, textoDaProcura,
 } from '../src/versao-app.js';
 
 describe('numeroDaVersao', () => {
@@ -92,5 +93,19 @@ describe('deveVerificarVersao', () => {
     const ultima = 1_000_000;
     assert.equal(deveVerificarVersao(ultima + INTERVALO_VERIFICAR_VERSAO_MS - 1, ultima), false);
     assert.equal(deveVerificarVersao(ultima + INTERVALO_VERIFICAR_VERSAO_MS, ultima), true);
+  });
+});
+
+describe('textoDaProcura (botão "Procurar atualização")', () => {
+  it('um texto claro para cada resultado', () => {
+    assert.equal(textoDaProcura(RESULTADOS_DA_PROCURA.ultima, 'painel-financeiro-v16'), 'Você já está na última versão (v16).');
+    assert.equal(textoDaProcura(RESULTADOS_DA_PROCURA.nova), 'Há uma versão nova: toque em Atualizar, no topo da tela.');
+    assert.match(textoDaProcura(RESULTADOS_DA_PROCURA.instalando), /^Versão nova encontrada\. Em instantes aparece o botão Atualizar/);
+    assert.match(textoDaProcura(RESULTADOS_DA_PROCURA.erro), /sem internet ou servidor fora do ar/);
+    assert.match(textoDaProcura(RESULTADOS_DA_PROCURA.semSuporte), /recarregue a página/);
+  });
+
+  it('sem a versão, usa a VERSAO_APP', () => {
+    assert.equal(textoDaProcura(RESULTADOS_DA_PROCURA.ultima), `Você já está na última versão (${numeroDaVersao(VERSAO_APP)}).`);
   });
 });

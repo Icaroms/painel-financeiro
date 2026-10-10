@@ -128,6 +128,11 @@ describe('index.html', () => {
     assert.match(html, /<div class="aviso-topo aviso-copia" id="aviso-copia" role="status" hidden>/);
     assert.match(html, /<div class="aviso-topo aviso-versao" id="aviso-versao" role="status" hidden>/);
   });
+
+  it('tem o botão "Procurar atualização" junto da versão, em Configurar', () => {
+    const configurar = html.slice(html.indexOf('id="tela-configurar"'));
+    assert.match(configurar, /id="versao-app"[\s\S]*id="botao-procurar-atualizacao"[^>]*>Procurar atualização<[\s\S]*id="procura-atualizacao" role="status"/);
+  });
 });
 
 /**
