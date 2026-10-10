@@ -1,11 +1,13 @@
 /**
- * Robô do Radar de opções (Fase 04, partes 4.3a e 4.3b).
+ * Robô do Radar de opções (Fase 04, partes 4.3a, 4.3b e 4.3c).
  *
  * Roda no GitHub Actions (.github/workflows/radar.yml), uma vez por dia:
  * 1. baixa os dados públicos:
  *    - taxas do Tesouro Direto (Tesouro Nacional);
  *    - cotações de ações e FIIs (B3): o pregão mais recente e os de
  *      1 semana, 1 mês e 12 meses antes, para as variações;
+ *    - informes mensais dos FIIs (CVM): dividendos de 12 meses e valor
+ *      patrimonial da cota (P/VP com o preço da B3);
  * 2. monta o arquivo radar.json;
  * 3. o workflow publica esse arquivo na branch "radar-dados", e o app lê de lá.
  *
@@ -23,7 +25,8 @@ import { fileURLToPath } from 'node:url';
 
 import { FONTE_TESOURO, lerCsvTesouro } from './tesouro.js';
 import { enderecoDoDia, lerCotahist, montarMercado } from './b3.js';
-import { datasDosPeriodos, hojeEmBrasilia, pregaoMaisProximo } from './baixar.js';
+import { datasDosPeriodos, hojeEmBrasilia, pregaoMaisProximo, baixarZip, SemArquivo } from './baixar.js';
+import { enderecoDoAno, lerInformesFii, montarFiis } from './cvm.js';
 
 /** Identificação do arquivo. O app (src/radar.js) confere estes dois valores. */
 export const FORMATO_RADAR = 'painel-financeiro-radar';
@@ -40,10 +43,11 @@ const TEMPO_LIMITE_MS = 120_000;
  * @param {{ dataBase: string, titulos: object[] }|null} partes.tesouro Títulos lidos do CSV,
  *   ou a parte "tesouro" de um radar anterior (já com fonte e link).
  * @param {object|null} [partes.mercado] Resultado de montarMercado (ou o do radar anterior).
+ * @param {object|null} [partes.fiis] Resultado de montarFiis (ou o do radar anterior).
  * @param {Date} [partes.agora]
  * @returns {object} O conteúdo do radar.json.
  */
-export function montarRadar({ tesouro, mercado = null, agora = new Date() }) {
+export function montarRadar({ tesouro, mercado = null, fiis = null, agora = new Date() }) {
   return {
     formato: FORMATO_RADAR,
     versao: VERSAO_RADAR,
@@ -52,6 +56,7 @@ export function montarRadar({ tesouro, mercado = null, agora = new Date() }) {
       ? { fonte: FONTE_TESOURO.nome, link: FONTE_TESOURO.pagina, dataBase: tesouro.dataBase, titulos: tesouro.titulos }
       : null,
     mercado,
+    fiis,
   };
 }
 
@@ -112,6 +117,36 @@ async function parteDoMercado() {
   return mercado;
 }
 
+/** CVM: informes mensais dos FIIs do ano do pregão e do ano anterior (12 meses podem cruzar a virada do ano). */
+async function parteDosFiis(mercado) {
+  if (!mercado) throw new Error('sem as cotações da B3, não dá para calcular o P/VP');
+  console.log('Baixando os informes mensais dos FIIs (CVM)…');
+  const ano = Number(mercado.dataBase.slice(0, 4));
+  const geral = [];
+  const complemento = [];
+  for (const a of [ano - 1, ano]) {
+    try {
+      const [textoGeral, textoComplemento] = await baixarZip(enderecoDoAno(a), ['*geral*', '*complemento*']);
+      geral.push(textoGeral);
+      complemento.push(textoComplemento);
+      console.log(`CVM: informes de ${a} baixados.`);
+    } catch (erro) {
+      // No começo do ano o arquivo do ano novo pode ainda não existir.
+      if (!(erro instanceof SemArquivo)) throw erro;
+      console.warn(`Aviso: sem os informes de ${a} na CVM.`);
+    }
+  }
+  if (geral.length === 0) throw new Error('nenhum arquivo de informes da CVM');
+
+  const { fundos, escalaDy, cabecalhos } = lerInformesFii({ geral, complemento });
+  console.log(`CVM: ${fundos.size} FIIs com ISIN; dividend yield do mês veio como ${escalaDy}.`);
+  console.log(`CVM (cabeçalho do complemento): ${cabecalhos.complemento.join(';').slice(0, 400)}`);
+  const fiis = montarFiis({ ativos: mercado.ativos, dataBase: mercado.dataBase, fundos });
+  const comDado = fiis.itens.filter((f) => f.dividendos12m !== null).length;
+  console.log(`CVM: ${fiis.itens.length} FIIs com liquidez ligados ao informe (${comDado} com 12 meses), até ${fiis.mesReferencia}.`);
+  return fiis;
+}
+
 /** Ponto de entrada do robô. */
 async function principal() {
   const saida = process.argv[2];
@@ -138,9 +173,18 @@ async function principal() {
     mercado = anterior?.mercado ?? null;
   }
 
+  let fiis = null;
+  try {
+    fiis = await parteDosFiis(mercado);
+    novas += 1;
+  } catch (erro) {
+    console.warn(`Aviso: FIIs (CVM) falhou (${erro.message}). ${anterior?.fiis ? 'Mantendo a parte do radar anterior.' : ''}`);
+    fiis = anterior?.fiis ?? null;
+  }
+
   if (novas === 0) throw new Error('Todas as fontes falharam: nada foi publicado (o app continua com o último radar).');
 
-  const radar = montarRadar({ tesouro, mercado });
+  const radar = montarRadar({ tesouro, mercado, fiis });
   await mkdir(dirname(saida), { recursive: true });
   await writeFile(saida, `${JSON.stringify(radar)}\n`, 'utf8');
   console.log(`Radar gravado em ${saida}.`);

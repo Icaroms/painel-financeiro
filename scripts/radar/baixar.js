@@ -101,26 +101,39 @@ async function curl(endereco, destino) {
 }
 
 /**
- * Baixa um ZIP e devolve o texto do primeiro arquivo de dentro, lido em Latin-1.
+ * Baixa um ZIP e devolve o texto de arquivos de dentro dele, lidos em Latin-1.
+ *
  * @param {string} endereco
- * @returns {Promise<string>}
+ * @param {string[]} [padroes] Nomes (com * e ?) dos arquivos de dentro, um texto por padrão.
+ *   Sem padrões: o conteúdo de todos os arquivos, como um texto só.
+ * @returns {Promise<string[]>}
  */
-export async function baixarZipComoTexto(endereco) {
+export async function baixarZip(endereco, padroes = []) {
   const pasta = await mkdtemp(join(tmpdir(), 'radar-'));
   try {
     const zip = join(pasta, 'arquivo.zip');
     await curl(endereco, zip);
-    let conteudo;
-    try {
-      ({ stdout: conteudo } = await executar('unzip', ['-p', zip], { encoding: 'buffer', maxBuffer: 512 * 1024 * 1024 }));
-    } catch {
-      // Alguns servidores devolvem uma página (e não 404) quando o arquivo não existe.
-      throw new SemArquivo(`${endereco} (não é um ZIP)`);
-    }
-    return new TextDecoder('latin1').decode(conteudo);
+    const extrair = async (args) => {
+      try {
+        const { stdout } = await executar('unzip', ['-p', zip, ...args], { encoding: 'buffer', maxBuffer: 512 * 1024 * 1024 });
+        return new TextDecoder('latin1').decode(stdout);
+      } catch {
+        // Alguns servidores devolvem uma página (e não 404) quando o arquivo não existe.
+        throw new SemArquivo(`${endereco} (não é um ZIP, ou não tem ${args.join(' ') || 'arquivos'})`);
+      }
+    };
+    if (padroes.length === 0) return [await extrair([])];
+    const textos = [];
+    for (const padrao of padroes) textos.push(await extrair([padrao]));
+    return textos;
   } finally {
     await rm(pasta, { recursive: true, force: true });
   }
+}
+
+/** Baixa um ZIP e devolve o texto do(s) arquivo(s) de dentro, lido em Latin-1. */
+export async function baixarZipComoTexto(endereco) {
+  return (await baixarZip(endereco))[0];
 }
 
 /**
