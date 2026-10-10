@@ -8,12 +8,14 @@
  *   - Ações e FIIs: Remover, Nova operação (compra ou venda), Cotação e
  *     a lista das operações (5 por página), com preço médio e lucro das vendas.
  * - Cadastro: os campos mudam com o tipo (valor aplicado ou primeira compra).
+ * - Reserva de emergência (4.2c): renda fixa e fundos podem ser marcados como
+ *   reserva; a soma aparece no resumo e é a "reserva atual" do destino da sobra.
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As regras ficam em
  * src/carteira.js e src/acoes.js (testados no Node). Todo texto entra com textContent.
  */
 
-import { hojeLocal } from '../datas.js';
+import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
 import { ErroValidacao } from '../erros.js';
 import { textoDoValor, lerValorPositivo } from '../configuracao.js';
@@ -29,7 +31,9 @@ import {
   rendimento,
   textoDoPercentual,
   resumoDaCarteira,
+  podeSerReserva,
 } from '../carteira.js';
+import { situacaoDaReserva } from '../destino.js';
 import {
   ehPorOperacao,
   unidade,
@@ -126,6 +130,7 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
     total: elemento('investir-total'),
     rendimento: elemento('investir-rendimento'),
     grupos: elemento('investir-grupos'),
+    reserva: elemento('investir-reserva'),
     lista: elemento('lista-investimentos'),
     paginacao: elemento('paginacao-investimentos'),
     area: elemento('area-investimento'),
@@ -203,12 +208,22 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
     const atual = campoDinheiro('Valor atual', 'valorAtual', item ? textoDoValor(item.valorAtualCentavos) : '', { placeholder: 'opcional' });
     const dataAtual = criar('input', { name: 'valorAtualEm', type: 'date', max: hoje });
     dataAtual.value = item?.valorAtualEm ?? hoje;
+
+    // Reserva de emergência (4.2c): só para renda fixa e fundos.
+    const caixaReserva = criar('input', { type: 'checkbox', name: 'reserva' });
+    caixaReserva.checked = item?.reserva === true;
+    const opcaoReserva = criar('label', { classe: 'opcao-check inteira' });
+    opcaoReserva.append(caixaReserva, criar('span', {
+      texto: 'É reserva de emergência (entra na reserva do destino da sobra, na aba Mês)',
+    }));
+
     const camposDeValor = [
       campo('Nome', nome, 'inteira'),
       campo('Data da aplicação', dataAplicacao),
       aplicado.rotulo,
       atual.rotulo,
       campo('Data do valor atual', dataAtual),
+      opcaoReserva,
       criar('p', {
         classe: 'dica secundario',
         texto: 'O valor atual é o que aparece hoje no app ou no extrato do banco. Deixe vazio se ainda é igual ao aplicado.',
@@ -240,6 +255,8 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
       const porOperacao = ehPorOperacao(tipo.value);
       for (const c of camposDeValor) c.hidden = porOperacao;
       for (const c of camposDeCompra) c.hidden = !porOperacao;
+      // A reserva precisa de dinheiro que dá para sacar rápido: só renda fixa e fundos.
+      opcaoReserva.hidden = !podeSerReserva(tipo.value);
       rotuloQuantidade.firstChild.textContent = tipo.value === 'fii' ? 'Quantidade de cotas' : 'Quantidade de ações';
     }
     tipo.addEventListener('change', mostrarCamposDoTipo);
@@ -271,6 +288,7 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
           valorAplicadoCentavos: lerValorPositivo(aplicado.input.value, 'valorAplicadoCentavos'),
           valorAtualCentavos: semValorAtual ? null : lerValorPositivo(atual.input.value, 'valorAtualCentavos'),
           valorAtualEm: semValorAtual ? null : dataAtual.value,
+          reserva: podeSerReserva(tipo.value) && caixaReserva.checked,
         };
         return item
           ? [editarInvestimento(estado, item.id, dados, opcoes), `"${dados.nome.trim()}" salvo.`]
@@ -421,10 +439,9 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
   function itemDeValor({ investimento: item }) {
     const li = criar('li', { classe: 'fixo investimento' });
     const topo = criar('div', { classe: 'fixo-topo' });
-    topo.append(
-      criar('span', { classe: 'fixo-nome', texto: item.nome }),
-      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(item.valorAtualCentavos) }),
-    );
+    const nome = criar('span', { classe: 'fixo-nome', texto: item.nome });
+    if (item.reserva === true) nome.append(criar('span', { classe: 'etiqueta', texto: 'reserva' }));
+    topo.append(nome, criar('span', { classe: 'fixo-valor', texto: formatarCentavos(item.valorAtualCentavos) }));
 
     const detalhe = criar('p', { classe: 'fixo-detalhe secundario' });
     detalhe.append(
@@ -541,7 +558,25 @@ export function iniciarInvestir({ obterDados, aplicarMudanca }) {
     );
   }
 
+  /** Linha da reserva de emergência: soma dos marcados e quanto da meta isso é. */
+  function renderizarReserva() {
+    const reserva = situacaoDaReserva(obterDados(), mesDaData(hojeLocal()));
+    if (reserva.investimentosNaReserva === 0) {
+      el.reserva.textContent = 'Reserva de emergência: nenhum investimento marcado. Marque em "Editar" as aplicações de renda fixa ou fundos que são a sua reserva.';
+      return;
+    }
+    const meta = reserva.metaCentavos === 0
+      ? ''
+      : ` · ${Math.floor(reserva.fracao * 100)}% da meta de ${formatarCentavos(reserva.metaCentavos)}`;
+    el.reserva.replaceChildren(
+      'Reserva de emergência: ',
+      criar('strong', { texto: formatarCentavos(reserva.reservaAtualCentavos) }),
+      `${meta}.`,
+    );
+  }
+
   function renderizarResumo(r) {
+    renderizarReserva();
     el.total.textContent = formatarCentavos(r.atualCentavos);
     if (r.itens.length === 0) {
       el.rendimento.textContent = 'Nenhum investimento cadastrado ainda.';

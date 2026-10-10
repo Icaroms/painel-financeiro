@@ -300,6 +300,7 @@
       <p class="investir-total" id="investir-total"></p>
       <p class="resumo-dinheiro" id="investir-rendimento"></p>
       <dl class="contas" id="investir-grupos"></dl>
+      <p class="resumo-dinheiro" id="investir-reserva"></p>
       <p class="secundario explicacao">Os valores atuais são os que você digita, conferindo no app ou no extrato do banco. O app só mostra números: não indica o que comprar ou vender.</p>
     </section>
 
@@ -485,13 +486,9 @@
           <span class="secundario">Meta da reserva (meses de custo)</span>
           <input id="destino-meta" inputmode="numeric" maxlength="2">
         </label>
-        <label class="campo">
-          <span class="secundario">Reserva atual (o que você já tem guardado)</span>
-          <span class="campo-dinheiro">
-            <span aria-hidden="true">R$</span>
-            <input id="destino-reserva-atual" inputmode="decimal" placeholder="0,00">
-          </span>
-        </label>
+        <!-- Reserva atual (parte 4.2c): soma dos investimentos marcados como reserva na aba Investir -->
+        <p class="resumo-dinheiro" id="destino-reserva-atual"></p>
+        <p class="secundario aviso-saldo" id="destino-reserva-aviso"></p>
         <!-- Custo do mês = contas fixas + orçamentos: a base da meta da reserva -->
         <p class="resumo-dinheiro" id="destino-custo"></p>
         <span class="erro" id="destino-erro"></span>
