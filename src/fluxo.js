@@ -8,6 +8,11 @@
  *   sobram da divisão vão para a 1ª parcela (R$ 1.000,00 em 3x =
  *   333,34 + 333,33 + 333,33).
  *
+ * Compra convertida de uma conta fixa parcelada (parte 2.3, src/conversao.js):
+ * o lançamento guarda em "conversao" o mês da fatura da 1ª parcela e
+ * quantas parcelas já tinham sido pagas como conta fixa. Só as parcelas
+ * que faltam viram saídas, com o número original (Remador: 3/12 a 12/12).
+ *
  * Duas contas diferentes usam essas saídas:
  * - o SALDO do mês (quanto sobra) conta as saídas do mês;
  * - o ORÇAMENTO da categoria continua contando o gasto inteiro no mês da
@@ -43,7 +48,9 @@ export function saidasDoLancamento(lancamento, cartoes = []) {
   const total = lancamento.parcelas ?? 1;
   const parcela = Math.floor(lancamento.valorCentavos / total);
   const resto = lancamento.valorCentavos - parcela * total;
-  const primeira = faturaDaCompra(cartao, lancamento.data).mesFatura;
+  // Compra convertida: a 1ª fatura e as parcelas já pagas vêm gravadas.
+  const primeira = lancamento.conversao?.primeiraFatura ?? faturaDaCompra(cartao, lancamento.data).mesFatura;
+  const jaPagas = lancamento.conversao?.parcelasPagas ?? 0;
 
   return Array.from({ length: total }, (_, i) => {
     const mes = somarMeses(primeira, i);
@@ -51,7 +58,7 @@ export function saidasDoLancamento(lancamento, cartoes = []) {
       ...base, mes, vencimento: vencimentoNoMes(cartao, mes),
       valorCentavos: parcela + (i === 0 ? resto : 0), numero: i + 1, total, cartao: true,
     };
-  });
+  }).filter((saida) => saida.numero > jaPagas);
 }
 
 /**

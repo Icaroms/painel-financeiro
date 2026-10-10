@@ -10,7 +10,9 @@ import { ErroValidacao } from './erros.js';
 import { mesDaData, diaDaData, diasNoMes, ehDataValida, tituloDoMes } from './datas.js';
 import { reaisParaCentavos, formatarCentavos } from './dinheiro.js';
 import { criarLancamento } from './modelo.js';
-import { avaliarGasto, calcularMargemCategoria, calcularSaldoProjetado } from './veredito.js';
+import {
+  avaliarGasto, calcularMargemCategoria, calcularSaldoProjetado, lancamentosValidosDoMes,
+} from './veredito.js';
 import { geometriaMostrador } from './mostrador.js';
 import { saidasNoMes } from './fluxo.js';
 
@@ -120,9 +122,8 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     margem = resultado.numeros.margem;
   } else {
     // Sem valor: mostra a situação atual, sem julgar nada.
-    const doMes = lancamentos.filter(
-      (l) => l.excluidoEm === null && mesDaData(l.data) === registroMes.mes,
-    );
+    // Consumo do mês (sem as parcelas convertidas de contas fixas, que só pesam no saldo).
+    const doMes = lancamentosValidosDoMes(lancamentos, registroMes.mes);
     cor = 'neutro';
     frase = problemaData ?? 'Digite um valor para ver o veredito.';
     // Saldo: o que sai da conta no mês (à vista e faturas). Orçamento: o que foi consumido.

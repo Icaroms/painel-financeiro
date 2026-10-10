@@ -27,7 +27,7 @@
 import { ErroValidacao } from './erros.js';
 import { mesDaData, diaDaData, diasNoMes, tituloDoMes } from './datas.js';
 import { formatarCentavos } from './dinheiro.js';
-import { fixoAtivoNoMes, valorDoFixoNoMes } from './modelo.js';
+import { fixoAtivoNoMes, valorDoFixoNoMes, contaComoConsumo } from './modelo.js';
 import { saidasDoLancamento, saidasNoMes, projetarMeses, mesesAteAUltimaSaida } from './fluxo.js';
 
 /**
@@ -139,14 +139,16 @@ export function calcularSaldoProjetado(registroMes, fixos, lancamentosDoMes, nov
 }
 
 /**
- * Lançamentos que contam num mês: não excluídos e com data naquele mês.
+ * Lançamentos que contam como consumo num mês: não excluídos, com data
+ * naquele mês e que não vieram da conversão de uma conta fixa
+ * (veja contaComoConsumo, em src/modelo.js).
  *
  * @param {object[]} lancamentos
  * @param {string}   mes "AAAA-MM".
  * @returns {object[]}
  */
 export function lancamentosValidosDoMes(lancamentos, mes) {
-  return lancamentos.filter((l) => l.excluidoEm === null && mesDaData(l.data) === mes);
+  return lancamentos.filter((l) => contaComoConsumo(l) && mesDaData(l.data) === mes);
 }
 
 /* ------------------------------------------------------------------ */
