@@ -111,11 +111,10 @@ describe('index.html', () => {
     }
   });
 
-  it('responde a versão quando a página pergunta (linha "Versão do app" em Configurar)', () => {
-    const texto = ler('sw.js');
-    assert.match(texto, /addEventListener\('message'/);
-    assert.match(texto, /evento\.data === 'versao'/);
-    assert.match(texto, /postMessage\(\{ tipo: 'versao', versao: VERSAO_CACHE \}\)/);
+  it('tem a faixa de aviso da cópia guardada, fora das vistas', () => {
+    assert.match(html, /<body>\s*<!--[\s\S]*?-->\s*<div class="aviso-copia" id="aviso-copia" role="status" hidden>/);
+    assert.match(html, /id="aviso-copia-texto"/);
+    assert.match(html, /id="aviso-copia-fechar"/);
   });
 });
 
@@ -155,15 +154,28 @@ function serviceWorkerDeTeste({ rede, guardados = {} }) {
   };
   runInNewContext(ler('sw.js'), contexto);
 
-  async function pedir(caminho, { modo = 'cors' } = {}) {
+  /**
+   * Um pedido passando pelo service worker.
+   * pagina: id da aba. Na navegação (modo 'navigate') é a aba que VAI abrir.
+   */
+  async function pedir(caminho, { modo = 'cors', pagina = 'aba-1' } = {}) {
     let resposta;
     ouvintes.fetch({
       request: { method: 'GET', url: `${ORIGEM}${caminho}`, mode: modo },
+      clientId: modo === 'navigate' ? '' : pagina,
+      resultingClientId: modo === 'navigate' ? pagina : '',
       respondWith: (promessa) => { resposta = promessa; },
     });
     return resposta;
   }
-  return { pedir, cache, chave };
+
+  /** A aba pergunta a versão; devolve o que o service worker respondeu. */
+  function perguntarVersao(pagina = 'aba-1') {
+    let recebido;
+    ouvintes.message({ data: 'versao', source: { id: pagina, postMessage: (dados) => { recebido = dados; } } });
+    return recebido;
+  }
+  return { pedir, perguntarVersao, cache, chave };
 }
 
 describe('sw.js: de onde vem cada resposta', () => {
@@ -209,5 +221,52 @@ describe('sw.js: de onde vem cada resposta', () => {
     const resposta = await sw.pedir('/nao-guardado.js');
     assert.equal(resposta.status, 503);
     assert.equal(await resposta.text(), 'Sem internet e sem cópia deste arquivo.');
+  });
+});
+
+describe('sw.js: versão e aviso da cópia guardada', () => {
+  const versaoDoSw = /const VERSAO_CACHE = '([^']+)';/.exec(ler('sw.js'))[1];
+  const semInternet = async () => { throw new TypeError('Failed to fetch'); };
+  const guardados = { './index.html': 'app', './src/ui/app.js': 'js' };
+
+  it('abriu pela internet: responde a versão e copia null', async () => {
+    const sw = serviceWorkerDeTeste({ rede: async () => new Response('app', { status: 200 }) });
+    await sw.pedir('/', { modo: 'navigate' });
+    // { ... }: o objeto vem do "mundo" do service worker (outro protótipo); a cópia compara só os valores
+    assert.deepEqual({ ...sw.perguntarVersao() }, { tipo: 'versao', versao: versaoDoSw, copia: null });
+  });
+
+  it('servidor com erro: a aba que abriu com a cópia recebe "servidor-com-erro"', async () => {
+    const sw = serviceWorkerDeTeste({ rede: async () => new Response('Site not available', { status: 503 }), guardados });
+    await sw.pedir('/', { modo: 'navigate' });
+    assert.equal(sw.perguntarVersao().copia, 'servidor-com-erro');
+  });
+
+  it('sem internet: "sem-internet" (também quando só um arquivo veio da cópia)', async () => {
+    const sw = serviceWorkerDeTeste({ rede: semInternet, guardados });
+    await sw.pedir('/src/ui/app.js');
+    assert.equal(sw.perguntarVersao().copia, 'sem-internet');
+  });
+
+  it('cada aba recebe só o seu aviso, e uma vez só', async () => {
+    const sw = serviceWorkerDeTeste({ rede: semInternet, guardados });
+    await sw.pedir('/', { modo: 'navigate', pagina: 'aba-1' });
+    assert.equal(sw.perguntarVersao('aba-2').copia, null); // outra aba: abriu sem a cópia
+    assert.equal(sw.perguntarVersao('aba-1').copia, 'sem-internet');
+    assert.equal(sw.perguntarVersao('aba-1').copia, null); // já respondido
+  });
+
+  it('sem cópia para devolver: nada é anotado', async () => {
+    const sw = serviceWorkerDeTeste({ rede: semInternet });
+    await sw.pedir('/nao-guardado.js');
+    assert.equal(sw.perguntarVersao().copia, null);
+  });
+
+  it('guarda no máximo 20 abas (as mais antigas saem primeiro)', async () => {
+    const sw = serviceWorkerDeTeste({ rede: semInternet, guardados });
+    for (let i = 1; i <= 21; i += 1) await sw.pedir('/', { modo: 'navigate', pagina: `aba-${i}` });
+    assert.equal(sw.perguntarVersao('aba-1').copia, null);
+    assert.equal(sw.perguntarVersao('aba-2').copia, 'sem-internet');
+    assert.equal(sw.perguntarVersao('aba-21').copia, 'sem-internet');
   });
 });
