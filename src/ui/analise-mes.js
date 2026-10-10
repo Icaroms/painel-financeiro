@@ -7,11 +7,17 @@
  * HTML vindo da IA). O botão "Copiar" copia a resposta em texto limpo.
  *
  * A seção só aparece com a IA disponível (chave salva e ligada).
+ *
+ * A última análise do mês fica guardada no aparelho (fora do backup) e
+ * volta a aparecer ao abrir a aba, com a hora em que foi feita. Assim,
+ * abrir a aba não gasta a cota do Gemini; "Analisar de novo" pede outra.
  */
 
-import { hojeLocal } from '../datas.js';
+import { hojeLocal, mesDaData } from '../datas.js';
 import { chamarGemini, iaDisponivel } from '../ia.js';
-import { mensagemDoMes, blocosDaResposta, textoParaCopiar } from '../analise.js';
+import {
+  mensagemDoMes, blocosDaResposta, textoParaCopiar, criarAnaliseGuardada, analiseDoMes, quandoFoiFeita,
+} from '../analise.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -55,9 +61,13 @@ function elementosDosBlocos(blocos) {
  * @param {object} opcoes
  * @param {() => object} opcoes.obterDados
  * @param {() => object} opcoes.obterConfigIA
+ * @param {() => object|null} [opcoes.obterUltimaAnalise] A análise guardada no aparelho.
+ * @param {(analise: object) => Promise<void>} [opcoes.guardarAnalise] Guarda a análise nova.
  * @returns {{ renderizar: () => void }}
  */
-export function iniciarAnaliseMes({ obterDados, obterConfigIA }) {
+export function iniciarAnaliseMes({
+  obterDados, obterConfigIA, obterUltimaAnalise = () => null, guardarAnalise = async () => {},
+}) {
   const el = {
     secao: elemento('secao-analise'),
     pedir: elemento('analise-pedir'),
@@ -77,29 +87,41 @@ export function iniciarAnaliseMes({ obterDados, obterConfigIA }) {
     textoAtual = '';
   }
 
+  /** Mostra uma análise (nova ou guardada), com a hora em que foi feita. */
+  function mostrarAnalise(analise) {
+    const blocos = blocosDaResposta(analise.texto);
+    textoAtual = textoParaCopiar(blocos);
+    el.resposta.hidden = false;
+    el.resposta.dataset.estado = 'ok';
+    el.resposta.replaceChildren(
+      ...elementosDosBlocos(blocos),
+      criar('p', {
+        classe: 'ia-selo',
+        texto: `Texto gerado por IA ${quandoFoiFeita(analise.geradaEm)}, com os números daquele momento. Confira no app.`,
+      }),
+    );
+    el.copiar.hidden = false;
+    el.copiar.textContent = 'Copiar';
+    el.pedir.textContent = 'Analisar de novo';
+  }
+
   el.pedir.addEventListener('click', async () => {
     el.pedir.disabled = true;
     mostrarAviso('Analisando o mês…', 'carregando');
 
-    const resultado = await chamarGemini(obterConfigIA(), mensagemDoMes(obterDados(), hojeLocal()));
+    const hoje = hojeLocal();
+    const resultado = await chamarGemini(obterConfigIA(), mensagemDoMes(obterDados(), hoje));
 
     el.pedir.disabled = false;
-    el.pedir.textContent = 'Analisar de novo';
     if (!resultado.ok) {
+      el.pedir.textContent = 'Analisar de novo';
       mostrarAviso(resultado.erro, 'erro');
       return;
     }
 
-    const blocos = blocosDaResposta(resultado.texto);
-    textoAtual = textoParaCopiar(blocos);
-    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    el.resposta.dataset.estado = 'ok';
-    el.resposta.replaceChildren(
-      ...elementosDosBlocos(blocos),
-      criar('p', { classe: 'ia-selo', texto: `Texto gerado por IA às ${hora}, com os números daquele momento. Confira no app.` }),
-    );
-    el.copiar.hidden = false;
-    el.copiar.textContent = 'Copiar';
+    const analise = criarAnaliseGuardada(mesDaData(hoje), resultado.texto);
+    mostrarAnalise(analise);
+    await guardarAnalise(analise);
   });
 
   el.copiar.addEventListener('click', async () => {
@@ -112,15 +134,24 @@ export function iniciarAnaliseMes({ obterDados, obterConfigIA }) {
     }
   });
 
-  /** Mostra ou esconde a seção conforme a IA. Ao abrir a aba, começa sem resposta antiga. */
+  /**
+   * Mostra ou esconde a seção conforme a IA. Se houver uma análise guardada
+   * DESTE mês, ela volta a aparecer; a de um mês anterior não vale mais.
+   */
   function renderizar() {
     el.secao.hidden = !iaDisponivel(obterConfigIA());
-    el.resposta.hidden = true;
-    el.resposta.replaceChildren();
-    el.copiar.hidden = true;
     el.pedir.disabled = false;
-    el.pedir.textContent = 'Analisar o mês com IA';
+    el.copiar.hidden = true;
     textoAtual = '';
+
+    const guardada = analiseDoMes(obterUltimaAnalise(), mesDaData(hojeLocal()));
+    if (guardada) {
+      mostrarAnalise(guardada);
+    } else {
+      el.resposta.hidden = true;
+      el.resposta.replaceChildren();
+      el.pedir.textContent = 'Analisar o mês com IA';
+    }
   }
 
   return { renderizar };
