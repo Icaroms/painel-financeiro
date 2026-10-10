@@ -91,8 +91,8 @@ describe('montarPedido', () => {
     assert.equal(opcoes.headers['Content-Type'], 'application/json');
   });
 
-  it('envia só a origem do app (para a chave poder ser restrita ao endereço do app)', () => {
-    assert.equal(montarPedido(CONFIG, MENSAGEM).opcoes.referrerPolicy, 'strict-origin');
+  it('não informa de onde o pedido vem (a mesma regra "no-referrer" do app inteiro)', () => {
+    assert.equal(montarPedido(CONFIG, MENSAGEM).opcoes.referrerPolicy, 'no-referrer');
   });
 
   it('as instruções vão como systemInstruction e o conteúdo como mensagem do usuário', () => {
