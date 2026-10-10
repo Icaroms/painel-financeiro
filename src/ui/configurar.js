@@ -19,7 +19,9 @@ import { buscarMes } from '../meses.js';
 import { tituloDoMes } from '../painel.js';
 import { ehPrimeiroMes } from '../inicio.js';
 import { cartaoDaForma, salvarCartao, removerCartao, faturaDaCompra } from '../cartoes.js';
-import { contasParaConverter, converterFixo, comprasConvertidas, desfazerConversao } from '../conversao.js';
+import {
+  contasParaConverter, converterFixo, comprasConvertidas, desfazerConversao, avisoAoDesfazer,
+} from '../conversao.js';
 import {
   textoDoValor,
   lerValorComSinal,
@@ -917,8 +919,11 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
       classe: 'botao-pequeno', type: 'button', texto: 'Desfazer', 'aria-label': `Desfazer a conversão de ${lancamento.descricao}`,
     });
     desfazer.addEventListener('click', async () => {
+      // Se alguma fatura com parcela desta compra já foi paga, a confirmação avisa.
+      const aviso = avisoAoDesfazer(obterDados(), lancamento.id);
       const pergunta = `Desfazer a conversão de "${lancamento.descricao}"?\n\n` +
-        'A compra sai das faturas e a conta fixa volta como era.';
+        'A compra sai das faturas e a conta fixa volta como era.' +
+        (aviso ? `\n\n${aviso}` : '');
       if (!window.confirm(pergunta)) return;
       await aplicarMudanca(desfazerConversao(obterDados(), lancamento.id), `"${lancamento.descricao}" voltou a ser conta fixa.`);
       renderizar();
