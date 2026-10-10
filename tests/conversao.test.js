@@ -294,8 +294,8 @@ describe('aviso ao desfazer quando a fatura já foi paga', () => {
     assert.deepEqual(faturasPagasComAParcela(estado, id), [{ mes: '2026-10', numero: 3, total: 12 }]);
     assert.equal(
       avisoAoDesfazer(estado, id),
-      'Atenção: a fatura de outubro de 2026 do Cartão Careca já está Paga. ' +
-        'A parcela 3/12 desse mês volta a ser conta fixa Prevista: marque como Paga de novo na aba Mês.',
+      'A fatura de outubro de 2026 do Cartão Careca já está Paga: ' +
+        'a parcela 3/12 desse mês volta a ser conta fixa e já fica marcada como Paga.',
     );
   });
 
@@ -314,13 +314,44 @@ describe('aviso ao desfazer quando a fatura já foi paga', () => {
 
     assert.equal(
       avisoAoDesfazer(estado, convertido.lancamento.id),
-      'Atenção: as faturas de outubro de 2026 e novembro de 2026 do Cartão Careca já estão Pagas. ' +
-        'As parcelas 3/12 e 4/12 desses meses voltam a ser conta fixa Prevista: marque como Pagas de novo na aba Mês.',
+      'As faturas de outubro de 2026 e novembro de 2026 do Cartão Careca já estão Pagas: ' +
+        'as parcelas 3/12 e 4/12 desses meses voltam a ser conta fixa e já ficam marcadas como Pagas.',
     );
   });
 
   it('lançamento que não é conversão: lista vazia', () => {
     assert.deepEqual(faturasPagasComAParcela(estadoDeTeste(), 'id-que-nao-existe'), []);
+  });
+});
+
+describe('desfazer com fatura já paga: a parcela volta como Paga', () => {
+  it('marca a conta fixa como Paga só nos meses com a fatura paga', () => {
+    const inicial = estadoDeTeste();
+    inicial.meses.push(criarMes({ mes: '2026-11', saldoInicialCentavos: 0, rendaPrevistaCentavos: 300000 }));
+    const convertido = converter(inicial, 'Remador');
+    const pago = definirStatusDaFatura(convertido.estado, MES, 'Cartão Careca', 'pago', { agora: AGORA });
+
+    const desfeito = desfazerConversao(pago, convertido.lancamento.id, { agora: AGORA });
+    const id = idDe(desfeito, 'Remador');
+    assert.equal(buscarMes(desfeito, MES).statusFixos[id], 'pago'); // outubro: fatura paga
+    assert.equal(buscarMes(desfeito, '2026-11').statusFixos[id], undefined); // novembro: fatura prevista
+  });
+
+  it('o "já pago" do mês continua o mesmo depois de desfazer', () => {
+    const convertido = converter(estadoDeTeste(), 'Remador');
+    const pago = definirStatusDaFatura(convertido.estado, MES, 'Cartão Careca', 'pago', { agora: AGORA });
+    const antes = resumoDoMes(pago, MES, HOJE).jaPago.totalCentavos;
+
+    const desfeito = desfazerConversao(pago, convertido.lancamento.id, { agora: AGORA });
+    const depois = resumoDoMes(desfeito, MES, HOJE);
+    assert.equal(depois.jaPago.totalCentavos, antes); // R$ 117,53: antes na fatura, agora na conta fixa
+    assert.equal(depois.jaPago.fixosCentavos, 11753);
+  });
+
+  it('sem fatura paga: nenhum mês muda', () => {
+    const { estado, lancamento } = converter(estadoDeTeste(), 'Remador');
+    const desfeito = desfazerConversao(estado, lancamento.id, { agora: AGORA });
+    assert.deepEqual(desfeito.meses, estado.meses);
   });
 });
 

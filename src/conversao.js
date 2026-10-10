@@ -218,7 +218,8 @@ export function comprasConvertidas(estado) {
 /**
  * Meses em que a fatura do cartão já está marcada como Paga e tem uma
  * parcela desta compra convertida. Ao desfazer, a parcela desses meses
- * volta a ser conta fixa Prevista.
+ * volta a ser conta fixa e já fica marcada como Paga (ela foi paga
+ * junto com a fatura).
  *
  * Só olha os meses que existem nos dados (a situação da fatura fica
  * guardada no mês).
@@ -240,9 +241,8 @@ export function faturasPagasComAParcela(estado, lancamentoId) {
  * Texto de aviso para a confirmação do Desfazer, ou null se nenhuma
  * fatura paga tem parcela desta compra.
  *
- * Ex.: "Atenção: a fatura de outubro de 2026 do Cartão Careca já está Paga.
- *      A parcela 3/12 desse mês volta a ser conta fixa Prevista: marque
- *      como Paga de novo na aba Mês."
+ * Ex.: "A fatura de outubro de 2026 do Cartão Careca já está Paga: a
+ *      parcela 3/12 desse mês volta a ser conta fixa e já fica marcada como Paga."
  *
  * @param {object} estado
  * @param {string} lancamentoId
@@ -258,22 +258,22 @@ export function avisoAoDesfazer(estado, lancamentoId) {
 
   if (pagas.length === 1) {
     const [p] = pagas;
-    return `Atenção: a fatura de ${mesExtenso(p.mes)} do ${formaPagamento} já está Paga. ` +
-      `A parcela ${parcela(p)} desse mês volta a ser conta fixa Prevista: marque como Paga de novo na aba Mês.`;
+    return `A fatura de ${mesExtenso(p.mes)} do ${formaPagamento} já está Paga: ` +
+      `a parcela ${parcela(p)} desse mês volta a ser conta fixa e já fica marcada como Paga.`;
   }
   const juntar = (lista) => `${lista.slice(0, -1).join(', ')} e ${lista[lista.length - 1]}`;
-  return `Atenção: as faturas de ${juntar(pagas.map((p) => mesExtenso(p.mes)))} do ${formaPagamento} já estão Pagas. ` +
-    `As parcelas ${juntar(pagas.map(parcela))} desses meses voltam a ser conta fixa Prevista: ` +
-    'marque como Pagas de novo na aba Mês.';
+  return `As faturas de ${juntar(pagas.map((p) => mesExtenso(p.mes)))} do ${formaPagamento} já estão Pagas: ` +
+    `as parcelas ${juntar(pagas.map(parcela))} desses meses voltam a ser conta fixa e já ficam marcadas como Pagas.`;
 }
 
 /**
  * Desfaz uma conversão: a compra é excluída e a conta fixa volta como
  * era (mesmo mês final; se tinha sido excluída, volta a existir).
  *
- * Atenção: uma fatura já marcada como Paga num mês continua paga; a
- * parcela daquele mês volta a ser conta fixa Prevista e precisa ser
- * marcada como Paga de novo. A tela avisa antes (veja avisoAoDesfazer).
+ * Fatura já marcada como Paga num mês: a parcela daquele mês foi paga
+ * junto com ela. Por isso, ao voltar a ser conta fixa, ela já fica
+ * marcada como Paga naquele mês, e o "já pago" continua batendo com o
+ * banco. A tela conta isso antes (veja avisoAoDesfazer).
  *
  * @param {object} estado
  * @param {string} lancamentoId
@@ -291,11 +291,19 @@ export function desfazerConversao(estado, lancamentoId, { agora = new Date() } =
     throw new ErroValidacao('fixo', 'A conta fixa original não foi encontrada.');
   }
 
+  // Meses cuja fatura já foi paga com a parcela dentro (calculado ANTES de desfazer).
+  const mesesPagos = new Set(faturasPagasComAParcela(estado, lancamentoId).map((p) => p.mes));
+
   const momento = agora.toISOString();
   const fixoDeVolta = { ...fixo, mesFinal: mesFinalAnterior, excluidoEm: null, atualizadoEm: momento };
   return {
     ...estado,
     fixos: estado.fixos.map((f) => (f.id === fixoId ? fixoDeVolta : f)),
     lancamentos: estado.lancamentos.map((l) => (l.id === lancamentoId ? excluirRegistro(l, { agora }) : l)),
+    meses: estado.meses.map((m) => (!mesesPagos.has(m.mes) ? m : {
+      ...m,
+      statusFixos: { ...(m.statusFixos ?? {}), [fixoId]: 'pago' },
+      atualizadoEm: momento,
+    })),
   };
 }
