@@ -184,6 +184,17 @@
       </p>
     </section>
 
+    <!-- Fase 03, parte 3.3: análise do mês com IA (só com a IA ligada em Configurar) -->
+    <section class="cartao" aria-labelledby="titulo-mes-analise" id="secao-analise" hidden>
+      <h2 id="titulo-mes-analise">Análise com IA</h2>
+      <p class="secundario explicacao">A IA lê os números deste mês (os mesmos desta tela) e escreve um resumo, os pontos de atenção e até 3 sugestões.</p>
+      <div class="acoes-ia">
+        <button type="button" class="botao-pequeno" id="analise-copiar" hidden>Copiar</button>
+        <button type="button" class="botao-pequeno botao-ia" id="analise-pedir">Analisar o mês com IA</button>
+      </div>
+      <div class="ia-resposta analise-resposta" id="analise-resposta" aria-live="polite" hidden></div>
+    </section>
+
     <section class="cartao" aria-labelledby="titulo-mes-categorias">
       <h2 id="titulo-mes-categorias">Categorias</h2>
       <p class="secundario explicacao">A barra mostra o quanto do orçamento já foi usado; o triângulo marca o dia de hoje.</p>
