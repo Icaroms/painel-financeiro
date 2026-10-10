@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { calcularPainel, tituloDoMes, problemaNaDataDoGasto } from '../src/painel.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { dadosDoMes } from '../src/meses.js';
+import { formatarCentavos } from '../src/dinheiro.js';
 
 const HOJE = '2026-11-10';
 
@@ -186,6 +187,33 @@ describe('compra no cartão no painel', () => {
     assert.match(p.linhaSaldo, /^Com esta compra, dezembro de 2026 deve fechar em .+ \(estimativa\)$/);
   });
 
+  // Limite (parte 2.4): Crédito tem R$ 2.000 e o Mercado de R$ 150 está na fatura de novembro, ainda prevista.
+  it('sem valor: mostra o limite disponível', () => {
+    const p = noCartao('', 1);
+    assert.equal(p.limiteTexto, `Limite disponível: ${formatarCentavos(185000)} de ${formatarCentavos(200000)}`);
+    assert.equal(p.limiteEstourado, false);
+  });
+
+  it('com valor: mostra o limite que sobra depois da compra (o valor inteiro, mesmo parcelado)', () => {
+    const p = noCartao('300', 3);
+    assert.equal(p.limiteTexto, `Limite depois desta compra: ${formatarCentavos(155000)} de ${formatarCentavos(200000)}`);
+    assert.equal(p.limiteEstourado, false);
+  });
+
+  it('compra que passa do limite: veredito vermelho com o limite disponível', () => {
+    const p = noCartao('1900', 10);
+    assert.equal(p.limiteEstourado, true);
+    assert.equal(p.cor, 'vermelho');
+    assert.equal(p.frase, `Passou do limite: o Crédito tem ${formatarCentavos(185000)} disponíveis.`);
+    assert.equal(p.limiteTexto, `Passa do limite em ${formatarCentavos(5000)} (limite de ${formatarCentavos(200000)})`);
+  });
+
+  it('exatamente o limite disponível ainda cabe', () => {
+    const p = noCartao('1850', 10);
+    assert.equal(p.limiteEstourado, false);
+    assert.equal(p.limiteTexto, `Limite depois desta compra: ${formatarCentavos(0)} de ${formatarCentavos(200000)}`);
+  });
+
   it('forma que não é cartão ignora as parcelas', () => {
     const dados = exemploDeNovembro();
     const diversos = dados.categorias.find((c) => c.nome === 'Diversos');
@@ -193,5 +221,7 @@ describe('compra no cartão no painel', () => {
     assert.equal(p.ehCartao, false);
     assert.equal(p.lancamento.parcelas, 1);
     assert.equal(p.cartaoTexto, '');
+    assert.equal(p.limiteTexto, '');
+    assert.equal(p.limiteEstourado, false);
   });
 });

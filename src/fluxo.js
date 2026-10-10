@@ -128,6 +128,48 @@ export function definirStatusDaFatura(estado, mes, formaPagamento, status, { ago
 }
 
 /**
+ * Limite do cartão (Fase 02, parte 2.4): limite total menos o que está
+ * EM ABERTO nas faturas.
+ *
+ * Uma parcela ocupa o limite até a fatura dela ser paga:
+ * - fatura de um mês que já passou: considerada paga (o limite já voltou);
+ * - fatura do mês atual: em aberto até ser marcada como Paga na aba Mês;
+ * - faturas dos meses seguintes: em aberto.
+ *
+ * Ex.: limite R$ 2.000; Remador com 10 parcelas de R$ 117,53 faltando
+ * (R$ 1.175,30) → disponível R$ 824,70. Paga a fatura de outubro,
+ * a parcela 3/12 sai da conta: disponível R$ 942,23.
+ *
+ * As contas fixas mensais no cartão (como a assinatura do Claude) não
+ * entram aqui, porque não estão nas faturas do app (veja o documento da Fase 02).
+ *
+ * @param {object}   visao
+ * @param {object}   visao.cartao
+ * @param {object[]} visao.lancamentos
+ * @param {object}   visao.registroMes O mês atual (para saber se a fatura dele já foi paga).
+ * @returns {{ limiteCentavos: number, emAbertoCentavos: number,
+ *   disponivelCentavos: number, fracaoUsada: number }}
+ *   disponivelCentavos fica negativo quando as compras passam do limite.
+ */
+export function limiteDoCartao({ cartao, lancamentos, registroMes }) {
+  const mesAtual = registroMes.mes;
+  const faturaAtualPaga = registroMes.statusFaturas?.[cartao.formaPagamento] === 'pago';
+
+  const emAbertoCentavos = lancamentos
+    .filter((l) => l.excluidoEm === null && l.formaPagamento === cartao.formaPagamento)
+    .flatMap((l) => saidasDoLancamento(l, [cartao]))
+    .filter((s) => s.mes > mesAtual || (s.mes === mesAtual && !faturaAtualPaga))
+    .reduce((soma, s) => soma + s.valorCentavos, 0);
+
+  return {
+    limiteCentavos: cartao.limiteCentavos,
+    emAbertoCentavos,
+    disponivelCentavos: cartao.limiteCentavos - emAbertoCentavos,
+    fracaoUsada: emAbertoCentavos / cartao.limiteCentavos,
+  };
+}
+
+/**
  * Projeção da sobra do mês atual e dos meses seguintes. É uma ESTIMATIVA:
  *
  * - mês atual: a sobra de verdade (saldo + renda − contas fixas − saídas do mês);

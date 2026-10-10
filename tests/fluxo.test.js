@@ -15,6 +15,7 @@ import {
   definirStatusDaFatura,
   projetarMeses,
   mesesAteAUltimaSaida,
+  limiteDoCartao,
 } from '../src/fluxo.js';
 import { criarCartao } from '../src/cartoes.js';
 import { criarCategoria, criarFixo, criarLancamento, criarMes, excluirRegistro } from '../src/modelo.js';
@@ -153,5 +154,62 @@ describe('avaliarGasto com cartão', () => {
       registroMes: criarMes({ mes: '2026-10', saldoInicialCentavos: 500000 }) });
     assert.equal(r.motivo, 'categoria-estourada');
     assert.equal(r.numeros.margem.gastoDepoisCentavos, 30000);
+  });
+});
+
+describe('limiteDoCartao (parte 2.4)', () => {
+  // CARTAO: limite R$ 3.000, fecha dia 3, vence dia 10.
+  const mes = (m, extra = {}) => ({ ...criarMes({ mes: m, saldoInicialCentavos: 0 }), ...extra });
+  const tresVezes = () => compra(30000, '2026-10-20', { parcelas: 3 }); // faturas de nov, dez e jan
+
+  it('sem compras: o limite inteiro está disponível', () => {
+    const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [], registroMes: mes('2026-10') });
+    assert.deepEqual(r, { limiteCentavos: 300000, emAbertoCentavos: 0, disponivelCentavos: 300000, fracaoUsada: 0 });
+  });
+
+  it('compra parcelada ocupa o valor inteiro até as faturas serem pagas', () => {
+    const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [tresVezes()], registroMes: mes('2026-10') });
+    assert.equal(r.emAbertoCentavos, 30000);
+    assert.equal(r.disponivelCentavos, 270000);
+    assert.equal(r.fracaoUsada, 0.1);
+  });
+
+  it('a fatura do mês atual só libera o limite quando é marcada como Paga', () => {
+    const lancamentos = [tresVezes()];
+    const prevista = limiteDoCartao({ cartao: CARTAO, lancamentos, registroMes: mes('2026-11') });
+    assert.equal(prevista.emAbertoCentavos, 30000);
+
+    const paga = limiteDoCartao({
+      cartao: CARTAO, lancamentos, registroMes: mes('2026-11', { statusFaturas: { 'Cartão Nubank': 'pago' } }),
+    });
+    assert.equal(paga.emAbertoCentavos, 20000); // sobram dezembro e janeiro
+  });
+
+  it('faturas de meses que já passaram contam como pagas', () => {
+    const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [tresVezes()], registroMes: mes('2026-12') });
+    assert.equal(r.emAbertoCentavos, 20000); // novembro passou; dezembro e janeiro em aberto
+  });
+
+  it('não conta Pix, outro cartão nem lançamento excluído', () => {
+    const pix = criarLancamento({ valorCentavos: 5000, categoriaId: diversos.id, formaPagamento: 'Pix', data: '2026-10-20' });
+    const outro = criarLancamento({ valorCentavos: 7000, categoriaId: diversos.id, formaPagamento: 'Cartão Careca', data: '2026-10-20' });
+    const excluido = excluirRegistro(compra(9000, '2026-10-20'));
+    const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [pix, outro, excluido], registroMes: mes('2026-10') });
+    assert.equal(r.emAbertoCentavos, 0);
+  });
+
+  it('compra convertida de conta fixa: só as parcelas que faltam ocupam o limite', () => {
+    const remador = {
+      ...compra(141036, '2026-10-10', { parcelas: 12 }),
+      conversao: { fixoId: 'f1', primeiraFatura: '2026-08', parcelasPagas: 2, mesFinalAnterior: '2027-07' },
+    };
+    const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [remador], registroMes: mes('2026-10') });
+    assert.equal(r.emAbertoCentavos, 117530); // parcelas 3 a 12
+  });
+
+  it('compras acima do limite deixam o disponível negativo', () => {
+    const grande = compra(350000, '2026-10-20');
+    const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [grande], registroMes: mes('2026-10') });
+    assert.equal(r.disponivelCentavos, -50000);
   });
 });

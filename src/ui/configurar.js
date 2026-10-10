@@ -19,6 +19,7 @@ import { buscarMes } from '../meses.js';
 import { tituloDoMes } from '../painel.js';
 import { ehPrimeiroMes } from '../inicio.js';
 import { cartaoDaForma, salvarCartao, removerCartao, faturaDaCompra } from '../cartoes.js';
+import { limiteDoCartao } from '../fluxo.js';
 import {
   contasParaConverter, converterFixo, comprasConvertidas, desfazerConversao, avisoAoDesfazer,
 } from '../conversao.js';
@@ -735,15 +736,22 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
   function itemDoCartao(cartao) {
     const li = criar('li', { classe: 'fixo' });
     const topo = criar('div', { classe: 'fixo-topo' });
+    // Limite disponível = limite − o que está em aberto nas faturas (parte 2.4).
+    const dados = obterDados();
+    const limite = limiteDoCartao({
+      cartao, lancamentos: dados.lancamentos, registroMes: buscarMes(dados, mesAtual()),
+    });
     topo.append(
       criar('span', { classe: 'fixo-nome', texto: cartao.formaPagamento }),
-      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(cartao.limiteCentavos) }),
+      criar('span', { classe: 'fixo-valor', texto: formatarCentavos(limite.disponivelCentavos) }),
     );
 
     const { vencimento } = faturaDaCompra(cartao, hojeLocal());
     const detalhe = criar('p', {
       classe: 'fixo-detalhe secundario',
-      texto: `Limite · fecha dia ${cartao.diaFechamento} · vence dia ${cartao.diaVencimento}. ` +
+      texto: `Disponível de ${formatarCentavos(cartao.limiteCentavos)} ` +
+        `(em aberto nas faturas: ${formatarCentavos(limite.emAbertoCentavos)}) · ` +
+        `fecha dia ${cartao.diaFechamento} · vence dia ${cartao.diaVencimento}. ` +
         `Compra feita hoje: paga em ${dataCurta(vencimento)}.`,
     });
 

@@ -371,9 +371,12 @@ function atualizar() {
     parcelas: Number(el.parcelas.value) || 1,
   });
 
-  // Compra no cartão: escolha das parcelas e quando a fatura é paga.
+  // Compra no cartão: escolha das parcelas, quando a fatura é paga e o limite.
   el.linhaCartao.hidden = !painel.ehCartao;
-  el.infoCartao.textContent = painel.cartaoTexto;
+  const linhaLimite = document.createElement('span');
+  linhaLimite.className = painel.limiteEstourado ? 'linha-limite estourado' : 'linha-limite';
+  linhaLimite.textContent = painel.limiteTexto;
+  el.infoCartao.replaceChildren(painel.cartaoTexto, document.createElement('br'), linhaLimite);
 
   el.dataTexto.textContent = painel.dataTexto;
   el.campoData.classList.toggle('anterior', painel.dataAnterior);

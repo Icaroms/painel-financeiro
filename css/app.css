@@ -728,6 +728,8 @@ body {
 }
 .campo-parcelas select:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
 .info-cartao { margin: 18px 0 0; font-size: 14px; line-height: 1.4; }
+/* Limite do cartão (parte 2.4): fica na cor vermelha quando a compra passa do limite */
+.linha-limite.estourado { color: var(--vermelho); font-weight: 600; }
 
 /* ---------- Faturas (aba Mês) ---------- */
 .seletor-status.duas { grid-template-columns: repeat(2, minmax(0, 1fr)); }

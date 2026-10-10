@@ -23,7 +23,8 @@ import { tituloDoMes } from '../painel.js';
 import { resumoDoMes, excluirLancamento } from '../resumo-mes.js';
 import { gastoDaSemanaAtual, paginar } from '../historico.js';
 import { definirStatusDoFixo } from '../fixos.js';
-import { definirStatusDaFatura } from '../fluxo.js';
+import { definirStatusDaFatura, limiteDoCartao } from '../fluxo.js';
+import { buscarMes } from '../meses.js';
 import { ErroValidacao } from '../erros.js';
 import { textoDoValor } from '../configuracao.js';
 
@@ -218,7 +219,18 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
       grupo.append(botao);
     }
 
-    li.append(linha, itens, grupo);
+    // Limite disponível do cartão: marcar a fatura como Paga devolve o limite dela (parte 2.4).
+    const dados = obterDados();
+    const cartao = (dados.cartoes ?? []).find((c) => c.formaPagamento === fatura.formaPagamento);
+    const limite = limiteDoCartao({
+      cartao, lancamentos: dados.lancamentos, registroMes: buscarMes(dados, mesDaData(hojeLocal())),
+    });
+    const linhaLimite = criar('p', {
+      classe: 'fixo-detalhe secundario',
+      texto: `Limite disponível: ${formatarCentavos(limite.disponivelCentavos)} de ${formatarCentavos(limite.limiteCentavos)}`,
+    });
+
+    li.append(linha, itens, linhaLimite, grupo);
     return li;
   }
 
