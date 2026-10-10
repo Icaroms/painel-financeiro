@@ -13,6 +13,9 @@
  *       (Fase 03). Ele fica fora do backup de propósito;
  *     - um registro de chave "analise-mes", com a última análise do mês
  *       feita pela IA (Fase 03). Também fora do backup.
+ *     - um registro de chave "radar", com o último Radar de opções baixado
+ *       (Fase 04, parte 4.3). Fora do backup: são dados públicos do mercado,
+ *       não da pessoa, e o app busca de novo quando precisa.
  *
  * Guardar tudo num registro só é simples e seguro para o volume de um
  * app pessoal: cada gravação substitui o pacote inteiro de uma vez.
@@ -31,6 +34,8 @@ const CHAVE = 'atual';
 const CHAVE_CONFIG_IA = 'config-ia';
 // Última análise do mês feita pela IA (Fase 03): também fora do backup.
 const CHAVE_ANALISE_MES = 'analise-mes';
+// Último Radar de opções baixado (Fase 04): fora do backup.
+const CHAVE_RADAR = 'radar';
 
 /** Guarda a conexão aberta, para não abrir o banco a cada gravação. */
 let conexao = null;
@@ -151,6 +156,23 @@ export async function gravarAnaliseMes(analise) {
  */
 export async function apagarAnaliseMes() {
   await naGaveta('readwrite', (gaveta) => gaveta.delete(CHAVE_ANALISE_MES));
+}
+
+/**
+ * Lê o último radar baixado.
+ * @returns {Promise<{ radar: object, buscadoEm: string }|undefined>}
+ */
+export function lerRadarGuardado() {
+  return naGaveta('readonly', (gaveta) => gaveta.get(CHAVE_RADAR));
+}
+
+/**
+ * Guarda o radar baixado (substitui o anterior).
+ * @param {{ radar: object, buscadoEm: string }} guardado
+ * @returns {Promise<void>}
+ */
+export async function gravarRadarGuardado(guardado) {
+  await naGaveta('readwrite', (gaveta) => gaveta.put(guardado, CHAVE_RADAR));
 }
 
 /**

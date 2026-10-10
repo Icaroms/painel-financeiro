@@ -36,7 +36,7 @@ import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import {
   lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA,
-  lerAnaliseMes, gravarAnaliseMes, apagarAnaliseMes,
+  lerAnaliseMes, gravarAnaliseMes, apagarAnaliseMes, lerRadarGuardado, gravarRadarGuardado,
 } from './banco.js';
 import { iniciarConfigIA } from './configurar-ia.js';
 import { configuracaoVazia } from '../ia.js';
@@ -50,6 +50,7 @@ import { iniciarMes } from './mes.js';
 import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
 import { iniciarInvestir } from './investir.js';
+import { iniciarRadar } from './radar.js';
 import {
   VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
   RESULTADOS_DA_PROCURA, textoDaProcura,
@@ -650,6 +651,7 @@ const configurar = iniciarConfigurar({
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
 const investir = iniciarInvestir({ obterDados: () => dados, aplicarMudanca });
+const radar = iniciarRadar({ lerGuardado: lerRadarGuardado, guardar: gravarRadarGuardado });
 const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
 const destinoMes = iniciarDestinoMes({ obterDados: () => dados });
@@ -760,7 +762,10 @@ function mostrarVista() {
     analiseMes.renderizar(); // mostra a última análise do mês, com a hora em que foi feita
   }
   if (vista === 'historico') historico.renderizar();
-  if (vista === 'investir') investir.renderizar();
+  if (vista === 'investir') {
+    investir.renderizar();
+    radar.renderizar(); // mostra o radar guardado e busca o novo se já passou da hora
+  }
   if (vista === 'configurar') {
     configurar.renderizar();
     destinoConfig.renderizar();
