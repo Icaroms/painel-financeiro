@@ -125,6 +125,8 @@
         </label>
         <p class="secundario info-cartao" id="info-cartao"></p>
       </div>
+      <!-- Atalho para o simulador (Fase 02, parte 2.5), com o valor e o cartão já preenchidos -->
+      <a href="#simular" class="link-simular" id="link-simular" hidden>Simular parcelamento e melhor mês →</a>
 
       <!-- Data do gasto: já vem como hoje; muda só para lançar um gasto esquecido do mês -->
       <label class="campo-data" id="campo-data">
@@ -238,6 +240,44 @@
       <ul class="lista-mes" id="historico-gastos"></ul>
       <nav class="paginacao" id="paginacao-gastos" aria-label="Páginas dos gastos"></nav>
     </section>
+
+  </main>
+
+  <!-- Vista "Simular compra" (Fase 02, parte 2.5): uma consulta, nada é gravado -->
+  <main class="tela tela-simular" id="tela-simular" hidden>
+
+    <header class="cabecalho">
+      <div class="cabecalho-linha">
+        <h1>Simular compra</h1>
+        <a href="#lancar" class="botao-pequeno link-voltar">‹ Lançar</a>
+      </div>
+      <p class="secundario">Só uma consulta: nada é gravado.</p>
+    </header>
+
+    <section class="cartao" aria-labelledby="titulo-simular-compra">
+      <h2 id="titulo-simular-compra">Compra</h2>
+      <p class="secundario explicacao" id="simular-sem-cartao" hidden>Cadastre um cartão em Configurar para simular uma compra.</p>
+      <label class="campo">
+        <span class="secundario">Cartão</span>
+        <select id="simular-cartao"></select>
+      </label>
+      <label class="campo">
+        <span class="secundario">Preço à vista</span>
+        <span class="campo-dinheiro">
+          <span aria-hidden="true">R$</span>
+          <input id="simular-avista" inputmode="decimal" placeholder="0,00" autocomplete="off">
+        </span>
+      </label>
+      <h3 class="subtitulo-secao">Opções de parcelamento</h3>
+      <p class="secundario explicacao">Como a loja oferece: o número de parcelas e o total parcelado. Total vazio = sem juros (o mesmo preço à vista).</p>
+      <ul class="lista-opcoes" id="simular-opcoes"></ul>
+      <button type="button" class="botao-secundario" id="simular-adicionar">Adicionar opção</button>
+      <span class="erro" id="simular-erro"></span>
+    </section>
+
+    <div class="resultado-simulacao" id="simular-resultado"></div>
+
+    <p class="secundario explicacao">Estimativa: os meses seguintes usam a renda deste mês, as contas fixas, as faturas já comprometidas e os orçamentos das categorias. O simulador mostra números; ele não recomenda comprar.</p>
 
   </main>
 
