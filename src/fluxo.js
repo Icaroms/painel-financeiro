@@ -21,8 +21,8 @@
  * Funções puras: testadas no Node.
  */
 
-import { mesDaData, somarMeses, mesesEntre } from './datas.js';
-import { fixoAtivoNoMes } from './modelo.js';
+import { mesDaData, somarMeses, mesesEntre, diasNoMes } from './datas.js';
+import { fixoAtivoNoMes, valorDoFixoNoMes } from './modelo.js';
 import { faturaDaCompra, vencimentoNoMes } from './cartoes.js';
 import { calcularSaldoProjetado } from './veredito.js';
 
@@ -140,33 +140,110 @@ export function definirStatusDaFatura(estado, mes, formaPagamento, status, { ago
  * (R$ 1.175,30) → disponível R$ 824,70. Paga a fatura de outubro,
  * a parcela 3/12 sai da conta: disponível R$ 942,23.
  *
- * As contas fixas mensais no cartão (como a assinatura do Claude) não
- * entram aqui, porque não estão nas faturas do app (veja o documento da Fase 02).
+ * As contas fixas pagas no cartão (como a assinatura do Claude ou uma
+ * parcela que não foi convertida) também ocupam o limite. Como no resto
+ * do app, a conta fixa de um mês faz parte da fatura que vence naquele
+ * mês (veja contasFixasNasFaturas). No SALDO ela continua contando como
+ * conta fixa, e não aparece na lista da fatura: não há conta em dobro.
  *
  * @param {object}   visao
  * @param {object}   visao.cartao
  * @param {object[]} visao.lancamentos
  * @param {object}   visao.registroMes O mês atual (para saber se a fatura dele já foi paga).
- * @returns {{ limiteCentavos: number, emAbertoCentavos: number,
+ * @param {object[]} [visao.fixos]     Contas fixas (as do cartão ocupam o limite).
+ * @param {object[]} [visao.meses]     Registros dos meses (para "Dispensado" no mês seguinte).
+ * @param {string}   [visao.hoje]      "AAAA-MM-DD". Padrão: o último dia do mês atual.
+ * @returns {{ limiteCentavos: number, emAbertoCentavos: number, contasFixasCentavos: number,
  *   disponivelCentavos: number, fracaoUsada: number }}
+ *   emAbertoCentavos já inclui contasFixasCentavos (a parte das contas fixas).
  *   disponivelCentavos fica negativo quando as compras passam do limite.
  */
-export function limiteDoCartao({ cartao, lancamentos, registroMes }) {
+export function limiteDoCartao({ cartao, lancamentos, registroMes, fixos = [], meses = [], hoje }) {
   const mesAtual = registroMes.mes;
   const faturaAtualPaga = registroMes.statusFaturas?.[cartao.formaPagamento] === 'pago';
+  const emAberto = (mes) => mes > mesAtual || (mes === mesAtual && !faturaAtualPaga);
 
-  const emAbertoCentavos = lancamentos
+  const comprasCentavos = lancamentos
     .filter((l) => l.excluidoEm === null && l.formaPagamento === cartao.formaPagamento)
     .flatMap((l) => saidasDoLancamento(l, [cartao]))
-    .filter((s) => s.mes > mesAtual || (s.mes === mesAtual && !faturaAtualPaga))
+    .filter((s) => emAberto(s.mes))
     .reduce((soma, s) => soma + s.valorCentavos, 0);
 
+  const contasFixasCentavos = contasFixasNasFaturas({
+    cartao, fixos, registroMes, meses, hoje: hoje ?? ultimoDiaDoMes(mesAtual),
+  })
+    .filter((c) => emAberto(c.mesFatura))
+    .reduce((soma, c) => soma + c.valorCentavos, 0);
+
+  const emAbertoCentavos = comprasCentavos + contasFixasCentavos;
   return {
     limiteCentavos: cartao.limiteCentavos,
     emAbertoCentavos,
+    contasFixasCentavos,
     disponivelCentavos: cartao.limiteCentavos - emAbertoCentavos,
     fracaoUsada: emAbertoCentavos / cartao.limiteCentavos,
   };
+}
+
+/** "2026-10" → "2026-10-31". */
+function ultimoDiaDoMes(mes) {
+  return `${mes}-${String(diasNoMes(mes)).padStart(2, '0')}`;
+}
+
+/**
+ * Data em que fecha a fatura que vence num mês.
+ * Ex.: fecha dia 3 e vence dia 10 → a fatura de outubro fecha em 03/10.
+ *      Fecha dia 28 e vence dia 5 → a fatura de outubro fecha em 28/09.
+ *
+ * @param {object} cartao
+ * @param {string} mes "AAAA-MM" (mês do vencimento).
+ * @returns {string} "AAAA-MM-DD".
+ */
+export function fechamentoDaFatura(cartao, mes) {
+  const mesFechamento = cartao.diaVencimento > cartao.diaFechamento ? mes : somarMeses(mes, -1);
+  const dia = Math.min(cartao.diaFechamento, diasNoMes(mesFechamento));
+  return `${mesFechamento}-${String(dia).padStart(2, '0')}`;
+}
+
+/**
+ * Contas fixas de um cartão que podem estar ocupando o limite agora.
+ *
+ * A conta fixa de um mês faz parte da fatura que vence naquele mês (é
+ * assim que ela conta no saldo e foi assim que a conversão da parte 2.3
+ * leu as parcelas). Então:
+ * - a do mês atual está na fatura deste mês;
+ * - a do mês seguinte entra na fatura seguinte, que começa a receber
+ *   cobranças quando a fatura deste mês FECHA. Depois desse dia, a
+ *   cobrança pode já ter acontecido: o app conta (é mais seguro mostrar
+ *   o limite um pouco menor do que maior que o real).
+ *
+ * Ex.: cartão que fecha dia 3 e vence dia 10; hoje é 10/10.
+ *   A fatura de outubro fechou em 03/10 → as contas de outubro e de
+ *   novembro ocupam o limite. Em 02/10 só a de outubro contaria.
+ *
+ * Contas dispensadas no mês (ou com valor zero) não ocupam limite.
+ *
+ * @param {object} visao { cartao, fixos, registroMes, meses, hoje }
+ * @returns {{ fixo: object, mesFatura: string, valorCentavos: number }[]}
+ */
+export function contasFixasNasFaturas({ cartao, fixos, registroMes, meses = [], hoje }) {
+  const mesAtual = registroMes.mes;
+  const registroDe = (mes) => (mes === mesAtual ? registroMes : meses.find((m) => m.mes === mes));
+
+  const mesesNaFatura = [mesAtual];
+  if (hoje >= fechamentoDaFatura(cartao, mesAtual)) mesesNaFatura.push(somarMeses(mesAtual, 1));
+
+  const contas = [];
+  for (const mes of mesesNaFatura) {
+    const registro = registroDe(mes);
+    for (const fixo of fixos) {
+      if (fixo.formaPagamento !== cartao.formaPagamento || !fixoAtivoNoMes(fixo, mes)) continue;
+      const valorCentavos = registro ? valorDoFixoNoMes(fixo, registro) : fixo.valorCentavos;
+      if (valorCentavos === 0) continue; // dispensada (ou sem valor) não ocupa limite
+      contas.push({ fixo, mesFatura: mes, valorCentavos });
+    }
+  }
+  return contas;
 }
 
 /**

@@ -223,7 +223,12 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     const dados = obterDados();
     const cartao = (dados.cartoes ?? []).find((c) => c.formaPagamento === fatura.formaPagamento);
     const limite = limiteDoCartao({
-      cartao, lancamentos: dados.lancamentos, registroMes: buscarMes(dados, mesDaData(hojeLocal())),
+      cartao,
+      lancamentos: dados.lancamentos,
+      registroMes: buscarMes(dados, mesDaData(hojeLocal())),
+      fixos: dados.fixos,
+      meses: dados.meses,
+      hoje: hojeLocal(),
     });
     const linhaLimite = criar('p', {
       classe: 'fixo-detalhe secundario',

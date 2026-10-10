@@ -56,6 +56,7 @@ describe('buscarMes e dadosDoMes', () => {
     assert.equal(visao.fixos, estado.fixos);
     assert.equal(visao.lancamentos, estado.lancamentos);
     assert.equal(visao.formasPagamento, estado.formasPagamento);
+    assert.equal(visao.meses, estado.meses); // o limite do cartão olha os meses anteriores
   });
 
   it('mês inexistente: buscarMes devolve undefined e dadosDoMes lança erro', () => {

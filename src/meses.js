@@ -36,7 +36,7 @@ export function buscarMes(estado, mes) {
 
 /**
  * Monta a "visão" de um mês, no formato que a tela de lançamento usa:
- * { registroMes, categorias, fixos, lancamentos, formasPagamento }.
+ * { registroMes, categorias, fixos, lancamentos, formasPagamento, cartoes, meses }.
  *
  * @param {object} estado
  * @param {string} mes "AAAA-MM".
@@ -56,6 +56,8 @@ export function dadosDoMes(estado, mes) {
     lancamentos: estado.lancamentos,
     formasPagamento: estado.formasPagamento,
     cartoes: estado.cartoes ?? [],
+    // Todos os meses: o limite do cartão olha se uma conta fixa foi dispensada em meses anteriores.
+    meses: estado.meses,
   };
 }
 

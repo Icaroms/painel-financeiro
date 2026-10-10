@@ -16,6 +16,8 @@ import {
   projetarMeses,
   mesesAteAUltimaSaida,
   limiteDoCartao,
+  contasFixasNasFaturas,
+  fechamentoDaFatura,
 } from '../src/fluxo.js';
 import { criarCartao } from '../src/cartoes.js';
 import { criarCategoria, criarFixo, criarLancamento, criarMes, excluirRegistro } from '../src/modelo.js';
@@ -164,7 +166,9 @@ describe('limiteDoCartao (parte 2.4)', () => {
 
   it('sem compras: o limite inteiro está disponível', () => {
     const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [], registroMes: mes('2026-10') });
-    assert.deepEqual(r, { limiteCentavos: 300000, emAbertoCentavos: 0, disponivelCentavos: 300000, fracaoUsada: 0 });
+    assert.deepEqual(r, {
+      limiteCentavos: 300000, emAbertoCentavos: 0, contasFixasCentavos: 0, disponivelCentavos: 300000, fracaoUsada: 0,
+    });
   });
 
   it('compra parcelada ocupa o valor inteiro até as faturas serem pagas', () => {
@@ -211,5 +215,85 @@ describe('limiteDoCartao (parte 2.4)', () => {
     const grande = compra(350000, '2026-10-20');
     const r = limiteDoCartao({ cartao: CARTAO, lancamentos: [grande], registroMes: mes('2026-10') });
     assert.equal(r.disponivelCentavos, -50000);
+  });
+});
+
+describe('contas fixas no cartão ocupam o limite', () => {
+  // CARTAO (Cartão Nubank): limite R$ 3.000, fecha dia 3, vence dia 10. Hoje: 10/10/2026.
+  // A conta fixa de um mês faz parte da fatura que vence naquele mês.
+  const outubro = (extra = {}) => ({ ...criarMes({ mes: '2026-10', saldoInicialCentavos: 0 }), ...extra });
+  const claude = (forma = 'Cartão Nubank') => criarFixo({
+    nome: 'Claude', valorCentavos: 11000, diaVencimento: 10, formaPagamento: forma, mesInicial: '2026-01',
+  });
+  const limite = (fixos, extra = {}) => limiteDoCartao({
+    cartao: CARTAO, lancamentos: [], registroMes: outubro(), fixos, hoje: '2026-10-10', ...extra,
+  });
+
+  it('fechamentoDaFatura: no mesmo mês ou no mês anterior ao vencimento', () => {
+    assert.equal(fechamentoDaFatura(CARTAO, '2026-10'), '2026-10-03');
+    const viraMes = criarCartao({ formaPagamento: 'X', limiteCentavos: 100, diaFechamento: 28, diaVencimento: 5 });
+    assert.equal(fechamentoDaFatura(viraMes, '2026-10'), '2026-09-28');
+  });
+
+  it('depois do fechamento: a conta deste mês e a do mês seguinte ocupam o limite', () => {
+    const contas = contasFixasNasFaturas({ cartao: CARTAO, fixos: [claude()], registroMes: outubro(), hoje: '2026-10-10' });
+    assert.deepEqual(contas.map((c) => c.mesFatura), ['2026-10', '2026-11']);
+
+    const r = limite([claude()]);
+    assert.equal(r.contasFixasCentavos, 22000);
+    assert.equal(r.emAbertoCentavos, 22000);
+    assert.equal(r.disponivelCentavos, 278000);
+  });
+
+  it('antes do fechamento: só a conta deste mês', () => {
+    assert.equal(limite([claude()], { hoje: '2026-10-02' }).contasFixasCentavos, 11000);
+  });
+
+  it('sem "hoje", conta como fim do mês (as duas)', () => {
+    assert.equal(limite([claude()], { hoje: undefined }).contasFixasCentavos, 22000);
+  });
+
+  it('pagar a fatura de outubro libera a conta de outubro', () => {
+    const r = limite([claude()], { registroMes: outubro({ statusFaturas: { 'Cartão Nubank': 'pago' } }) });
+    assert.equal(r.contasFixasCentavos, 11000); // fica só a de novembro
+  });
+
+  it('conta dispensada no mês não ocupa limite', () => {
+    const fixo = claude();
+    const r = limite([fixo], { registroMes: outubro({ statusFixos: { [fixo.id]: 'dispensado' } }) });
+    assert.equal(r.contasFixasCentavos, 11000); // só a de novembro
+  });
+
+  it('valor ajustado no mês vale para aquele mês', () => {
+    const fixo = claude();
+    const r = limite([fixo], { registroMes: outubro({ ajustesFixos: { [fixo.id]: 12500 } }) });
+    assert.equal(r.contasFixasCentavos, 23500); // 125 (outubro) + 110 (novembro)
+  });
+
+  it('parcela que termina neste mês não conta no mês seguinte', () => {
+    const anel = criarFixo({
+      nome: 'Anel', valorCentavos: 9250, diaVencimento: 10, formaPagamento: 'Cartão Nubank', mesInicial: '2026-07', mesFinal: '2026-10',
+    });
+    assert.equal(limite([anel]).contasFixasCentavos, 9250);
+  });
+
+  it('conta convertida (termina no mês anterior) não conta: as parcelas dela já estão na compra', () => {
+    const remador = criarFixo({
+      nome: 'Remador', valorCentavos: 11753, diaVencimento: 10, formaPagamento: 'Cartão Nubank', mesInicial: '2026-08', mesFinal: '2026-09',
+    });
+    assert.equal(limite([remador]).contasFixasCentavos, 0);
+  });
+
+  it('conta fixa de outra forma de pagamento não conta', () => {
+    assert.equal(limite([claude('Pix')]).contasFixasCentavos, 0);
+  });
+
+  it('compras e contas fixas somam no "em aberto"', () => {
+    const r = limiteDoCartao({
+      cartao: CARTAO, lancamentos: [compra(30000, '2026-10-20', { parcelas: 3 })], registroMes: outubro(),
+      fixos: [claude()], hoje: '2026-10-10',
+    });
+    assert.equal(r.emAbertoCentavos, 52000);
+    assert.equal(r.contasFixasCentavos, 22000);
   });
 });

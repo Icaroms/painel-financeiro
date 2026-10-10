@@ -10,7 +10,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { calcularPainel, tituloDoMes, problemaNaDataDoGasto } from '../src/painel.js';
+import { calcularPainel, tituloDoMes, problemaNaDataDoGasto, limiteApertado } from '../src/painel.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { dadosDoMes } from '../src/meses.js';
 import { formatarCentavos } from '../src/dinheiro.js';
@@ -187,16 +187,18 @@ describe('compra no cartão no painel', () => {
     assert.match(p.linhaSaldo, /^Com esta compra, dezembro de 2026 deve fechar em .+ \(estimativa\)$/);
   });
 
-  // Limite (parte 2.4): Crédito tem R$ 2.000 e o Mercado de R$ 150 está na fatura de novembro, ainda prevista.
+  // Limite (parte 2.4): Crédito tem R$ 2.000. Em aberto: o Mercado de R$ 150 (fatura de novembro, ainda
+  // prevista) e o Streaming de R$ 39,90 de novembro e de dezembro (a fatura de novembro já fechou em 03/11).
+  // Disponível: 2.000 − 150 − 79,80 = R$ 1.770,20.
   it('sem valor: mostra o limite disponível', () => {
     const p = noCartao('', 1);
-    assert.equal(p.limiteTexto, `Limite disponível: ${formatarCentavos(185000)} de ${formatarCentavos(200000)}`);
+    assert.equal(p.limiteTexto, `Limite disponível: ${formatarCentavos(177020)} de ${formatarCentavos(200000)}`);
     assert.equal(p.limiteEstourado, false);
   });
 
   it('com valor: mostra o limite que sobra depois da compra (o valor inteiro, mesmo parcelado)', () => {
     const p = noCartao('300', 3);
-    assert.equal(p.limiteTexto, `Limite depois desta compra: ${formatarCentavos(155000)} de ${formatarCentavos(200000)}`);
+    assert.equal(p.limiteTexto, `Limite depois desta compra: ${formatarCentavos(147020)} de ${formatarCentavos(200000)}`);
     assert.equal(p.limiteEstourado, false);
   });
 
@@ -204,14 +206,45 @@ describe('compra no cartão no painel', () => {
     const p = noCartao('1900', 10);
     assert.equal(p.limiteEstourado, true);
     assert.equal(p.cor, 'vermelho');
-    assert.equal(p.frase, `Passou do limite: o Crédito tem ${formatarCentavos(185000)} disponíveis.`);
-    assert.equal(p.limiteTexto, `Passa do limite em ${formatarCentavos(5000)} (limite de ${formatarCentavos(200000)})`);
+    assert.equal(p.frase, `Passou do limite: o Crédito tem ${formatarCentavos(177020)} disponíveis.`);
+    assert.equal(p.limiteTexto, `Passa do limite em ${formatarCentavos(12980)} (limite de ${formatarCentavos(200000)})`);
   });
 
   it('exatamente o limite disponível ainda cabe', () => {
-    const p = noCartao('1850', 10);
+    const p = noCartao('1770,20', 10);
     assert.equal(p.limiteEstourado, false);
     assert.equal(p.limiteTexto, `Limite depois desta compra: ${formatarCentavos(0)} de ${formatarCentavos(200000)}`);
+  });
+
+  it('limiteApertado: sobra menos de 10% do limite total', () => {
+    const limite = { limiteCentavos: 200000, disponivelCentavos: 185000 };
+    assert.equal(limiteApertado(limite, 165000), false); // sobram 200,00: exatamente 10%
+    assert.equal(limiteApertado(limite, 165001), true); // sobram 199,99
+  });
+
+  it('compra que cabe mas deixa o limite apertado: amarelo, se o veredito era verde', () => {
+    const dados = exemploDeNovembro();
+    // Renda alta: o saldo fica folgado, então só o limite pesa no veredito.
+    dados.registroMes = { ...dados.registroMes, rendaPrevistaCentavos: 1000000 };
+    const diversos = dados.categorias.find((c) => c.nome === 'Diversos');
+    const valor = (valorTexto) => calcularPainel({
+      dados, valorTexto, categoriaId: diversos.id, formaPagamento: 'Crédito', hoje: HOJE, parcelas: 1,
+    });
+
+    const apertado = valor('1700'); // sobram R$ 70,20 de R$ 2.000
+    assert.equal(apertado.cor, 'amarelo');
+    assert.equal(apertado.limiteApertado, true);
+    assert.equal(apertado.frase, `Atenção: depois desta compra sobram ${formatarCentavos(7020)} do limite do Crédito.`);
+
+    const folgado = valor('1000'); // sobram R$ 770,20
+    assert.equal(folgado.cor, 'verde');
+    assert.equal(folgado.limiteApertado, false);
+  });
+
+  it('limite apertado não troca um vermelho por amarelo', () => {
+    const p = noCartao('1700', 1); // no exemplo, dezembro fecharia negativo
+    assert.equal(p.cor, 'vermelho');
+    assert.equal(p.limiteApertado, true);
   });
 
   it('forma que não é cartão ignora as parcelas', () => {
@@ -223,5 +256,6 @@ describe('compra no cartão no painel', () => {
     assert.equal(p.cartaoTexto, '');
     assert.equal(p.limiteTexto, '');
     assert.equal(p.limiteEstourado, false);
+    assert.equal(p.limiteApertado, false);
   });
 });

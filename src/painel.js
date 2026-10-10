@@ -68,6 +68,23 @@ function textoDoCartao(saidas) {
   return `${saidas.length}x de ${formatarCentavos(saidas[1].valorCentavos)} · 1ª parcela paga em ${data}`;
 }
 
+/** Abaixo desta porcentagem do limite total, o limite que sobra está "apertado". */
+export const PERCENTUAL_LIMITE_APERTADO = 10;
+
+/**
+ * Diz se, depois da compra, sobra menos de 10% do limite total.
+ * Conta com inteiros (centavos x 100), sem arredondamento.
+ * Ex.: limite R$ 2.000 → apertado quando sobram menos de R$ 200.
+ *
+ * @param {object} limite        Resultado de limiteDoCartao.
+ * @param {number} valorCentavos Valor da compra.
+ * @returns {boolean}
+ */
+export function limiteApertado(limite, valorCentavos) {
+  const sobra = limite.disponivelCentavos - valorCentavos;
+  return sobra * 100 < limite.limiteCentavos * PERCENTUAL_LIMITE_APERTADO;
+}
+
 /**
  * Texto do limite do cartão na tela de lançamento.
  *
@@ -107,8 +124,10 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
   const cartoes = dados.cartoes ?? [];
   const cartao = cartoes.find((c) => c.formaPagamento === formaPagamento) ?? null;
   const ehCartao = cartao !== null;
-  // Limite do cartão ANTES desta compra (parte 2.4).
-  const limite = ehCartao ? limiteDoCartao({ cartao, lancamentos, registroMes }) : null;
+  // Limite do cartão ANTES desta compra (parte 2.4), com as contas fixas cobradas nele.
+  const limite = ehCartao
+    ? limiteDoCartao({ cartao, lancamentos, registroMes, fixos, meses: dados.meses ?? [], hoje })
+    : null;
 
   const categoria = categorias.find((c) => c.id === categoriaId);
   if (!categoria) {
@@ -150,6 +169,12 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
       frase = limite.disponivelCentavos > 0
         ? `Passou do limite: o ${formaPagamento} tem ${formatarCentavos(limite.disponivelCentavos)} disponíveis.`
         : `Passou do limite: o ${formaPagamento} não tem limite disponível.`;
+    } else if (ehCartao && cor === 'verde' && limiteApertado(limite, valor)) {
+      // Cabe, mas deixa o cartão quase sem limite: atenção (como o colchão do saldo).
+      // Só troca o verde: um amarelo ou vermelho por outro motivo continua valendo.
+      cor = 'amarelo';
+      frase = `Atenção: depois desta compra sobram ${formatarCentavos(limite.disponivelCentavos - valor)} ` +
+        `do limite do ${formaPagamento}.`;
     }
   } else {
     // Sem valor: mostra a situação atual, sem julgar nada.
@@ -190,6 +215,8 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     // "Limite depois desta compra: R$ 724,70 de R$ 2.000,00".
     limiteTexto: textoDoLimite(limite, lancamento !== null ? valor : 0),
     limiteEstourado: limite !== null && lancamento !== null && valor > limite.disponivelCentavos,
+    limiteApertado: limite !== null && lancamento !== null && valor <= limite.disponivelCentavos
+      && limiteApertado(limite, valor),
     cartaoTexto: ehCartao && numerosVeredito
       ? textoDoCartao(numerosVeredito.saidas)
       : (ehCartao ? 'No cartão: entra na fatura, não sai da conta hoje.' : ''),

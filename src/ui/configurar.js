@@ -739,7 +739,12 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     // Limite disponível = limite − o que está em aberto nas faturas (parte 2.4).
     const dados = obterDados();
     const limite = limiteDoCartao({
-      cartao, lancamentos: dados.lancamentos, registroMes: buscarMes(dados, mesAtual()),
+      cartao,
+      lancamentos: dados.lancamentos,
+      registroMes: buscarMes(dados, mesAtual()),
+      fixos: dados.fixos,
+      meses: dados.meses,
+      hoje: hojeLocal(),
     });
     topo.append(
       criar('span', { classe: 'fixo-nome', texto: cartao.formaPagamento }),
@@ -750,7 +755,9 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     const detalhe = criar('p', {
       classe: 'fixo-detalhe secundario',
       texto: `Disponível de ${formatarCentavos(cartao.limiteCentavos)} ` +
-        `(em aberto nas faturas: ${formatarCentavos(limite.emAbertoCentavos)}) · ` +
+        `(em aberto nas faturas: ${formatarCentavos(limite.emAbertoCentavos)}` +
+        (limite.contasFixasCentavos > 0 ? `, ${formatarCentavos(limite.contasFixasCentavos)} de contas fixas` : '') +
+        ') · ' +
         `fecha dia ${cartao.diaFechamento} · vence dia ${cartao.diaVencimento}. ` +
         `Compra feita hoje: paga em ${dataCurta(vencimento)}.`,
     });
