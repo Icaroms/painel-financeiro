@@ -836,6 +836,29 @@ if (carregado.dados === null) {
 // Sem esperar: o pedido roda em segundo plano e não atrasa a tela.
 pedirArmazenamentoPersistente();
 
+/**
+ * Versão do app neste aparelho: pergunta ao service worker que está
+ * rodando ("painel-financeiro-v12" vira "v12"). Serve para conferir se o
+ * celular e o PC estão na mesma publicação.
+ */
+function mostrarVersao() {
+  const linha = document.getElementById('versao-app');
+  if (!linha) return;
+  if (!('serviceWorker' in navigator)) {
+    linha.textContent = 'Versão do app: este navegador não guarda o app para uso sem internet.';
+    return;
+  }
+  navigator.serviceWorker.addEventListener('message', (evento) => {
+    if (evento.data?.tipo !== 'versao') return;
+    const numero = /-(v\d+)$/.exec(evento.data.versao)?.[1] ?? evento.data.versao;
+    linha.textContent = `Versão do app: ${numero}`;
+  });
+  // Espera o service worker ficar ativo (na primeira visita ele ainda está instalando).
+  navigator.serviceWorker.ready.then((registro) => {
+    (navigator.serviceWorker.controller ?? registro.active)?.postMessage('versao');
+  });
+}
+
 // PWA: instala o service worker (../../sw.js), que faz o app abrir sem internet.
 // Falhar aqui não impede o app de funcionar: só deixa de funcionar offline.
 if ('serviceWorker' in navigator) {
@@ -843,3 +866,4 @@ if ('serviceWorker' in navigator) {
     console.error('Não foi possível instalar o funcionamento offline.', erro);
   });
 }
+mostrarVersao();

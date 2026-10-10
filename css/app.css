@@ -745,6 +745,9 @@ body {
 .ia-resposta[data-estado="erro"] p { color: var(--vermelho); }
 .ia-resposta .ia-selo { font-size: 12px; color: var(--secundario); }
 
+/* Linha "Versão do app" no fim de Configurar */
+.versao-app { margin: 0; font-size: 13px; text-align: center; }
+
 /* ---------- Destino da sobra (parte 4.1) ---------- */
 .linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .destino-reserva p { margin: 0; font-size: 14px; line-height: 1.4; }
