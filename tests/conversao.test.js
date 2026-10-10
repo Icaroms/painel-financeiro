@@ -22,12 +22,14 @@ import {
   converterFixo,
   comprasConvertidas,
   desfazerConversao,
+  faturasPagasComAParcela,
+  avisoAoDesfazer,
   CATEGORIA_DA_CONVERSAO,
 } from '../src/conversao.js';
 import { criarCartao, removerCartao } from '../src/cartoes.js';
 import { criarCategoria, criarFixo, criarMes, contaComoConsumo } from '../src/modelo.js';
 import { definirStatusDoFixo } from '../src/fixos.js';
-import { saidasDoLancamento, faturasDoMes, projetarMeses } from '../src/fluxo.js';
+import { saidasDoLancamento, faturasDoMes, projetarMeses, definirStatusDaFatura } from '../src/fluxo.js';
 import { sobraDoMes, dadosDoMes, buscarMes } from '../src/meses.js';
 import { resumoDoMes } from '../src/resumo-mes.js';
 import { filtrarGastos, semanasDeGastos } from '../src/historico.js';
@@ -274,6 +276,51 @@ describe('comprasConvertidas e desfazerConversao', () => {
   it('desfazer um lançamento que não veio de conversão: erro', () => {
     const { estado } = converter(estadoDeTeste(), 'Remador');
     assert.throws(() => desfazerConversao(estado, 'id-que-nao-existe'), /não veio de uma conversão/);
+  });
+});
+
+describe('aviso ao desfazer quando a fatura já foi paga', () => {
+  it('nenhuma fatura paga: sem aviso', () => {
+    const { estado, lancamento } = converter(estadoDeTeste(), 'Remador');
+    assert.deepEqual(faturasPagasComAParcela(estado, lancamento.id), []);
+    assert.equal(avisoAoDesfazer(estado, lancamento.id), null);
+  });
+
+  it('fatura de outubro paga: avisa o mês e a parcela', () => {
+    const convertido = converter(estadoDeTeste(), 'Remador');
+    const estado = definirStatusDaFatura(convertido.estado, MES, 'Cartão Careca', 'pago', { agora: AGORA });
+    const id = convertido.lancamento.id;
+
+    assert.deepEqual(faturasPagasComAParcela(estado, id), [{ mes: '2026-10', numero: 3, total: 12 }]);
+    assert.equal(
+      avisoAoDesfazer(estado, id),
+      'Atenção: a fatura de outubro de 2026 do Cartão Careca já está Paga. ' +
+        'A parcela 3/12 desse mês volta a ser conta fixa Prevista: marque como Paga de novo na aba Mês.',
+    );
+  });
+
+  it('a fatura paga de OUTRO cartão não conta', () => {
+    const convertido = converter(estadoDeTeste(), 'Remador');
+    const estado = definirStatusDaFatura(convertido.estado, MES, 'Cartão Nubank', 'pago', { agora: AGORA });
+    assert.equal(avisoAoDesfazer(estado, convertido.lancamento.id), null);
+  });
+
+  it('duas faturas pagas: avisa os dois meses no plural', () => {
+    const inicial = estadoDeTeste();
+    inicial.meses.push(criarMes({ mes: '2026-11', saldoInicialCentavos: 0, rendaPrevistaCentavos: 300000 }));
+    const convertido = converter(inicial, 'Remador');
+    let estado = definirStatusDaFatura(convertido.estado, MES, 'Cartão Careca', 'pago', { agora: AGORA });
+    estado = definirStatusDaFatura(estado, '2026-11', 'Cartão Careca', 'pago', { agora: AGORA });
+
+    assert.equal(
+      avisoAoDesfazer(estado, convertido.lancamento.id),
+      'Atenção: as faturas de outubro de 2026 e novembro de 2026 do Cartão Careca já estão Pagas. ' +
+        'As parcelas 3/12 e 4/12 desses meses voltam a ser conta fixa Prevista: marque como Pagas de novo na aba Mês.',
+    );
+  });
+
+  it('lançamento que não é conversão: lista vazia', () => {
+    assert.deepEqual(faturasPagasComAParcela(estadoDeTeste(), 'id-que-nao-existe'), []);
   });
 });
 
