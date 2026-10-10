@@ -11,7 +11,8 @@
  * 4. Se o servidor RESPONDER COM ERRO (ex.: site pausado na hospedagem, que
  *    mostra "Site not available", ou um erro 500), também usa a cópia.
  * Assim, com internet o app está sempre na versão mais nova; sem internet,
- * ou com o servidor fora do ar, ele abre igual.
+ * ou com o servidor fora do ar, ele abre igual, e a página mostra um aviso
+ * de que abriu com a cópia guardada (ver PAGINAS_COM_COPIA abaixo).
  *
  * Fica na raiz do site de propósito: um service worker só controla os
  * arquivos da pasta onde ele está e das pastas abaixo dela.
@@ -25,7 +26,7 @@
  * conferir se o aparelho está na última publicação) e, ao mudar, a cópia
  * antiga dos arquivos é apagada.
  */
-const VERSAO_CACHE = 'painel-financeiro-v13';
+const VERSAO_CACHE = 'painel-financeiro-v14';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -70,6 +71,7 @@ const ARQUIVOS = [
   './src/resumo-mes.js',
   './src/simulador.js',
   './src/veredito.js',
+  './src/versao-app.js',
   './src/ui/analise-mes.js',
   './src/ui/app.js',
   './src/ui/arquivos.js',
@@ -115,13 +117,45 @@ function buscarComPrazo(pedido) {
   });
 }
 
-// A página pergunta "qual versão está rodando?" (linha "Versão do app" em
-// Configurar). A resposta é a versão DESTE service worker: é ela que mostra
-// se o aparelho já recebeu a última publicação.
-self.addEventListener('message', (evento) => {
-  if (evento.data === 'versao') {
-    evento.source?.postMessage({ tipo: 'versao', versao: VERSAO_CACHE });
+/**
+ * Páginas que abriram com a cópia guardada: id da página (aba) → motivo.
+ * Motivos (os mesmos de src/versao-app.js):
+ * - 'servidor-com-erro': o servidor respondeu com erro (ex.: site pausado);
+ * - 'sem-internet': sem internet, ou a internet demorou demais.
+ * Fica só na memória do service worker: a página pergunta logo ao abrir.
+ */
+const PAGINAS_COM_COPIA = new Map();
+
+/** Quantas páginas anotar no máximo (as mais antigas saem primeiro). */
+const MAXIMO_PAGINAS_ANOTADAS = 20;
+
+/**
+ * Anota que a página deste pedido recebeu a cópia guardada.
+ * - Para a página principal (navegação), o id é o da página que VAI abrir
+ *   (resultingClientId).
+ * - Para os outros arquivos (CSS, JS…), é o da página que pediu (clientId).
+ */
+function anotarCopia(evento, motivo) {
+  const id = evento.resultingClientId || evento.clientId;
+  if (!id) return;
+  PAGINAS_COM_COPIA.delete(id); // reinserir deixa esta página como a mais nova
+  PAGINAS_COM_COPIA.set(id, motivo);
+  while (PAGINAS_COM_COPIA.size > MAXIMO_PAGINAS_ANOTADAS) {
+    PAGINAS_COM_COPIA.delete(PAGINAS_COM_COPIA.keys().next().value);
   }
+}
+
+// A página pergunta "qual versão está rodando?" (linha "Versão do app" em
+// Configurar). A resposta traz:
+// - versao: a versão DESTE service worker (mostra se o aparelho já recebeu
+//   a última publicação);
+// - copia: se ESTA página abriu com a cópia guardada, o motivo; senão, null.
+self.addEventListener('message', (evento) => {
+  if (evento.data !== 'versao') return;
+  const id = evento.source?.id;
+  const copia = (id && PAGINAS_COM_COPIA.get(id)) || null;
+  if (id) PAGINAS_COM_COPIA.delete(id); // já respondido: não precisa guardar
+  evento.source?.postMessage({ tipo: 'versao', versao: VERSAO_CACHE, copia });
 });
 
 /**
@@ -153,7 +187,12 @@ self.addEventListener('fetch', (evento) => {
       resposta = await buscarComPrazo(request);
     } catch {
       // Sem internet (ou a internet demorou demais): a cópia guardada.
-      return (await copiaGuardada(cache, request)) ?? new Response('Sem internet e sem cópia deste arquivo.', {
+      const copia = await copiaGuardada(cache, request);
+      if (copia) {
+        anotarCopia(evento, 'sem-internet');
+        return copia;
+      }
+      return new Response('Sem internet e sem cópia deste arquivo.', {
         status: 503,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       });
@@ -168,6 +207,11 @@ self.addEventListener('fetch', (evento) => {
     // O servidor respondeu, mas com erro (ex.: 503 do site pausado, 404, 500).
     // A cópia guardada é melhor que a página de erro; sem cópia, mostra o erro
     // do servidor como ele veio (assim um arquivo que não existe continua dando 404).
-    return (await copiaGuardada(cache, request)) ?? resposta;
+    const copia = await copiaGuardada(cache, request);
+    if (copia) {
+      anotarCopia(evento, 'servidor-com-erro');
+      return copia;
+    }
+    return resposta;
   })());
 });
