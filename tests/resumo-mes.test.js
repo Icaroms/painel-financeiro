@@ -256,3 +256,16 @@ describe('resumoDoMes: faturas do cartão', () => {
     assert.equal(depois.gastos.length, antes.gastos.length + 1);
   });
 });
+
+describe('resumoDoMes: fatura com as contas fixas do cartão', () => {
+  it('o Streaming (Crédito) aparece para conferência, sem mudar o previsto', () => {
+    const resumo = resumoDoMes(exemplo(), MES, '2026-11-10');
+    const [fatura] = resumo.faturas;
+    assert.equal(fatura.formaPagamento, 'Crédito');
+    assert.equal(fatura.totalCentavos, 15000); // o Mercado
+    assert.equal(fatura.contasFixasCentavos, 3990); // o Streaming
+    assert.equal(fatura.totalNoBancoCentavos, 18990);
+    // O Streaming já está nas contas previstas: o previsto continua 389,80 + 150.
+    assert.equal(resumo.previstoCentavos, 38980 + 15000);
+  });
+});

@@ -82,7 +82,8 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
   const cartoes = estado.cartoes ?? [];
   const saidas = saidasNoMes(estado.lancamentos, cartoes, mes);
   const gastosAVista = somar(saidas.filter((s) => !s.cartao), 'valorCentavos');
-  const faturas = faturasDoMes(estado.lancamentos, cartoes, registro)
+  // As contas fixas no cartão aparecem na fatura só para conferência (já contam como contas fixas).
+  const faturas = faturasDoMes(estado.lancamentos, cartoes, registro, estado.fixos)
     .map((f) => ({ ...f, atrasada: f.status === 'previsto' && diaDaData(f.vencimento) < dia }));
   const faturasPagas = somar(faturas.filter((f) => f.status === 'pago'), 'totalCentavos');
   const faturasPrevistas = somar(faturas.filter((f) => f.status === 'previsto'), 'totalCentavos');

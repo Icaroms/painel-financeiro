@@ -738,3 +738,5 @@ body {
 .itens-fatura { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .itens-fatura li { display: flex; justify-content: space-between; gap: 8px; }
 .itens-fatura li span:last-child { font-family: var(--fonte-numero); white-space: nowrap; }
+/* Conferência com a fatura do banco (compras + contas fixas no cartão) */
+.total-banco { font-weight: 600; }

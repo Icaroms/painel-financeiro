@@ -78,28 +78,50 @@ export function saidasNoMes(lancamentos, cartoes, mes) {
 
 /**
  * Faturas que vencem num mês, uma por cartão, com as parcelas que entram nela.
- * Só aparecem cartões com alguma compra na fatura.
+ *
+ * Também lista as contas fixas pagas no cartão naquele mês (a conta fixa
+ * de um mês faz parte da fatura que vence nele). Elas NÃO entram em
+ * totalCentavos, porque o saldo já conta cada uma como conta fixa: servem
+ * só para o total bater com a fatura do banco (totalNoBancoCentavos).
+ *
+ * Aparecem os cartões com alguma compra ou conta fixa na fatura.
+ *
+ * Ex.: Careca em outubro: Remador 3/12 (R$ 117,53) + Claude e Anel
+ * (R$ 202,50 de contas fixas) → totalCentavos 11753; no banco, R$ 320,03.
  *
  * @param {object[]} lancamentos
  * @param {object[]} cartoes
  * @param {object}   registroMes O mês (para a situação da fatura: prevista ou paga).
- * @returns {{ formaPagamento: string, vencimento: string, totalCentavos: number,
- *   itens: object[], status: 'previsto'|'pago' }[]}
+ * @param {object[]} [fixos]     Contas fixas (só as dos cartões entram na conferência).
+ * @returns {{ formaPagamento: string, vencimento: string, totalCentavos: number, itens: object[],
+ *   contasFixas: { fixo: object, valorCentavos: number }[], contasFixasCentavos: number,
+ *   totalNoBancoCentavos: number, status: 'previsto'|'pago' }[]}
  */
-export function faturasDoMes(lancamentos, cartoes, registroMes) {
+export function faturasDoMes(lancamentos, cartoes, registroMes, fixos = []) {
   const saidas = saidasNoMes(lancamentos, cartoes, registroMes.mes).filter((s) => s.cartao);
   return cartoes
     .map((cartao) => {
       const itens = saidas.filter((s) => s.formaPagamento === cartao.formaPagamento);
+      const totalCentavos = itens.reduce((soma, s) => soma + s.valorCentavos, 0);
+      // Contas fixas deste cartão no mês (as dispensadas ficam de fora: valor zero).
+      const contasFixas = fixos
+        .filter((f) => f.formaPagamento === cartao.formaPagamento && fixoAtivoNoMes(f, registroMes.mes))
+        .map((fixo) => ({ fixo, valorCentavos: valorDoFixoNoMes(fixo, registroMes) }))
+        .filter((c) => c.valorCentavos > 0)
+        .sort((a, b) => a.fixo.nome.localeCompare(b.fixo.nome, 'pt-BR'));
+      const contasFixasCentavos = contasFixas.reduce((soma, c) => soma + c.valorCentavos, 0);
       return {
         formaPagamento: cartao.formaPagamento,
         vencimento: vencimentoNoMes(cartao, registroMes.mes),
-        totalCentavos: itens.reduce((soma, s) => soma + s.valorCentavos, 0),
+        totalCentavos,
         itens,
+        contasFixas,
+        contasFixasCentavos,
+        totalNoBancoCentavos: totalCentavos + contasFixasCentavos,
         status: registroMes.statusFaturas?.[cartao.formaPagamento] === 'pago' ? 'pago' : 'previsto',
       };
     })
-    .filter((f) => f.itens.length > 0)
+    .filter((f) => f.itens.length > 0 || f.contasFixas.length > 0)
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
 }
 
