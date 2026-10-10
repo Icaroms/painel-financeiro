@@ -6,6 +6,10 @@
  * No exemplo: deve sobrar R$ 760,20; contas fixas de novembro R$ 139,80
  * (Academia 99,90 + Streaming 39,90; a Consulta tem valor 0 e só um ajuste
  * de R$ 250 neste mês); orçamentos R$ 1.100 (200 + 300 + 600).
+ *
+ * Desde a parte 4.2c, a reserva atual é a soma dos investimentos marcados
+ * como reserva na carteira. Os testes partem do exemplo SEM nada marcado
+ * (semReserva) e marcam um CDB com o valor que cada teste precisa.
  */
 
 import { describe, it } from 'node:test';
@@ -22,36 +26,52 @@ import {
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { definirStatusDoFixo } from '../src/fixos.js';
 import { empacotar, desempacotar } from '../src/persistencia.js';
+import { adicionarInvestimento } from '../src/carteira.js';
 
 const HOJE = '2026-11-10';
 const MES = '2026-11';
 const exemplo = () => criarDadosDeExemplo(HOJE);
 const comDestino = (estado, dados) => salvarDestino(estado, { ...configuracaoDoDestino(estado), ...dados });
 
+/** Exemplo sem nenhum investimento marcado como reserva. */
+const semReserva = () => {
+  const estado = exemplo();
+  return { ...estado, investimentos: estado.investimentos.map((i) => ({ ...i, reserva: false })) };
+};
+
+/** Acrescenta um CDB marcado como reserva, valendo `centavos` hoje. */
+const comReserva = (estado, centavos) => adicionarInvestimento(estado, {
+  tipo: 'cdb', nome: 'CDB reserva', dataAplicacao: '2026-01-05', valorAplicadoCentavos: centavos, reserva: true,
+}, { hoje: HOJE });
+
 describe('configuração', () => {
-  it('sem nada salvo: 70 · 20 · 10, meta de 6 meses, reserva zero', () => {
+  it('sem nada salvo: 70 · 20 · 10, meta de 6 meses, nenhuma reserva digitada', () => {
     assert.deepEqual(configuracaoDoDestino(exemplo()), {
-      porcentagens: { reserva: 70, investir: 20, alivio: 10 }, metaMeses: 6, reservaAtualCentavos: 0,
+      porcentagens: { reserva: 70, investir: 20, alivio: 10 }, metaMeses: 6, reservaDigitadaCentavos: 0,
     });
     assert.equal(DESTINO_PADRAO.metaMeses, 6);
   });
 
   it('salvar guarda no estado (e o backup leva junto)', () => {
-    const estado = comDestino(exemplo(), {
-      porcentagens: { reserva: 50, investir: 40, alivio: 10 }, metaMeses: 3, reservaAtualCentavos: 100000,
-    });
-    assert.deepEqual(configuracaoDoDestino(estado).porcentagens, { reserva: 50, investir: 40, alivio: 10 });
+    const estado = comDestino(exemplo(), { porcentagens: { reserva: 50, investir: 40, alivio: 10 }, metaMeses: 3 });
     const lido = desempacotar(JSON.parse(JSON.stringify(empacotar(estado))));
-    assert.equal(configuracaoDoDestino(lido).reservaAtualCentavos, 100000);
+    assert.deepEqual(configuracaoDoDestino(lido).porcentagens, { reserva: 50, investir: 40, alivio: 10 });
+    assert.equal(configuracaoDoDestino(lido).metaMeses, 3);
   });
 
-  it('erros claros: soma diferente de 100, porcentagem inválida, meta fora do limite, reserva negativa', () => {
+  it('a reserva digitada antes da 4.2c continua guardada ao salvar (nada se perde)', () => {
+    const antigo = { ...exemplo(), destinoSobra: { porcentagens: { reserva: 70, investir: 20, alivio: 10 }, metaMeses: 6, reservaAtualCentavos: 100000 } };
+    const salvo = comDestino(antigo, { metaMeses: 4 });
+    assert.equal(salvo.destinoSobra.reservaAtualCentavos, 100000);
+    assert.equal(configuracaoDoDestino(salvo).reservaDigitadaCentavos, 100000);
+  });
+
+  it('erros claros: soma diferente de 100, porcentagem inválida, meta fora do limite', () => {
     const base = configuracaoDoDestino(exemplo());
     assert.throws(() => salvarDestino(exemplo(), { ...base, porcentagens: { reserva: 70, investir: 20, alivio: 20 } }), /somar 100% \(agora somam 110%\)/);
     assert.throws(() => salvarDestino(exemplo(), { ...base, porcentagens: { reserva: NaN, investir: 20, alivio: 10 } }), /Reserva: use um número inteiro/);
     assert.throws(() => salvarDestino(exemplo(), { ...base, metaMeses: 0 }), /de 1 a 24 meses/);
     assert.throws(() => salvarDestino(exemplo(), { ...base, metaMeses: 25 }), /de 1 a 24 meses/);
-    assert.throws(() => salvarDestino(exemplo(), { ...base, reservaAtualCentavos: -1 }), /zero ou mais/);
   });
 });
 
@@ -69,13 +89,29 @@ describe('custo do mês e meta da reserva', () => {
     assert.equal(custoDoMes(estado, MES).contasFixasCentavos, 13980);
   });
 
-  it('meta = custo × meses; quanto falta e a fração', () => {
-    const estado = comDestino(exemplo(), { reservaAtualCentavos: 371940 }); // metade de 6 × 1.239,80
+  it('meta = custo × meses; reserva = soma dos marcados na carteira; quanto falta e a fração', () => {
+    const estado = comReserva(semReserva(), 371940); // metade de 6 × 1.239,80
     const r = situacaoDaReserva(estado, MES);
     assert.equal(r.metaCentavos, 743880);
+    assert.equal(r.reservaAtualCentavos, 371940);
+    assert.equal(r.investimentosNaReserva, 1);
     assert.equal(r.faltaCentavos, 371940);
     assert.equal(r.fracao, 0.5);
     assert.equal(r.completa, false);
+  });
+
+  it('o exemplo traz o Tesouro Selic marcado como reserva', () => {
+    const r = situacaoDaReserva(exemplo(), MES);
+    assert.equal(r.investimentosNaReserva, 1);
+    assert.equal(r.reservaAtualCentavos, 51340);
+  });
+
+  it('reserva digitada antes da 4.2c não conta mais: só aparece para o aviso', () => {
+    const antigo = { ...semReserva(), destinoSobra: { porcentagens: { reserva: 70, investir: 20, alivio: 10 }, metaMeses: 6, reservaAtualCentavos: 100000 } };
+    const r = situacaoDaReserva(antigo, MES);
+    assert.equal(r.reservaAtualCentavos, 0);
+    assert.equal(r.investimentosNaReserva, 0);
+    assert.equal(r.reservaDigitadaCentavos, 100000);
   });
 });
 
@@ -93,7 +129,7 @@ describe('dividirSobra', () => {
   });
 
   it('reserva quase na meta: recebe só o que falta e o resto vai para Investir', () => {
-    const estado = comDestino(exemplo(), { reservaAtualCentavos: 743880 - 10000 }); // faltam R$ 100
+    const estado = comReserva(semReserva(), 743880 - 10000); // faltam R$ 100
     const d = dividirSobra(estado, MES, HOJE);
     assert.equal(d.reservaCentavos, 10000);
     assert.equal(d.paraInvestirDaReservaCentavos, 39214 - 10000);
@@ -102,7 +138,7 @@ describe('dividirSobra', () => {
   });
 
   it('reserva completa: a parte dela vai inteira para Investir', () => {
-    const estado = comDestino(exemplo(), { reservaAtualCentavos: 800000 });
+    const estado = comReserva(semReserva(), 800000);
     const d = dividirSobra(estado, MES, HOJE);
     assert.equal(d.reserva.completa, true);
     assert.equal(d.reservaCentavos, 0);

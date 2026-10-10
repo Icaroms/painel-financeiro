@@ -594,6 +594,7 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .conta-total dd { font-size: 30px; }
 .conta-total .luz { box-shadow: 0 0 0 4px var(--painel), 0 0 0 5px var(--cor); }
 .aviso-saldo { margin: 0; font-size: 14px; }
+.aviso-saldo:empty { display: none; }
 .aviso-saldo a, .faixa-exemplo a { color: var(--texto); font-weight: 600; }
 
 /* Réguas das categorias: o "marcador de combustível" em versão horizontal */

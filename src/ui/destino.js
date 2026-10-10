@@ -4,6 +4,9 @@
  * - em Configurar: as porcentagens, a meta da reserva, a reserva atual e o
  *   custo do mês (a base da meta).
  *
+ * Desde a parte 4.2c, a reserva atual não é mais digitada: ela é a soma dos
+ * investimentos marcados como reserva na aba Investir.
+ *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As contas ficam em
  * src/destino.js (testado no Node).
  */
@@ -11,9 +14,8 @@
 import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
 import { ErroValidacao } from '../erros.js';
-import { textoDoValor, lerValorPositivo } from '../configuracao.js';
 import {
-  configuracaoDoDestino, salvarDestino, custoDoMes, dividirSobra,
+  configuracaoDoDestino, salvarDestino, custoDoMes, situacaoDaReserva, dividirSobra,
 } from '../destino.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
@@ -98,7 +100,7 @@ export function iniciarDestinoMes({ obterDados }) {
 
     // Explicação do que aconteceu com a parte da reserva.
     let nota = 'Sugestão do app com as porcentagens de Configurar: nada é movido sozinho. ' +
-      'Quando guardar dinheiro na reserva, atualize a "Reserva atual" em Configurar.';
+      'A reserva é a soma dos investimentos marcados como reserva na aba Investir: ao guardar dinheiro nela, atualize o valor lá.';
     if (reserva.completa && reserva.metaCentavos > 0) {
       nota = `Reserva completa: a parte dela vai para Investir. ${nota}`;
     } else if (d.paraInvestirDaReservaCentavos > 0) {
@@ -128,6 +130,7 @@ export function iniciarDestinoConfig({ obterDados, aplicarMudanca }) {
     soma: elemento('destino-soma'),
     meta: elemento('destino-meta'),
     reservaAtual: elemento('destino-reserva-atual'),
+    reservaAviso: elemento('destino-reserva-aviso'),
     custo: elemento('destino-custo'),
     erro: elemento('destino-erro'),
   };
@@ -165,7 +168,6 @@ export function iniciarDestinoConfig({ obterDados, aplicarMudanca }) {
       const novos = salvarDestino(obterDados(), {
         porcentagens: { reserva: inteiro(el.reserva), investir: inteiro(el.investir), alivio: inteiro(el.alivio) },
         metaMeses: inteiro(el.meta),
-        reservaAtualCentavos: el.reservaAtual.value.trim() === '' ? 0 : lerValorPositivo(el.reservaAtual.value, 'reservaAtualCentavos'),
       });
       await aplicarMudanca(novos, 'Destino da sobra salvo.');
       renderizar();
@@ -175,6 +177,28 @@ export function iniciarDestinoConfig({ obterDados, aplicarMudanca }) {
     }
   });
 
+  /**
+   * Reserva atual: a soma da carteira. Com nada marcado e um valor digitado
+   * antes da 4.2c, um aviso diz o que fazer com ele.
+   */
+  function renderizarReservaAtual() {
+    const reserva = situacaoDaReserva(obterDados(), mesDaData(hojeLocal()));
+    const n = reserva.investimentosNaReserva;
+    if (n === 0) {
+      el.reservaAtual.textContent = 'Reserva atual: R$ 0,00. Nenhum investimento está marcado como reserva na aba Investir.';
+    } else {
+      el.reservaAtual.replaceChildren(
+        'Reserva atual: ',
+        criar('strong', { texto: formatarCentavos(reserva.reservaAtualCentavos) }),
+        ` (${n === 1 ? '1 investimento marcado' : `${n} investimentos marcados`} como reserva na aba Investir).`,
+      );
+    }
+    el.reservaAviso.textContent = n === 0 && reserva.reservaDigitadaCentavos > 0
+      ? `Antes você digitava a reserva aqui (${formatarCentavos(reserva.reservaDigitadaCentavos)}). Agora ela vem da carteira: ` +
+        'cadastre esse dinheiro na aba Investir e marque "É reserva de emergência".'
+      : '';
+  }
+
   /** Preenche o formulário com a configuração salva. */
   function renderizar() {
     const config = configuracaoDoDestino(obterDados());
@@ -182,7 +206,7 @@ export function iniciarDestinoConfig({ obterDados, aplicarMudanca }) {
     el.investir.value = String(config.porcentagens.investir);
     el.alivio.value = String(config.porcentagens.alivio);
     el.meta.value = String(config.metaMeses);
-    el.reservaAtual.value = textoDoValor(config.reservaAtualCentavos);
+    renderizarReservaAtual();
     el.erro.textContent = '';
     atualizarSoma();
     atualizarCusto();
