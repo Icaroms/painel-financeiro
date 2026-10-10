@@ -42,6 +42,7 @@ import { configuracaoVazia } from '../ia.js';
 import { mensagemDaCompra } from '../explicacoes.js';
 import { blocoExplicar } from './explicar.js';
 import { iniciarAnaliseMes } from './analise-mes.js';
+import { iniciarDestinoMes, iniciarDestinoConfig } from './destino.js';
 import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
@@ -618,6 +619,10 @@ async function aplicarMudanca(novos, mensagem) {
   dados = novos;
   montarChips();
   atualizar();
+  // A aba Mês aberta (ex.: uma conta marcada como paga): o destino da sobra acompanha.
+  if (!el.telaMes.hidden) destinoMes.renderizar();
+  // Configurar aberta (ex.: um orçamento mudou): o custo do mês e a meta da reserva acompanham.
+  if (!el.telaConfigurar.hidden) destinoConfig.renderizar();
   atualizarPonto();
   atualizarFaixaExemplo();
   const gravou = await gravar(dados);
@@ -637,6 +642,9 @@ const configurar = iniciarConfigurar({
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
 const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
+// Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
+const destinoMes = iniciarDestinoMes({ obterDados: () => dados });
+const destinoConfig = iniciarDestinoConfig({ obterDados: () => dados, aplicarMudanca });
 
 /* ------------------------------------------------------------------ */
 /* IA (Fase 03): configuração guardada à parte, fora do backup        */
@@ -734,11 +742,13 @@ function mostrarVista() {
 
   if (vista === 'mes') {
     resumo.renderizar();
+    destinoMes.renderizar();
     analiseMes.renderizar(); // mostra a última análise do mês, com a hora em que foi feita
   }
   if (vista === 'historico') historico.renderizar();
   if (vista === 'configurar') {
     configurar.renderizar();
+    destinoConfig.renderizar();
     configuracaoIA.renderizar();
   }
   if (vista === 'simular') simulador.renderizar();

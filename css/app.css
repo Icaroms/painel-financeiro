@@ -745,6 +745,11 @@ body {
 .ia-resposta[data-estado="erro"] p { color: var(--vermelho); }
 .ia-resposta .ia-selo { font-size: 12px; color: var(--secundario); }
 
+/* ---------- Destino da sobra (parte 4.1) ---------- */
+.linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.destino-reserva p { margin: 0; font-size: 14px; line-height: 1.4; }
+.destino-reserva .regua { margin: 8px 0 0; }
+
 /* ---------- Análise do mês com IA (parte 3.3) ---------- */
 .analise-resposta h3 { margin: 6px 0 0; font-family: var(--fonte-numero); font-size: 16px; font-weight: 600; }
 .analise-resposta h3:first-child { margin-top: 0; }
