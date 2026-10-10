@@ -733,6 +733,15 @@ body {
 /* Sobra menos de 10% do limite depois da compra: cor âmbar, como o saldo apertado */
 .linha-limite.apertado { color: var(--amarelo); font-weight: 600; }
 
+/* ---------- Explicar com IA (parte 3.2) ---------- */
+.ia-bloco { display: flex; flex-direction: column; gap: 8px; }
+.botao-ia { align-self: flex-start; }
+.ia-resposta { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px dashed var(--linha); border-radius: 12px; background: var(--painel); }
+.ia-resposta p { margin: 0; font-size: 14px; line-height: 1.5; }
+.ia-resposta[data-estado="carregando"] p { color: var(--secundario); }
+.ia-resposta[data-estado="erro"] p { color: var(--vermelho); }
+.ia-resposta .ia-selo { font-size: 12px; color: var(--secundario); }
+
 /* ---------- IA (Gemini) na vista Configurar (parte 3.1) ---------- */
 .acoes-ia { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .ia-teste { margin: 0; font-size: 14px; }

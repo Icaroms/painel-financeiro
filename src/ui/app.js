@@ -36,6 +36,8 @@ import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import { lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA } from './banco.js';
 import { iniciarConfigIA } from './configurar-ia.js';
 import { configuracaoVazia } from '../ia.js';
+import { mensagemDaCompra } from '../explicacoes.js';
+import { blocoExplicar } from './explicar.js';
 import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
@@ -71,6 +73,7 @@ const el = {
   usadoTexto: elemento('usado-texto'),
   hojeTexto: elemento('hoje-texto'),
   frase: elemento('frase'),
+  iaLancar: elemento('ia-lancar'),
   formulario: elemento('formulario'),
   valor: elemento('valor'),
   chipsCategoria: elemento('chips-categoria'),
@@ -405,6 +408,14 @@ function atualizar() {
   el.hojeTexto.textContent = painel.hojeTexto;
   el.frase.textContent = painel.frase;
 
+  // IA (Fase 03): "Explicar com IA" aparece com um valor válido e a IA ligada.
+  // A cada mudança na tela o bloco é refeito: uma explicação antiga nunca fica na tela.
+  const explicar = painel.lancamento === null ? null : blocoExplicar({
+    obterConfigIA: () => configIA,
+    montarMensagem: () => mensagemDaCompra(painel, { hoje }),
+  });
+  el.iaLancar.replaceChildren(...(explicar ? [explicar] : []));
+
   el.botaoLancar.disabled = painel.lancamento === null;
   return painel;
 }
@@ -598,7 +609,7 @@ const configurar = iniciarConfigurar({
 });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
-const simulador = iniciarSimulador({ obterDados: () => dados });
+const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
 
 /* ------------------------------------------------------------------ */
 /* IA (Fase 03): configuração guardada à parte, fora do backup        */
@@ -684,6 +695,8 @@ function mostrarVista() {
     configuracaoIA.renderizar();
   }
   if (vista === 'simular') simulador.renderizar();
+  // Voltando ao Lançar (ex.: depois de salvar a chave da IA), a tela é refeita.
+  if (vista === 'lancar') atualizar();
   window.scrollTo(0, 0);
 }
 
