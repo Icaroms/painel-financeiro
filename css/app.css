@@ -526,6 +526,31 @@ body {
 .faixa-exemplo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .faixa-exemplo p { margin: 0; }
 
+/* ---------- Aviso "abriu com a cópia guardada" (topo de todas as vistas) ---------- */
+.aviso-copia {
+  max-width: 440px;
+  margin: 0 auto;
+  /* em cima: o espaço do entalhe do iPhone, que a vista abaixo deixa de usar (regra seguinte) */
+  padding: calc(12px + env(safe-area-inset-top)) 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.aviso-copia p {
+  flex: 1 1 220px;
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--amarelo);
+  border-radius: 4px;
+  background: var(--painel);
+}
+/* Com o aviso visível, a vista abaixo não repete o espaço do entalhe */
+body:has(.aviso-copia:not([hidden])) .tela { padding-top: 16px; min-height: auto; }
+
 /* ---------- Boas-vindas (primeiro acesso) ---------- */
 .tela-boas-vindas { justify-content: center; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .boas-vindas { display: flex; flex-direction: column; gap: 14px; }
