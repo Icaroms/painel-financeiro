@@ -792,6 +792,11 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .perda { color: var(--vermelho); }
 .resumo-dinheiro strong.ganho, .resumo-dinheiro strong.perda { font-size: 15px; }
 #botao-novo-investimento { align-self: stretch; }
+/* Ações e FIIs (parte 4.2b): posição zerada fica em segundo plano */
+.investimento.encerrado .fixo-nome, .investimento.encerrado .fixo-valor { color: var(--secundario); font-weight: 500; }
+/* Lista de operações aberta embaixo do ativo */
+.operacoes { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border: 1px solid var(--linha); border-radius: 14px; background: var(--fundo); }
+.botao-texto.perigo { color: var(--vermelho); }
 
 /* ---------- Destino da sobra (parte 4.1) ---------- */
 .linha-porcentagens { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }

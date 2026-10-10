@@ -1,5 +1,6 @@
 /**
- * Testes da carteira de investimentos (Fase 04, parte 4.2a).
+ * Testes da carteira de investimentos (Fase 04, partes 4.2a e 4.2b).
+ * As regras de ações e FIIs (operações e preço médio) estão em tests/acoes.test.js.
  * Rodar com: npm test
  *
  * Dia fixo: 10 de outubro de 2026. Valores fictícios.
@@ -43,12 +44,14 @@ const cdb = {
 };
 
 describe('tipos e grupos', () => {
-  it('renda fixa, fundos e imóvel; cada tipo num grupo que existe', () => {
-    assert.deepEqual(TIPOS_DE_INVESTIMENTO.map((t) => t.id), ['cdb', 'tesouro', 'lci-lca', 'poupanca', 'fundo', 'outro-renda-fixa', 'imovel']);
+  it('renda fixa, fundos, imóvel, ação e FII; cada tipo num grupo que existe', () => {
+    assert.deepEqual(TIPOS_DE_INVESTIMENTO.map((t) => t.id), ['cdb', 'tesouro', 'lci-lca', 'poupanca', 'fundo', 'outro-renda-fixa', 'imovel', 'acao', 'fii']);
+    assert.deepEqual(GRUPOS_DE_INVESTIMENTO.map((g) => g.id), ['renda-fixa', 'acoes', 'fiis', 'imovel']);
     const grupos = GRUPOS_DE_INVESTIMENTO.map((g) => g.id);
     for (const tipo of TIPOS_DE_INVESTIMENTO) assert.ok(grupos.includes(tipo.grupo), tipo.id);
     assert.equal(tipoDoInvestimento('tesouro').nome, 'Tesouro Direto');
-    assert.equal(tipoDoInvestimento('acao'), undefined); // ações entram na 4.2b
+    assert.equal(tipoDoInvestimento('fii').nome, 'FII');
+    assert.equal(tipoDoInvestimento('cripto'), undefined);
   });
 });
 
@@ -75,7 +78,8 @@ describe('adicionarInvestimento', () => {
 
   it('erros claros', () => {
     const tentar = (mudanca) => () => adicionarInvestimento(vazio(), { ...cdb, ...mudanca }, { hoje: HOJE });
-    assert.throws(tentar({ tipo: 'acao' }), /Escolha o tipo/);
+    assert.throws(tentar({ tipo: 'cripto' }), /Escolha o tipo/);
+    assert.throws(tentar({ tipo: 'acao' }), /Ações e FIIs são registrados por operação/);
     assert.throws(tentar({ nome: '   ' }), /Dê um nome/);
     assert.throws(tentar({ nome: 'x'.repeat(TAMANHO_MAXIMO_NOME + 1) }), /no máximo 40 letras/);
     assert.throws(tentar({ dataAplicacao: '2026-02-30' }), /A data da aplicação: escolha uma data válida/);
@@ -155,7 +159,11 @@ describe('resumoDaCarteira', () => {
     assert.equal(r.aplicadoCentavos, 20150000);
     assert.equal(r.atualCentavos, 22157000);
     assert.equal(r.rendimentoCentavos, 2007000);
-    assert.deepEqual(r.itens.map((i) => i.nome), ['Apartamento', 'CDB Banco X 2028', 'Tesouro Selic']);
+    assert.deepEqual(r.itens.map((i) => i.investimento.nome), ['Apartamento', 'CDB Banco X 2028', 'Tesouro Selic']);
+    assert.deepEqual(
+      { aplicado: r.itens[0].aplicadoCentavos, atual: r.itens[0].atualCentavos, semCotacao: r.itens[0].semCotacao, encerrado: r.itens[0].encerrado },
+      { aplicado: 20000000, atual: 22000000, semCotacao: false, encerrado: false },
+    );
     assert.deepEqual(r.grupos, [
       { id: 'renda-fixa', nome: 'Renda fixa e fundos', aplicadoCentavos: 150000, atualCentavos: 157000, quantidade: 2 },
       { id: 'imovel', nome: 'Imóveis', aplicadoCentavos: 20000000, atualCentavos: 22000000, quantidade: 1 },
@@ -180,8 +188,9 @@ describe('backup e dados de exemplo', () => {
   it('o exemplo traz uma carteira fictícia, com datas até hoje', () => {
     const r = resumoDaCarteira(criarDadosDeExemplo(HOJE));
     assert.ok(r.itens.length >= 2);
-    for (const item of r.itens) {
-      assert.ok(item.dataAplicacao <= HOJE && item.valorAtualEm <= HOJE, item.nome);
+    for (const { investimento: item } of r.itens) {
+      const datas = item.operacoes ? item.operacoes.map((o) => o.data) : [item.dataAplicacao, item.valorAtualEm];
+      assert.ok(datas.every((d) => d <= HOJE), item.nome);
     }
   });
 });

@@ -16,7 +16,7 @@
  */
 
 /** Versão do código desta página. Mude junto com a VERSAO_CACHE do sw.js. */
-export const VERSAO_APP = 'painel-financeiro-v17';
+export const VERSAO_APP = 'painel-financeiro-v18';
 
 /**
  * De quanto em quanto tempo, no máximo, o app pergunta ao servidor se há

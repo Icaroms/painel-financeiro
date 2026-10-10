@@ -13,6 +13,7 @@ import { criarCartao } from './cartoes.js';
 import { criarCategoria, criarFixo, criarLancamento, criarMes, ajustarFixoNoMes } from './modelo.js';
 import { mesDaData, somarMeses } from './datas.js';
 import { adicionarInvestimento } from './carteira.js';
+import { adicionarAtivo, atualizarCotacao } from './acoes.js';
 
 /**
  * @param {string} hoje "AAAA-MM-DD".
@@ -58,7 +59,14 @@ export function criarDadosDeExemplo(hoje) {
   const carteira = [
     { tipo: 'cdb', nome: 'CDB Banco Exemplo', dataAplicacao: `${somarMeses(mes, -6)}-10`, valorAplicadoCentavos: 100000, valorAtualCentavos: 105230, valorAtualEm: primeiroDia },
     { tipo: 'tesouro', nome: 'Tesouro Selic', dataAplicacao: `${somarMeses(mes, -3)}-05`, valorAplicadoCentavos: 50000, valorAtualCentavos: 51340, valorAtualEm: primeiroDia },
-  ].reduce((estado, dados) => adicionarInvestimento(estado, dados, { hoje }), { investimentos: [] }).investimentos;
+  ].reduce((estado, dados) => adicionarInvestimento(estado, dados, { hoje }), { investimentos: [] });
+
+  // Uma ação fictícia (parte 4.2b): uma compra há 4 meses e a cotação conferida hoje.
+  let comAcao = adicionarAtivo(carteira, {
+    tipo: 'acao', codigo: 'EXEM3', compra: { data: `${somarMeses(mes, -4)}-15`, quantidade: 50, precoCentavos: 2000, custosCentavos: 490 },
+  }, { hoje });
+  const exem3 = comAcao.investimentos.find((i) => i.nome === 'EXEM3');
+  comAcao = atualizarCotacao(comAcao, exem3.id, 2130, { hoje });
 
   return {
     origem: 'exemplo', // a tela mostra a faixa "dados de exemplo" (veja src/inicio.js)
@@ -69,6 +77,6 @@ export function criarDadosDeExemplo(hoje) {
     formasPagamento: ['Pix', 'Crédito', 'Débito', 'Dinheiro'],
     // "Crédito" é um cartão: limite de R$ 2.000, fecha dia 3 e vence dia 10.
     cartoes: [criarCartao({ formaPagamento: 'Crédito', limiteCentavos: 200000, diaFechamento: 3, diaVencimento: 10 })],
-    investimentos: carteira,
+    investimentos: comAcao.investimentos,
   };
 }
