@@ -16,6 +16,9 @@ import {
   trechosDaLinha,
   blocosDaResposta,
   textoParaCopiar,
+  criarAnaliseGuardada,
+  analiseDoMes,
+  quandoFoiFeita,
 } from '../src/analise.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { definirStatusDaFatura } from '../src/fluxo.js';
@@ -138,5 +141,33 @@ describe('blocosDaResposta e textoParaCopiar', () => {
       'Sugestões',
       '• Uma opção é pagar a Academia hoje.',
     ].join('\n\n'));
+  });
+});
+
+describe('última análise guardada', () => {
+  // Datas montadas no fuso do aparelho (como a tela usa), para o teste valer em qualquer fuso.
+  const momento = (ano, mes, dia, hora, minuto) => new Date(ano, mes - 1, dia, hora, minuto);
+
+  it('criarAnaliseGuardada guarda o mês, o texto e quando foi feita', () => {
+    const agora = momento(2026, 10, 10, 14, 52);
+    assert.deepEqual(criarAnaliseGuardada('2026-10', '## Resumo\nOk.', agora), {
+      mes: '2026-10', texto: '## Resumo\nOk.', geradaEm: agora.toISOString(),
+    });
+  });
+
+  it('analiseDoMes: só vale a análise do mesmo mês, com texto', () => {
+    const guardada = criarAnaliseGuardada('2026-10', 'Texto.');
+    assert.equal(analiseDoMes(guardada, '2026-10'), guardada);
+    assert.equal(analiseDoMes(guardada, '2026-11'), null); // virou o mês: não vale mais
+    assert.equal(analiseDoMes({ ...guardada, texto: '' }, '2026-10'), null);
+    assert.equal(analiseDoMes(null, '2026-10'), null);
+    assert.equal(analiseDoMes(undefined, '2026-10'), null);
+  });
+
+  it('quandoFoiFeita: hoje, ontem ou a data, com a hora', () => {
+    const agora = momento(2026, 10, 10, 18, 0);
+    assert.equal(quandoFoiFeita(momento(2026, 10, 10, 14, 52).toISOString(), agora), 'hoje às 14:52');
+    assert.equal(quandoFoiFeita(momento(2026, 10, 9, 9, 5).toISOString(), agora), 'ontem às 09:05');
+    assert.equal(quandoFoiFeita(momento(2026, 10, 8, 14, 52).toISOString(), agora), 'em 08/10 às 14:52');
   });
 });
