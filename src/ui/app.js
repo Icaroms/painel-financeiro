@@ -34,7 +34,8 @@ import { registrarBackup, situacaoDoBackup } from '../lembrete-backup.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import {
-  lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA, lerAnaliseMes, gravarAnaliseMes,
+  lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA,
+  lerAnaliseMes, gravarAnaliseMes, apagarAnaliseMes,
 } from './banco.js';
 import { iniciarConfigIA } from './configurar-ia.js';
 import { configuracaoVazia } from '../ia.js';
@@ -106,6 +107,7 @@ const el = {
   botaoVerExemplo: elemento('botao-ver-exemplo'),
   botaoBoasVindasBackup: elemento('botao-boas-vindas-backup'),
   faixaExemplo: elemento('faixa-exemplo'),
+  faixaExemploMes: elemento('faixa-exemplo-mes'),
   botaoZerar: elemento('botao-zerar'),
   backupSituacao: elemento('backup-situacao'),
   abas: elemento('abas'),
@@ -323,9 +325,11 @@ function montarParcelas() {
   );
 }
 
-/** Mostra a faixa "dados de exemplo" na vista de lançamento, só com os dados fictícios. */
+/** Mostra a faixa "dados de exemplo" no Lançar e no Mês, só com os dados fictícios. */
 function atualizarFaixaExemplo() {
-  el.faixaExemplo.hidden = !ehExemplo(dados);
+  const exemplo = ehExemplo(dados);
+  el.faixaExemplo.hidden = !exemplo;
+  el.faixaExemploMes.hidden = !exemplo;
 }
 
 /**
@@ -470,6 +474,26 @@ el.botaoRestaurar.addEventListener('click', async () => {
   const gravou = await gravar(dados);
   avisar(gravou ? 'Exemplo restaurado.' : avisoSemGravacao());
 });
+
+/**
+ * "Usar de verdade" (faixa de exemplo no Lançar e no Mês): apaga o exemplo,
+ * começa do zero e leva para Configurar, onde se informa o saldo do mês.
+ */
+async function usarDeVerdade() {
+  const confirmou = window.confirm(
+    'Apagar os dados de exemplo e começar a usar de verdade?\n\n' +
+      'O app começa vazio: em Configurar, você informa o saldo da conta, a renda, as contas fixas e as categorias.',
+  );
+  if (!confirmou) return;
+
+  trocarDados(criarDadosIniciais(hojeLocal()));
+  location.hash = '#configurar';
+  const gravou = await gravar(dados);
+  avisar(gravou ? 'Pronto: comece informando o saldo da conta em "Dinheiro do mês".' : avisoSemGravacao());
+}
+for (const botao of document.querySelectorAll('.botao-usar-de-verdade')) {
+  botao.addEventListener('click', usarDeVerdade);
+}
 
 el.botaoZerar.addEventListener('click', async () => {
   const pergunta = ehExemplo(dados)
@@ -737,6 +761,9 @@ window.addEventListener('hashchange', mostrarVista);
  */
 function trocarDados(novos) {
   dados = novos;
+  // A análise da IA guardada era dos dados antigos: deixa de valer.
+  ultimaAnalise = null;
+  apagarAnaliseMes().catch(() => {});
   el.valor.value = '';
   montarChips();
   atualizar();
