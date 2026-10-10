@@ -16,8 +16,13 @@
  * Os dados financeiros NÃO passam por aqui: eles ficam no IndexedDB do aparelho.
  */
 
-/** Mude a versão quando a LISTA de arquivos mudar: a cópia antiga é apagada. */
-const VERSAO_CACHE = 'painel-financeiro-v11';
+/**
+ * Versão do app. Mude a cada entrega (cada PR), não só quando a LISTA de
+ * arquivos mudar: ela aparece em Configurar como "Versão do app" (para
+ * conferir se o aparelho está na última publicação) e, ao mudar, a cópia
+ * antiga dos arquivos é apagada.
+ */
+const VERSAO_CACHE = 'painel-financeiro-v12';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -106,6 +111,15 @@ function buscarComPrazo(pedido) {
     );
   });
 }
+
+// A página pergunta "qual versão está rodando?" (linha "Versão do app" em
+// Configurar). A resposta é a versão DESTE service worker: é ela que mostra
+// se o aparelho já recebeu a última publicação.
+self.addEventListener('message', (evento) => {
+  if (evento.data === 'versao') {
+    evento.source?.postMessage({ tipo: 'versao', versao: VERSAO_CACHE });
+  }
+});
 
 // Cada pedido: rede primeiro, cópia como reserva.
 self.addEventListener('fetch', (evento) => {
