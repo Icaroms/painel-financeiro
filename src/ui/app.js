@@ -48,6 +48,7 @@ import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
 import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
+import { numeroDaVersao, textoDoAvisoDaCopia } from '../versao-app.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -837,9 +838,24 @@ if (carregado.dados === null) {
 pedirArmazenamentoPersistente();
 
 /**
+ * Faixa no topo quando o app abriu com a cópia guardada no aparelho.
+ * O botão "Entendi" esconde a faixa até a próxima vez que o app abrir.
+ *
+ * @param {string|null} texto null esconde a faixa.
+ */
+function mostrarAvisoDaCopia(texto) {
+  const faixa = document.getElementById('aviso-copia');
+  if (!faixa) return;
+  document.getElementById('aviso-copia-texto').textContent = texto ?? '';
+  faixa.hidden = !texto;
+}
+document.getElementById('aviso-copia-fechar')?.addEventListener('click', () => mostrarAvisoDaCopia(null));
+
+/**
  * Versão do app neste aparelho: pergunta ao service worker que está
- * rodando ("painel-financeiro-v12" vira "v12"). Serve para conferir se o
- * celular e o PC estão na mesma publicação.
+ * rodando ("painel-financeiro-v14" vira "v14"). Serve para conferir se o
+ * celular e o PC estão na mesma publicação. Na mesma resposta vem se esta
+ * página abriu com a cópia guardada (e por quê): aí aparece a faixa de aviso.
  */
 function mostrarVersao() {
   const linha = document.getElementById('versao-app');
@@ -850,8 +866,8 @@ function mostrarVersao() {
   }
   navigator.serviceWorker.addEventListener('message', (evento) => {
     if (evento.data?.tipo !== 'versao') return;
-    const numero = /-(v\d+)$/.exec(evento.data.versao)?.[1] ?? evento.data.versao;
-    linha.textContent = `Versão do app: ${numero}`;
+    linha.textContent = `Versão do app: ${numeroDaVersao(evento.data.versao)}`;
+    mostrarAvisoDaCopia(textoDoAvisoDaCopia(evento.data.copia, evento.data.versao));
   });
   // Espera o service worker ficar ativo (na primeira visita ele ainda está instalando).
   navigator.serviceWorker.ready.then((registro) => {
