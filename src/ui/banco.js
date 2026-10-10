@@ -146,6 +146,14 @@ export async function gravarAnaliseMes(analise) {
 }
 
 /**
+ * Apaga a análise guardada (ex.: os dados foram trocados e ela ficou velha).
+ * @returns {Promise<void>}
+ */
+export async function apagarAnaliseMes() {
+  await naGaveta('readwrite', (gaveta) => gaveta.delete(CHAVE_ANALISE_MES));
+}
+
+/**
  * Pede ao navegador para NÃO apagar os dados quando faltar espaço.
  *
  * Sem esse pedido, o navegador pode limpar dados de sites para liberar

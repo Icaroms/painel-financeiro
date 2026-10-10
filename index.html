@@ -60,9 +60,10 @@
       </div>
       <p class="secundario" id="linha-saldo"></p>
       <!-- Aparece só com os dados fictícios -->
-      <p class="faixa-exemplo" id="faixa-exemplo" hidden>
-        Você está vendo dados de exemplo. Para usar de verdade, <a href="#configurar">comece do zero em Configurar</a>.
-      </p>
+      <div class="faixa-exemplo" id="faixa-exemplo" hidden>
+        <p>Você está vendo <strong>dados de exemplo</strong> (fictícios).</p>
+        <button type="button" class="botao-pequeno botao-usar-de-verdade">Usar de verdade</button>
+      </div>
     </header>
 
     <section class="mostrador" aria-label="Mostrador da categoria">
@@ -154,6 +155,11 @@
       <div class="cabecalho-linha">
         <h1 id="mes-titulo"></h1>
         <span class="secundario" id="mes-dia"></span>
+      </div>
+      <!-- A mesma faixa do Lançar: evita analisar números de exemplo sem perceber -->
+      <div class="faixa-exemplo" id="faixa-exemplo-mes" hidden>
+        <p>Você está vendo <strong>dados de exemplo</strong> (fictícios).</p>
+        <button type="button" class="botao-pequeno botao-usar-de-verdade">Usar de verdade</button>
       </div>
     </header>
 

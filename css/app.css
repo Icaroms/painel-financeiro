@@ -522,6 +522,9 @@ body {
   line-height: 1.4;
 }
 .faixa-exemplo a { color: var(--texto); font-weight: 600; }
+/* Faixa com o botão "Usar de verdade" ao lado do texto (quebra a linha em telas estreitas) */
+.faixa-exemplo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.faixa-exemplo p { margin: 0; }
 
 /* ---------- Boas-vindas (primeiro acesso) ---------- */
 .tela-boas-vindas { justify-content: center; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
