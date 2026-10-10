@@ -7,8 +7,10 @@
  * Organização usada:
  * - banco "painel-financeiro"
  *   - gaveta (object store) "estado"
- *     - um único registro, de chave "atual", com o pacote inteiro
- *       (o envelope de src/persistencia.js).
+ *     - um registro de chave "atual", com o pacote inteiro
+ *       (o envelope de src/persistencia.js);
+ *     - um registro de chave "config-ia", com a configuração da IA
+ *       (Fase 03). Ele fica fora do backup de propósito.
  *
  * Guardar tudo num registro só é simples e seguro para o volume de um
  * app pessoal: cada gravação substitui o pacote inteiro de uma vez.
@@ -22,6 +24,9 @@ const NOME_BANCO = 'painel-financeiro';
 const VERSAO_BANCO = 1; // versão da ESTRUTURA do banco (gavetas), não dos dados
 const GAVETA = 'estado';
 const CHAVE = 'atual';
+// Configuração da IA (Fase 03): numa chave separada, para NÃO entrar no
+// backup, que exporta só o pacote "atual". A chave do Gemini fica só no aparelho.
+const CHAVE_CONFIG_IA = 'config-ia';
 
 /** Guarda a conexão aberta, para não abrir o banco a cada gravação. */
 let conexao = null;
@@ -98,6 +103,25 @@ export function lerPacote() {
  */
 export async function gravarPacote(pacote) {
   await naGaveta('readwrite', (gaveta) => gaveta.put(pacote, CHAVE));
+}
+
+/**
+ * Lê a configuração da IA (chave do Gemini, modelo, ligada).
+ * @returns {Promise<object|undefined>} undefined se nunca foi gravada.
+ */
+export function lerConfigIA() {
+  return naGaveta('readonly', (gaveta) => gaveta.get(CHAVE_CONFIG_IA));
+}
+
+/**
+ * Grava a configuração da IA. Com null, apaga (ex.: "Apagar chave").
+ * @param {object|null} config
+ * @returns {Promise<void>}
+ */
+export async function gravarConfigIA(config) {
+  await naGaveta('readwrite', (gaveta) => (config === null
+    ? gaveta.delete(CHAVE_CONFIG_IA)
+    : gaveta.put(config, CHAVE_CONFIG_IA)));
 }
 
 /**

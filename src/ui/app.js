@@ -33,7 +33,9 @@ import { criarDadosIniciais, ehExemplo } from '../inicio.js';
 import { registrarBackup, situacaoDoBackup } from '../lembrete-backup.js';
 import { empacotar, desempacotar } from '../persistencia.js';
 import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
-import { lerPacote, gravarPacote, pedirArmazenamentoPersistente } from './banco.js';
+import { lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA } from './banco.js';
+import { iniciarConfigIA } from './configurar-ia.js';
+import { configuracaoVazia } from '../ia.js';
 import { entregarArquivo } from './arquivos.js';
 import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
@@ -598,6 +600,30 @@ const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
 const simulador = iniciarSimulador({ obterDados: () => dados });
 
+/* ------------------------------------------------------------------ */
+/* IA (Fase 03): configuração guardada à parte, fora do backup        */
+/* ------------------------------------------------------------------ */
+
+/** Configuração da IA deste aparelho (chave, modelo, ligada). */
+let configIA = configuracaoVazia();
+
+/**
+ * Grava a configuração da IA (null apaga).
+ * @param {object|null} config
+ * @returns {Promise<boolean>} true se gravou.
+ */
+async function salvarConfigIA(config) {
+  try {
+    await gravarConfigIA(config);
+    configIA = config ?? configuracaoVazia();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const configuracaoIA = iniciarConfigIA({ obterConfigIA: () => configIA, salvarConfigIA });
+
 // Atalho do Lançar para o simulador: leva o valor digitado e o cartão escolhido.
 el.linkSimular.addEventListener('click', () => {
   simulador.preencher({
@@ -653,7 +679,10 @@ function mostrarVista() {
 
   if (vista === 'mes') resumo.renderizar();
   if (vista === 'historico') historico.renderizar();
-  if (vista === 'configurar') configurar.renderizar();
+  if (vista === 'configurar') {
+    configurar.renderizar();
+    configuracaoIA.renderizar();
+  }
   if (vista === 'simular') simulador.renderizar();
   window.scrollTo(0, 0);
 }
@@ -705,6 +734,12 @@ el.botaoVerExemplo.addEventListener('click', async () => {
 
 // "await" no nível do módulo: a tela só é montada depois de ler o aparelho.
 const carregado = await carregarDados();
+// A configuração da IA é lida à parte; falhar aqui só deixa a IA desligada.
+try {
+  configIA = { ...configuracaoVazia(), ...((await lerConfigIA()) ?? {}) };
+} catch {
+  configIA = configuracaoVazia();
+}
 montarMarcas();
 montarParcelas();
 

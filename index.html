@@ -391,6 +391,36 @@
       <ul class="lista-fixos" id="lista-convertidas" hidden></ul>
     </section>
 
+    <!-- Fase 03, parte 3.1: IA (Gemini). A chave fica só neste aparelho e não vai no backup. -->
+    <section class="cartao" aria-labelledby="titulo-ia">
+      <h2 id="titulo-ia">IA (Gemini)</h2>
+      <p class="secundario explicacao">Opcional. Com a sua chave do Gemini, o app explica os vereditos e analisa o mês. As contas continuam sendo feitas pelo app: a IA só explica.</p>
+      <p class="secundario explicacao"><strong>Privacidade:</strong> no plano gratuito do Gemini, o Google pode usar o que é enviado para melhorar os produtos, e pessoas podem ler. O app envia números e nomes de categorias e de contas; nunca o seu nome, e-mail ou senhas. A chave fica só neste aparelho e não vai no backup.</p>
+      <p class="resumo-dinheiro" id="ia-situacao"></p>
+      <form class="form-config" id="form-ia" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Chave do Gemini</span>
+          <input id="ia-chave" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Cole aqui a chave">
+        </label>
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="link-simular">Criar uma chave no Google AI Studio ↗</a>
+        <label class="campo">
+          <span class="secundario">Modelo</span>
+          <select id="ia-modelo"></select>
+        </label>
+        <label class="opcao-check">
+          <input type="checkbox" id="ia-ligada">
+          <span><strong>Usar a IA neste aparelho</strong><span class="secundario"> — desmarque para esconder os botões da IA sem apagar a chave.</span></span>
+        </label>
+        <span class="erro" id="ia-erro"></span>
+        <div class="acoes-ia">
+          <button type="button" class="botao-pequeno perigo" id="ia-apagar">Apagar chave</button>
+          <button type="button" class="botao-pequeno" id="ia-testar">Testar conexão</button>
+          <button type="submit" class="botao-pequeno" id="ia-salvar">Salvar</button>
+        </div>
+      </form>
+      <p class="secundario ia-teste" id="ia-teste" aria-live="polite"></p>
+    </section>
+
     <section class="cartao backup" aria-labelledby="titulo-backup">
       <h2 id="titulo-backup">Backup</h2>
       <p class="secundario explicacao">Os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
