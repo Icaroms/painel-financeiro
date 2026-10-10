@@ -584,7 +584,16 @@ async function aplicarMudanca(novos, mensagem) {
   avisar(gravou ? mensagem : avisoSemGravacao());
 }
 
-const configurar = iniciarConfigurar({ obterDados: () => dados, aplicarMudanca });
+const configurar = iniciarConfigurar({
+  obterDados: () => dados,
+  aplicarMudanca,
+  // Botão "Simular compra" de cada cartão: abre o simulador com aquele cartão.
+  // (O simulador é criado logo abaixo; o clique só acontece depois.)
+  abrirSimulador: (formaPagamento) => {
+    simulador.preencher({ formaPagamento, origem: '#configurar' });
+    location.hash = '#simular';
+  },
+});
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
 const simulador = iniciarSimulador({ obterDados: () => dados });
@@ -594,6 +603,7 @@ el.linkSimular.addEventListener('click', () => {
   simulador.preencher({
     formaPagamento: el.formulario.elements.pagamento.value,
     valorTexto: el.valor.value,
+    origem: '#lancar',
   });
 });
 

@@ -12,10 +12,14 @@
  *   Ex.: R$ 1.000 à vista ou 10x de R$ 115 → R$ 150 de juros, cerca de 2,6% ao mês.
  * - Peso em cada mês: a sobra prevista de cada mês com parcela, sem e com a compra.
  * - Limite do cartão: quanto sobra do limite depois da compra.
- * - Melhor momento: o primeiro mês (a partir de hoje) em que comprar não
- *   deixa nenhum mês com parcela abaixo do colchão de R$ 200, contando os
- *   parcelamentos que terminam. Ex.: "a Amazon Ferramentas termina em
- *   novembro; comprando a partir de dezembro, cabe".
+ * - Quando comprar (melhor momento): o primeiro mês (a partir de hoje) em
+ *   que comprar não deixa nenhum mês com parcela abaixo do colchão de
+ *   R$ 200, e o que muda até lá (parcelamentos que terminam).
+ *   Ex.: "a Amazon Ferramentas termina em novembro; comprando a partir de
+ *   dezembro, cabe".
+ * - "Comprar em": a pessoa pode simular a compra num mês futuro (até 12
+ *   meses), por exemplo o mês do 13º. Os números da opção passam a ser
+ *   os de uma compra feita naquele mês.
  *
  * Os meses futuros são ESTIMATIVAS (src/fluxo.js, projetarMeses): renda
  * do mês atual − contas fixas − faturas já comprometidas − orçamentos das
@@ -25,7 +29,7 @@
  */
 
 import { ErroValidacao } from './erros.js';
-import { mesDaData, somarMeses, diasNoMes, diaDaData } from './datas.js';
+import { mesDaData, somarMeses, mesesEntre, diasNoMes, diaDaData } from './datas.js';
 import { criarLancamento, MAXIMO_PARCELAS_COMPRA } from './modelo.js';
 import { LIMITES_PADRAO } from './veredito.js';
 import {
@@ -169,23 +173,48 @@ function primeiraParcela(visao, cartao, totalCentavos, parcelas, data) {
  * novembro; no melhor momento, em janeiro → contam os que terminam em
  * novembro ou dezembro.
  *
- * @returns {{ esperaMeses: number|null, mesDaCompra: string|null, terminam: { nome: string, mes: string }[] }}
- *   esperaMeses null: não cabe nos próximos 12 meses.
+ * @returns {{
+ *   esperaMeses: number|null,     // 0 = agora; null = não cabe nos próximos 12 meses
+ *   mesDaCompra: string|null,     // "AAAA-MM" do melhor momento
+ *   piorMes: { mes: string, sobraCentavos: number }|null,      // comprando no melhor momento
+ *   piorMesAgora: { mes: string, sobraCentavos: number },      // comprando agora (para comparar)
+ *   terminam: { nome: string, mes: string }[]
+ * }}
  */
 function melhorMomento(visao, cartao, totalCentavos, parcelas, hoje, colchaoCentavos) {
+  let piorMesAgora = null;
   for (let espera = 0; espera <= MESES_DE_ESPERA_MAXIMOS; espera += 1) {
     const data = dataDaqui(hoje, espera);
     const { piorMes } = pesoNosMeses(visao, compraSimulada(cartao, totalCentavos, parcelas, data));
+    if (espera === 0) piorMesAgora = piorMes;
     if (piorMes.sobraCentavos >= colchaoCentavos) {
       const terminam = espera === 0 ? [] : parcelamentosQueTerminam(
         visao,
         primeiraParcela(visao, cartao, totalCentavos, parcelas, hoje),
         somarMeses(primeiraParcela(visao, cartao, totalCentavos, parcelas, data), -1),
       );
-      return { esperaMeses: espera, mesDaCompra: mesDaData(data), terminam };
+      return { esperaMeses: espera, mesDaCompra: mesDaData(data), piorMes, piorMesAgora, terminam };
     }
   }
-  return { esperaMeses: null, mesDaCompra: null, terminam: [] };
+  return { esperaMeses: null, mesDaCompra: null, piorMes: null, piorMesAgora, terminam: [] };
+}
+
+/**
+ * Limite disponível no dia de uma compra futura: as faturas que vencem
+ * antes do mês da compra são tratadas como pagas. É uma estimativa.
+ */
+function limiteNaData(visao, cartao, data) {
+  const mes = mesDaData(data);
+  const ehAgora = mes === visao.registroMes.mes;
+  return limiteDoCartao({
+    cartao,
+    lancamentos: visao.lancamentos,
+    // Mês futuro: sem registro ainda (nenhuma fatura marcada, contas no valor padrão).
+    registroMes: ehAgora ? visao.registroMes : { mes, ajustesFixos: {}, statusFixos: {}, statusFaturas: {} },
+    fixos: visao.fixos,
+    meses: ehAgora ? (visao.meses ?? []) : [],
+    hoje: data,
+  });
 }
 
 /**
@@ -198,18 +227,22 @@ function melhorMomento(visao, cartao, totalCentavos, parcelas, hoje, colchaoCent
  * @param {number} entrada.parcelas
  * @param {number} entrada.totalCentavos
  * @param {string} entrada.hoje "AAAA-MM-DD".
+ * @param {string} [entrada.comprarEm] "AAAA-MM" do mês da compra (padrão: o mês atual,
+ *                                     comprando hoje). Num mês futuro, a compra é no
+ *                                     mesmo dia de hoje daquele mês.
  * @param {object} [limites] Padrão: LIMITES_PADRAO (colchão de R$ 200).
  * @returns {object} Veja simularCompra.
  */
-export function simularOpcao(visao, { cartao, aVistaCentavos, parcelas, totalCentavos, hoje }, limites = LIMITES_PADRAO) {
-  const compra = compraSimulada(cartao, totalCentavos, parcelas, hoje);
+export function simularOpcao(
+  visao, { cartao, aVistaCentavos, parcelas, totalCentavos, hoje, comprarEm = visao.registroMes.mes }, limites = LIMITES_PADRAO,
+) {
+  const espera = mesesEntre(visao.registroMes.mes, comprarEm) - 1;
+  const dataDaCompra = espera === 0 ? hoje : dataDaqui(hoje, espera);
+  const compra = compraSimulada(cartao, totalCentavos, parcelas, dataDaCompra);
   const saidas = saidasDoLancamento(compra, visao.cartoes);
   const { meses, piorMes } = pesoNosMeses(visao, compra);
 
-  const limite = limiteDoCartao({
-    cartao, lancamentos: visao.lancamentos, registroMes: visao.registroMes,
-    fixos: visao.fixos, meses: visao.meses ?? [], hoje,
-  });
+  const limite = limiteNaData(visao, cartao, dataDaCompra);
   const limiteDepoisCentavos = limite.disponivelCentavos - totalCentavos;
 
   const colchao = limites.colchaoSaldoCentavos;
@@ -220,6 +253,8 @@ export function simularOpcao(visao, { cartao, aVistaCentavos, parcelas, totalCen
   return {
     parcelas,
     totalCentavos,
+    dataDaCompra,
+    compraFutura: espera > 0,
     // Valor das parcelas (a 1ª pode ter alguns centavos a mais: o resto da divisão).
     valorParcelaCentavos: saidas[saidas.length - 1].valorCentavos,
     primeiraParcelaCentavos: saidas[0].valorCentavos,
@@ -230,6 +265,8 @@ export function simularOpcao(visao, { cartao, aVistaCentavos, parcelas, totalCen
       limiteCentavos: limite.limiteCentavos,
       disponivelAntesCentavos: limite.disponivelCentavos,
       disponivelDepoisCentavos: limiteDepoisCentavos,
+      // Compra num mês futuro: o limite daquele dia é estimado.
+      estimativa: espera > 0,
     },
     meses,
     piorMes,
@@ -250,11 +287,14 @@ export function simularOpcao(visao, { cartao, aVistaCentavos, parcelas, totalCen
  * @param {{ parcelas: number, totalCentavos: number }[]} entrada.opcoes
  *   Parcelas de 2 a 24; total maior que zero (vazio na tela = igual ao à vista, sem juros).
  * @param {string} entrada.hoje "AAAA-MM-DD".
+ * @param {string} [entrada.comprarEm] "AAAA-MM", do mês atual a 12 meses depois (padrão: agora).
  * @param {object} [limites]
  * @returns {{ opcoes: object[] }} A primeira é sempre o à vista (parcelas 1).
  * @throws {ErroValidacao} Entrada inválida (mensagem para a tela).
  */
-export function simularCompra(visao, { formaPagamento, aVistaCentavos, opcoes = [], hoje }, limites = LIMITES_PADRAO) {
+export function simularCompra(
+  visao, { formaPagamento, aVistaCentavos, opcoes = [], hoje, comprarEm = visao.registroMes.mes }, limites = LIMITES_PADRAO,
+) {
   const cartao = (visao.cartoes ?? []).find((c) => c.formaPagamento === formaPagamento);
   if (!cartao) {
     throw new ErroValidacao('formaPagamento', 'Escolha um cartão cadastrado.');
@@ -274,8 +314,13 @@ export function simularCompra(visao, { formaPagamento, aVistaCentavos, opcoes = 
     }
   }
 
+  const mesAtual = visao.registroMes.mes;
+  if (!(comprarEm >= mesAtual && comprarEm <= somarMeses(mesAtual, MESES_DE_ESPERA_MAXIMOS))) {
+    throw new ErroValidacao('comprarEm', `Escolha um mês de compra entre agora e ${MESES_DE_ESPERA_MAXIMOS} meses depois.`);
+  }
+
   const todas = [{ parcelas: 1, totalCentavos: aVistaCentavos }, ...opcoes];
   return {
-    opcoes: todas.map((opcao) => simularOpcao(visao, { cartao, aVistaCentavos, hoje, ...opcao }, limites)),
+    opcoes: todas.map((opcao) => simularOpcao(visao, { cartao, aVistaCentavos, hoje, comprarEm, ...opcao }, limites)),
   };
 }

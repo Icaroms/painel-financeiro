@@ -9,11 +9,12 @@
  * fica a tela; os números vêm de src/simulador.js (testado no Node).
  *
  * Quem usa este módulo (src/ui/app.js) entrega obterDados() e pode chamar
- * preencher({ formaPagamento, valorTexto }) antes de abrir a vista, para
- * trazer o valor e o cartão que estavam na tela de lançamento.
+ * preencher({ formaPagamento, valorTexto, origem }) antes de abrir a vista,
+ * para trazer o valor e o cartão da tela de onde a pessoa veio (Lançar ou
+ * Configurar). "origem" é o endereço do botão Voltar (ex.: "#configurar").
  */
 
-import { hojeLocal, mesDaData, tituloDoMes } from '../datas.js';
+import { hojeLocal, mesDaData, tituloDoMes, somarMeses } from '../datas.js';
 import { formatarCentavos, reaisParaCentavos } from '../dinheiro.js';
 import { ErroValidacao } from '../erros.js';
 import { MAXIMO_PARCELAS_COMPRA } from '../modelo.js';
@@ -65,6 +66,8 @@ export function iniciarSimulador({ obterDados }) {
   const el = {
     semCartao: elemento('simular-sem-cartao'),
     cartao: elemento('simular-cartao'),
+    comprarEm: elemento('simular-comprar-em'),
+    voltar: elemento('simular-voltar'),
     aVista: elemento('simular-avista'),
     opcoes: elemento('simular-opcoes'),
     adicionar: elemento('simular-adicionar'),
@@ -134,22 +137,53 @@ export function iniciarSimulador({ obterDados }) {
       const totalCentavos = texto === '' ? aVistaCentavos : reaisParaCentavos(texto);
       return { parcelas, totalCentavos };
     });
-    return { formaPagamento: el.cartao.value, aVistaCentavos, opcoes, hoje: hojeLocal() };
+    return {
+      formaPagamento: el.cartao.value, aVistaCentavos, opcoes, hoje: hojeLocal(), comprarEm: el.comprarEm.value,
+    };
   }
 
   /* ---------------- Resultado ---------------- */
 
-  /** Texto do "melhor momento". */
-  function textoDoMelhorMomento({ esperaMeses, mesDaCompra, terminam }) {
-    if (esperaMeses === null) {
-      return `Nos próximos ${MESES_DE_ESPERA_MAXIMOS} meses, nenhum mês de compra deixa as parcelas acima de R$ 200,00.`;
+  /**
+   * Quadro "Quando comprar": a resposta em uma linha e, embaixo, o porquê.
+   *
+   * Três casos:
+   * - cabe agora: "Quando comprar: agora";
+   * - cabe mais tarde: "a partir de dezembro de 2026", comparando com comprar
+   *   agora e dizendo o que termina até lá;
+   * - não cabe nos próximos 12 meses.
+   */
+  function quadroQuandoComprar({ esperaMeses, mesDaCompra, piorMes, piorMesAgora, terminam }) {
+    const quadro = criar('div', { classe: 'quando-comprar' });
+    const paragrafo = (texto) => quadro.append(criar('p', { texto }));
+    const folga = 'pelo menos R$ 200,00 de sobra';
+    const valor = formatarCentavos;
+
+    if (esperaMeses === 0) {
+      quadro.append(criar('strong', { texto: 'Quando comprar: agora' }));
+      paragrafo(`Comprando agora, todos os meses com parcela ficam com ${folga}.`);
+      paragrafo(`O mês mais apertado é ${mesPorExtenso(piorMes.mes)}, com ${valor(piorMes.sobraCentavos)}.`);
+      return quadro;
     }
-    if (esperaMeses === 0) return 'Comprando agora, nenhum mês com parcela fica abaixo de R$ 200,00.';
-    // Ex.: "(antes, terminam: Ferramentas em novembro de 2026)".
-    const motivo = terminam.length > 0
-      ? ` (antes, terminam: ${terminam.map((t) => `${t.nome} em ${mesPorExtenso(t.mes)}`).join('; ')})`
-      : '';
-    return `Comprando a partir de ${mesPorExtenso(mesDaCompra)}, nenhum mês com parcela fica abaixo de R$ 200,00${motivo}.`;
+
+    if (esperaMeses === null) {
+      const ultimo = mesPorExtenso(somarMeses(mesDaData(hojeLocal()), MESES_DE_ESPERA_MAXIMOS));
+      quadro.append(criar('strong', { texto: `Quando comprar: não cabe nos próximos ${MESES_DE_ESPERA_MAXIMOS} meses` }));
+      paragrafo(`Comprando em qualquer mês até ${ultimo}, algum mês com parcela fica com menos de R$ 200,00 de sobra.`);
+      paragrafo(`Se comprar agora, o mais apertado seria ${mesPorExtenso(piorMesAgora.mes)}, com ${valor(piorMesAgora.sobraCentavos)}.`);
+      return quadro;
+    }
+
+    quadro.append(criar('strong', { texto: `Quando comprar: a partir de ${mesPorExtenso(mesDaCompra)}` }));
+    paragrafo(`Se comprar agora, ${mesPorExtenso(piorMesAgora.mes)} ficaria com ${valor(piorMesAgora.sobraCentavos)} ` +
+      'de sobra (menos que os R$ 200,00 mínimos).');
+    paragrafo(`Comprando em ${mesPorExtenso(mesDaCompra)}, todos os meses com parcela ficam com ${folga}. ` +
+      `O mais apertado é ${mesPorExtenso(piorMes.mes)}, com ${valor(piorMes.sobraCentavos)}.`);
+    if (terminam.length > 0) {
+      const lista = terminam.map((t) => `${t.nome} termina em ${mesPorExtenso(t.mes)}`).join('; ');
+      paragrafo(`O que abre espaço até lá: ${lista}.`);
+    }
+    return quadro;
   }
 
   /** Tabela mês a mês: parcela e sobra prevista, sem e com a compra. */
@@ -195,6 +229,11 @@ export function iniciarSimulador({ obterDados }) {
     const linhas = criar('ul', { classe: 'opcao-linhas' });
     const linha = (texto, classe) => linhas.append(criar('li', { texto, classe }));
 
+    // Compra num mês futuro: deixa claro de quando são os números.
+    if (opcao.compraFutura) {
+      linha(`Compra simulada em ${dataCurta(opcao.dataDaCompra)}/${opcao.dataDaCompra.slice(0, 4)}`);
+    }
+
     // Total e quando começa.
     const primeira = opcao.primeiraParcelaCentavos !== opcao.valorParcelaCentavos
       ? ` (a 1ª é ${formatarCentavos(opcao.primeiraParcelaCentavos)})`
@@ -209,22 +248,21 @@ export function iniciarSimulador({ obterDados }) {
     }
 
     // Limite.
-    const { limiteCentavos, disponivelDepoisCentavos } = opcao.limite;
+    const { limiteCentavos, disponivelDepoisCentavos, estimativa: limiteEstimado } = opcao.limite;
+    const sufixoLimite = limiteEstimado ? ' (estimativa)' : '';
     if (disponivelDepoisCentavos < 0) {
-      linha(`Passa do limite do ${formaPagamento} em ${formatarCentavos(-disponivelDepoisCentavos)}`, 'alerta');
+      linha(`Passa do limite do ${formaPagamento} em ${formatarCentavos(-disponivelDepoisCentavos)}${sufixoLimite}`, 'linha-alerta');
     } else {
-      linha(`Limite do ${formaPagamento} depois: ${formatarCentavos(disponivelDepoisCentavos)} de ${formatarCentavos(limiteCentavos)}`);
+      linha(`Limite do ${formaPagamento} depois: ${formatarCentavos(disponivelDepoisCentavos)} de ` +
+        `${formatarCentavos(limiteCentavos)}${sufixoLimite}`);
     }
 
-    // Pior mês.
+    // Mês mais apertado (o pior entre os meses com parcela).
     const estimativa = opcao.estimativa ? ' (estimativa)' : '';
-    linha(`Pior mês: ${mesPorExtenso(opcao.piorMes.mes)} deve fechar em ${formatarCentavos(opcao.piorMes.sobraCentavos)}${estimativa}`,
-      opcao.piorMes.sobraCentavos < 0 ? 'alerta' : undefined);
+    linha(`Mês mais apertado: ${mesPorExtenso(opcao.piorMes.mes)}, com ${formatarCentavos(opcao.piorMes.sobraCentavos)} de sobra${estimativa}`,
+      opcao.piorMes.sobraCentavos < 0 ? 'linha-alerta' : undefined);
 
-    // Melhor momento.
-    linha(`Melhor momento: ${textoDoMelhorMomento(opcao.melhorMomento)}`);
-
-    ficha.append(topo, linhas, tabelaMesAMes(opcao.meses));
+    ficha.append(topo, linhas, quadroQuandoComprar(opcao.melhorMomento), tabelaMesAMes(opcao.meses));
     return ficha;
   }
 
@@ -258,6 +296,7 @@ export function iniciarSimulador({ obterDados }) {
   }
 
   el.cartao.addEventListener('change', calcular);
+  el.comprarEm.addEventListener('change', calcular);
   el.aVista.addEventListener('input', calcular);
   el.opcoes.addEventListener('input', calcular);
   el.opcoes.addEventListener('change', calcular);
@@ -268,9 +307,9 @@ export function iniciarSimulador({ obterDados }) {
   let inicial = null;
 
   /**
-   * Guarda o valor e o cartão da tela de lançamento para preencher o simulador.
+   * Guarda o valor, o cartão e a tela de origem para preencher o simulador.
    *
-   * @param {{ formaPagamento: string, valorTexto: string }} dadosIniciais
+   * @param {{ formaPagamento?: string, valorTexto?: string, origem?: string }} dadosIniciais
    */
   function preencher(dadosIniciais) {
     inicial = dadosIniciais;
@@ -286,7 +325,24 @@ export function iniciarSimulador({ obterDados }) {
     if (cartoes.some((c) => c.formaPagamento === escolhido)) el.cartao.value = escolhido;
 
     if (inicial?.valorTexto) el.aVista.value = inicial.valorTexto;
+
+    // Botão Voltar: para a tela de onde a pessoa veio (Lançar ou Configurar).
+    if (inicial?.origem) {
+      el.voltar.href = inicial.origem;
+      el.voltar.textContent = inicial.origem === '#configurar' ? '‹ Configurar' : '‹ Lançar';
+    }
     inicial = null;
+
+    // "Comprar em": agora e os próximos 12 meses (a lista acompanha a virada do mês).
+    const mesAtual = mesDaData(hojeLocal());
+    const escolhidoMes = el.comprarEm.value;
+    el.comprarEm.replaceChildren(...Array.from({ length: MESES_DE_ESPERA_MAXIMOS + 1 }, (_, i) => {
+      const mes = somarMeses(mesAtual, i);
+      return criar('option', { value: mes, texto: i === 0 ? `Agora (${mesPorExtenso(mes)})` : mesPorExtenso(mes) });
+    }));
+    if (escolhidoMes >= mesAtual && escolhidoMes <= somarMeses(mesAtual, MESES_DE_ESPERA_MAXIMOS)) {
+      el.comprarEm.value = escolhidoMes;
+    }
 
     if (el.opcoes.children.length === 0) el.opcoes.append(linhaDeOpcao(10));
     atualizarBotaoAdicionar();
