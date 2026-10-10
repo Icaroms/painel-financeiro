@@ -374,7 +374,10 @@ function atualizar() {
   // Compra no cartão: escolha das parcelas, quando a fatura é paga e o limite.
   el.linhaCartao.hidden = !painel.ehCartao;
   const linhaLimite = document.createElement('span');
-  linhaLimite.className = painel.limiteEstourado ? 'linha-limite estourado' : 'linha-limite';
+  let classeLimite = 'linha-limite';
+  if (painel.limiteEstourado) classeLimite += ' estourado';
+  else if (painel.limiteApertado) classeLimite += ' apertado';
+  linhaLimite.className = classeLimite;
   linhaLimite.textContent = painel.limiteTexto;
   el.infoCartao.replaceChildren(painel.cartaoTexto, document.createElement('br'), linhaLimite);
 
