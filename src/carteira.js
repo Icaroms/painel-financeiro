@@ -20,6 +20,7 @@
  *     valorAtualCentavos: 105000,               ← digitado pela pessoa
  *     valorAtualEm: '2026-10-01',               ← data do valor atual
  *     reserva: true,                            ← faz parte da reserva de emergência (4.2c)
+ *     taxa: { indexador: 'cdi', percentual: 110 },← taxa contratada (4.4c), opcional
  *   }]
  *
  * Reserva de emergência (parte 4.2c): a pessoa marca quais aplicações de
@@ -29,8 +30,10 @@
  * para sacar rápido e sem risco de vender em baixa. Investimentos gravados
  * antes da 4.2c não têm o campo e contam como "não é reserva".
  *
- * Decisões de 10/10/2026: o valor atual da renda fixa é digitado agora; na
- * parte 4.4 (taxas) o app passa a estimar pela taxa contratada.
+ * Decisões de 10/10/2026: o valor atual da renda fixa é digitado; com a taxa
+ * contratada (parte 4.4c, só CDB, Tesouro, LCI/LCA e outra renda fixa), o app
+ * estima o valor de hoje a partir do último valor digitado (src/renda-fixa.js).
+ * Investimentos gravados antes da 4.4c não têm o campo e contam como "sem taxa".
  *
  * O app só mostra números: nunca diz o que comprar ou vender.
  * Funções puras: testadas no Node. A tela fica em src/ui/investir.js.
@@ -39,6 +42,7 @@
 import { ErroValidacao } from './erros.js';
 import { ehDataValida } from './datas.js';
 import { ehPorOperacao, valoresDoAtivo } from './acoes.js';
+import { validarTaxa } from './renda-fixa.js';
 
 /** Grupos do resumo da carteira, na ordem em que aparecem. */
 export const GRUPOS_DE_INVESTIMENTO = Object.freeze([
@@ -113,7 +117,7 @@ function exigirValor(valor, campo, rotulo, { permitirZero }) {
  * Valor atual vazio (null) = igual ao aplicado, na data da aplicação.
  */
 function validar(
-  { tipo, nome, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos = null, valorAtualEm = null, reserva = false },
+  { tipo, nome, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos = null, valorAtualEm = null, reserva = false, taxa = null },
   hoje,
 ) {
   if (!tipoDoInvestimento(tipo)) {
@@ -135,11 +139,12 @@ function validar(
     throw new ErroValidacao('reserva', 'Só renda fixa e fundos podem ser a reserva de emergência: ela precisa de dinheiro que dá para sacar rápido.');
   }
   const ehReserva = reserva === true;
+  const taxaValida = validarTaxa(tipo, taxa);
 
   if (valorAtualCentavos === null) {
     return {
       tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos,
-      valorAtualCentavos: valorAplicadoCentavos, valorAtualEm: dataAplicacao, reserva: ehReserva,
+      valorAtualCentavos: valorAplicadoCentavos, valorAtualEm: dataAplicacao, reserva: ehReserva, taxa: taxaValida,
     };
   }
   exigirValor(valorAtualCentavos, 'valorAtualCentavos', 'O valor atual', { permitirZero: true });
@@ -147,7 +152,9 @@ function validar(
   if (valorAtualEm < dataAplicacao) {
     throw new ErroValidacao('valorAtualEm', 'A data do valor atual não pode ser antes da aplicação.');
   }
-  return { tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos, valorAtualEm, reserva: ehReserva };
+  return {
+    tipo, nome: nomeLimpo, dataAplicacao, valorAplicadoCentavos, valorAtualCentavos, valorAtualEm, reserva: ehReserva, taxa: taxaValida,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,6 +187,8 @@ function substituir(estado, novo) {
  * @param {number} dados.valorAplicadoCentavos Maior que zero.
  * @param {number|null} [dados.valorAtualCentavos] null = igual ao aplicado.
  * @param {string|null} [dados.valorAtualEm]   Data do valor atual (obrigatória com o valor).
+ * @param {boolean} [dados.reserva]            É reserva de emergência (só renda fixa e fundos).
+ * @param {{ indexador: string, percentual: number }|null} [dados.taxa] Taxa contratada (src/renda-fixa.js).
  * @param {object} opcoes { hoje, agora, gerarId }
  * @returns {object} Estado novo.
  */

@@ -52,6 +52,7 @@ import { iniciarSimulador } from './simulador.js';
 import { iniciarInvestir } from './investir.js';
 import { iniciarRadar } from './radar.js';
 import { dividirSobra } from '../destino.js';
+import { comEstimativas } from '../renda-fixa.js';
 import {
   VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
   RESULTADOS_DA_PROCURA, textoDaProcura,
@@ -136,6 +137,29 @@ const TAMANHO_MAXIMO_BACKUP = 5 * 1024 * 1024;
 
 /** Os dados em uso. São carregados do aparelho no início (veja "Início"). */
 let dados = null;
+
+/**
+ * Histórico do CDI e do IPCA do último radar baixado (parte 4.4b), para
+ * estimar a renda fixa pela taxa contratada (parte 4.4c). null sem radar.
+ */
+let historicoDasTaxas = null;
+
+/** Última visão com estimativas calculada (reaproveitada enquanto nada muda). */
+let cacheEstimados = { dados: undefined, historico: undefined, hoje: undefined, visao: null };
+
+/**
+ * Dados com a renda fixa estimada pela taxa contratada (src/renda-fixa.js).
+ * SÓ PARA MOSTRAR E CALCULAR (carteira, reserva, destino da sobra, IA):
+ * toda mudança continua partindo de `dados`, que é o que a pessoa digitou.
+ */
+function dadosEstimados() {
+  const hoje = hojeLocal();
+  const c = cacheEstimados;
+  if (c.dados !== dados || c.historico !== historicoDasTaxas || c.hoje !== hoje) {
+    cacheEstimados = { dados, historico: historicoDasTaxas, hoje, visao: dados && comEstimativas(dados, historicoDasTaxas, hoje) };
+  }
+  return cacheEstimados.visao;
+}
 
 /**
  * Fica false quando o armazenamento não pode ser usado (navegador sem
@@ -651,23 +675,29 @@ const configurar = iniciarConfigurar({
 });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
-const investir = iniciarInvestir({ obterDados: () => dados, aplicarMudanca });
+const investir = iniciarInvestir({ obterDados: () => dados, obterDadosEstimados: dadosEstimados, aplicarMudanca });
 const radar = iniciarRadar({
   lerGuardado: lerRadarGuardado,
-  guardar: gravarRadarGuardado,
-  obterDados: () => dados,
+  // Radar novo: guarda, troca o histórico das taxas e refaz a carteira com a estimativa nova.
+  guardar: async (guardado) => {
+    await gravarRadarGuardado(guardado);
+    historicoDasTaxas = guardado?.radar?.taxas?.historico ?? null;
+    if (location.hash === '#investir') investir.renderizar();
+  },
+  obterDados: dadosEstimados,
   obterConfigIA: () => configIA,
   // Filtro "cabe no Investir deste mês" do radar: a parte Investir do destino da sobra.
   obterInvestirCentavos: () => {
     if (!dados) return 0;
     const hoje = hojeLocal();
-    return dividirSobra(dados, mesDaData(hoje), hoje).investirCentavos;
+    return dividirSobra(dadosEstimados(), mesDaData(hoje), hoje).investirCentavos;
   },
 });
 const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
-const destinoMes = iniciarDestinoMes({ obterDados: () => dados });
-const destinoConfig = iniciarDestinoConfig({ obterDados: () => dados, aplicarMudanca });
+// A reserva usa o valor estimado da renda fixa (4.4c): só leitura, então a visão com estimativas.
+const destinoMes = iniciarDestinoMes({ obterDados: dadosEstimados });
+const destinoConfig = iniciarDestinoConfig({ obterDados: () => dados, obterDadosEstimados: dadosEstimados, aplicarMudanca });
 
 /* ------------------------------------------------------------------ */
 /* IA (Fase 03): configuração guardada à parte, fora do backup        */
@@ -849,6 +879,11 @@ try {
   ultimaAnalise = (await lerAnaliseMes()) ?? null;
 } catch {
   ultimaAnalise = null;
+}
+try {
+  historicoDasTaxas = (await lerRadarGuardado())?.radar?.taxas?.historico ?? null;
+} catch {
+  historicoDasTaxas = null; // sem radar guardado: a renda fixa fica com o valor digitado
 }
 montarMarcas();
 montarParcelas();

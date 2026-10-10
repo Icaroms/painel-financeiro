@@ -64,7 +64,7 @@ describe('adicionarInvestimento', () => {
     assert.deepEqual(estado.investimentos, [{
       id: 'inv-1', criadoEm: AGORA.toISOString(), atualizadoEm: AGORA.toISOString(), excluidoEm: null,
       tipo: 'cdb', nome: 'CDB Banco X 2028', dataAplicacao: '2026-03-10',
-      valorAplicadoCentavos: 100000, valorAtualCentavos: 105000, valorAtualEm: '2026-10-01', reserva: false,
+      valorAplicadoCentavos: 100000, valorAtualCentavos: 105000, valorAtualEm: '2026-10-01', reserva: false, taxa: null,
     }]);
   });
 

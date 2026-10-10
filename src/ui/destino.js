@@ -119,9 +119,10 @@ export function iniciarDestinoMes({ obterDados }) {
  * @param {object} opcoes
  * @param {() => object} opcoes.obterDados
  * @param {(novos: object, mensagem: string) => Promise<void>} opcoes.aplicarMudanca
+ * @param {() => object} [opcoes.obterDadosEstimados] Dados com a renda fixa estimada (só para mostrar).
  * @returns {{ renderizar: () => void }}
  */
-export function iniciarDestinoConfig({ obterDados, aplicarMudanca }) {
+export function iniciarDestinoConfig({ obterDados, aplicarMudanca, obterDadosEstimados = obterDados }) {
   const el = {
     form: elemento('form-destino'),
     reserva: elemento('destino-reserva'),
@@ -182,7 +183,8 @@ export function iniciarDestinoConfig({ obterDados, aplicarMudanca }) {
    * antes da 4.2c, um aviso diz o que fazer com ele.
    */
   function renderizarReservaAtual() {
-    const reserva = situacaoDaReserva(obterDados(), mesDaData(hojeLocal()));
+    // Só leitura: usa o valor estimado da renda fixa (parte 4.4c).
+    const reserva = situacaoDaReserva(obterDadosEstimados(), mesDaData(hojeLocal()));
     const n = reserva.investimentosNaReserva;
     if (n === 0) {
       el.reservaAtual.textContent = 'Reserva atual: R$ 0,00. Nenhum investimento está marcado como reserva na aba Investir.';
