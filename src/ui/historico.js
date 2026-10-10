@@ -169,7 +169,7 @@ export function iniciarHistorico({ obterDados }) {
         : pagina.itens.map(({ lancamento, nomeCategoria }) => {
             const li = criar('li', { classe: 'linha-mes' });
             const info = criar('div', { classe: 'linha-mes-info' });
-            const detalhe = [dataCurta(lancamento.data), lancamento.formaPagamento, lancamento.descricao || null]
+            const detalhe = [dataCurta(lancamento.data), lancamento.formaPagamento + ((lancamento.parcelas ?? 1) > 1 ? ` em ${lancamento.parcelas}x` : ''), lancamento.descricao || null]
               .filter(Boolean).join(' · ');
             info.append(
               criar('span', { classe: 'linha-mes-nome', texto: nomeCategoria }),
