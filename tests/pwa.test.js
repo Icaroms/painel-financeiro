@@ -109,4 +109,11 @@ describe('index.html', () => {
       assert.ok(existsSync(join(RAIZ, fonte)), `fonte não encontrada: ${fonte}`);
     }
   });
+
+  it('responde a versão quando a página pergunta (linha "Versão do app" em Configurar)', () => {
+    const texto = ler('sw.js');
+    assert.match(texto, /addEventListener\('message'/);
+    assert.match(texto, /evento\.data === 'versao'/);
+    assert.match(texto, /postMessage\(\{ tipo: 'versao', versao: VERSAO_CACHE \}\)/);
+  });
 });
