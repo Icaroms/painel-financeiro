@@ -199,3 +199,12 @@ export function inicioDaSemana(data) {
   const voltar = diaDaSemana === 0 ? 6 : diaDaSemana - 1;
   return somarDias(data, -voltar);
 }
+
+const nomeDoMes = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/** "2026-11" → "Novembro de 2026". */
+export function tituloDoMes(mes) {
+  const [ano, numero] = mes.split('-').map(Number);
+  const texto = nomeDoMes.format(new Date(Date.UTC(ano, numero - 1, 1)));
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}

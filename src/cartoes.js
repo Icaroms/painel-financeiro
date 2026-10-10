@@ -151,6 +151,17 @@ export function faturaDaCompra(cartao, data) {
 }
 
 /**
+ * Data de vencimento da fatura que vence num mês: vencimentoNoMes(cartao, "2026-11") → "2026-11-10".
+ *
+ * @param {object} cartao
+ * @param {string} mes "AAAA-MM".
+ * @returns {string} "AAAA-MM-DD".
+ */
+export function vencimentoNoMes(cartao, mes) {
+  return dataNoMes(mes, cartao.diaVencimento);
+}
+
+/**
  * Melhor dia de compra: o dia do fechamento. Comprando a partir dele,
  * a compra só é paga na fatura seguinte (o prazo mais longo).
  *
