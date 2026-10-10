@@ -1,0 +1,59 @@
+# Robô do Radar de opções (Fase 04, parte 4.3a).
+#
+# Uma vez por dia, baixa dados públicos (por enquanto, as taxas do Tesouro
+# Direto), monta o radar.json e publica na branch "radar-dados". O app lê
+# o arquivo de lá. Custo zero: o GitHub Actions é gratuito para repositório
+# público, e nenhum cadastro em outro site é necessário.
+#
+# - A branch "radar-dados" guarda só o arquivo do dia (um commit, trocado a
+#   cada execução): o histórico da main não muda.
+# - Se o robô falhar (ex.: um site fora do ar), nada é publicado e o app
+#   continua com o último radar bom.
+# - Para rodar na hora: aba Actions → Radar → Run workflow.
+
+name: Radar
+
+on:
+  schedule:
+    # 10:30 UTC = 07:30 em Brasília, de segunda a sábado (os dados do Tesouro saem em dias úteis).
+    - cron: '30 10 * * 1-6'
+  workflow_dispatch: {}
+
+# Só o necessário: escrever na branch radar-dados.
+permissions:
+  contents: write
+
+# Nunca duas execuções ao mesmo tempo.
+concurrency:
+  group: radar
+  cancel-in-progress: false
+
+jobs:
+  gerar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar o código do app
+        uses: actions/checkout@v5
+
+      - name: Preparar o Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Gerar o radar
+        run: node scripts/radar/gerar-radar.js "$RUNNER_TEMP/radar/radar.json"
+
+      - name: Publicar na branch radar-dados
+        working-directory: ${{ runner.temp }}/radar
+        env:
+          TOKEN: ${{ github.token }}
+          REPOSITORIO: ${{ github.repository }}
+        run: |
+          git init -q -b radar-dados
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add radar.json
+          git commit -q -m "radar: dados de $(date -u +%Y-%m-%d)"
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${REPOSITORIO}.git" radar-dados
+          echo "Radar publicado na branch radar-dados."
