@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 const RAIZ = fileURLToPath(new URL('..', import.meta.url));
 const ler = (caminho) => readFileSync(join(RAIZ, caminho), 'utf8');
@@ -115,5 +116,98 @@ describe('index.html', () => {
     assert.match(texto, /addEventListener\('message'/);
     assert.match(texto, /evento\.data === 'versao'/);
     assert.match(texto, /postMessage\(\{ tipo: 'versao', versao: VERSAO_CACHE \}\)/);
+  });
+});
+
+/**
+ * Roda o sw.js de verdade num "navegador de mentira" (sem internet nenhuma):
+ * - a "rede" responde o que o teste mandar (ou falha, como sem internet);
+ * - a "cópia guardada" é um Map que o teste preenche.
+ * Devolve a função pedir(endereco, { modo }) que passa um pedido pelo
+ * service worker e devolve a resposta que a página receberia.
+ */
+function serviceWorkerDeTeste({ rede, guardados = {} }) {
+  const ORIGEM = 'https://app.exemplo';
+  const enderecoCompleto = (pedido) => new URL(typeof pedido === 'string' ? pedido : pedido.url, `${ORIGEM}/`);
+  const chave = (pedido) => {
+    const endereco = enderecoCompleto(pedido);
+    return `${endereco.origin}${endereco.pathname}`; // sem "?..." (como o ignoreSearch)
+  };
+
+  const cache = new Map(Object.entries(guardados).map(([endereco, texto]) => [chave(endereco), texto]));
+  const ouvintes = {};
+  const contexto = {
+    self: {
+      location: { origin: ORIGEM },
+      addEventListener: (tipo, funcao) => { ouvintes[tipo] = funcao; },
+    },
+    caches: {
+      open: async () => ({
+        match: async (pedido) => (cache.has(chave(pedido)) ? new Response(cache.get(chave(pedido)), { status: 200 }) : undefined),
+        put: async (pedido, resposta) => { cache.set(chave(pedido), await resposta.text()); },
+      }),
+    },
+    fetch: async (pedido) => rede(pedido),
+    Response,
+    URL,
+    setTimeout,
+    clearTimeout,
+  };
+  runInNewContext(ler('sw.js'), contexto);
+
+  async function pedir(caminho, { modo = 'cors' } = {}) {
+    let resposta;
+    ouvintes.fetch({
+      request: { method: 'GET', url: `${ORIGEM}${caminho}`, mode: modo },
+      respondWith: (promessa) => { resposta = promessa; },
+    });
+    return resposta;
+  }
+  return { pedir, cache, chave };
+}
+
+describe('sw.js: de onde vem cada resposta', () => {
+  const servidorRespondendo = (status, texto) => async () => new Response(texto, { status });
+  const semInternet = async () => { throw new TypeError('Failed to fetch'); };
+
+  it('com internet: a versão nova do servidor, e ela vira a nova cópia guardada', async () => {
+    const sw = serviceWorkerDeTeste({ rede: servidorRespondendo(200, 'nova'), guardados: { './src/app.js': 'antiga' } });
+    const resposta = await sw.pedir('/src/app.js');
+    assert.equal(await resposta.text(), 'nova');
+    await new Promise((pronto) => setTimeout(pronto, 0)); // o put guarda sem a página esperar
+    assert.equal(sw.cache.get(sw.chave('./src/app.js')), 'nova');
+  });
+
+  it('servidor com erro (ex.: site pausado, 503): usa a cópia guardada', async () => {
+    const sw = serviceWorkerDeTeste({ rede: servidorRespondendo(503, 'Site not available'), guardados: { './src/app.js': 'guardada' } });
+    const resposta = await sw.pedir('/src/app.js');
+    assert.equal(resposta.status, 200);
+    assert.equal(await resposta.text(), 'guardada');
+    assert.equal(sw.cache.get(sw.chave('./src/app.js')), 'guardada'); // a página de erro NÃO substitui a cópia
+  });
+
+  it('servidor com erro na página principal: abre o index.html guardado', async () => {
+    const sw = serviceWorkerDeTeste({ rede: servidorRespondendo(404, 'Not found'), guardados: { './index.html': 'app' } });
+    const resposta = await sw.pedir('/qualquer-endereco', { modo: 'navigate' });
+    assert.equal(await resposta.text(), 'app');
+  });
+
+  it('servidor com erro e sem cópia: mostra o erro do servidor como veio', async () => {
+    const sw = serviceWorkerDeTeste({ rede: servidorRespondendo(404, 'Not found') });
+    const resposta = await sw.pedir('/nao-existe.js');
+    assert.equal(resposta.status, 404);
+    assert.equal(await resposta.text(), 'Not found');
+  });
+
+  it('sem internet: usa a cópia guardada (ignorando o "?..." do endereço)', async () => {
+    const sw = serviceWorkerDeTeste({ rede: semInternet, guardados: { './css/app.css': 'estilos' } });
+    assert.equal(await (await sw.pedir('/css/app.css?v=2')).text(), 'estilos');
+  });
+
+  it('sem internet e sem cópia: aviso claro com erro 503', async () => {
+    const sw = serviceWorkerDeTeste({ rede: semInternet });
+    const resposta = await sw.pedir('/nao-guardado.js');
+    assert.equal(resposta.status, 503);
+    assert.equal(await resposta.text(), 'Sem internet e sem cópia deste arquivo.');
   });
 });

@@ -8,7 +8,10 @@
  * 1. Na instalação, guarda uma cópia de todos os arquivos do app (lista abaixo).
  * 2. A cada pedido, tenta buscar a versão mais nova na internet e atualiza a cópia.
  * 3. Sem internet (ou se a internet demorar mais de 3 segundos), usa a cópia.
- * Assim, com internet o app está sempre na versão mais nova; sem internet, ele abre igual.
+ * 4. Se o servidor RESPONDER COM ERRO (ex.: site pausado na hospedagem, que
+ *    mostra "Site not available", ou um erro 500), também usa a cópia.
+ * Assim, com internet o app está sempre na versão mais nova; sem internet,
+ * ou com o servidor fora do ar, ele abre igual.
  *
  * Fica na raiz do site de propósito: um service worker só controla os
  * arquivos da pasta onde ele está e das pastas abaixo dela.
@@ -22,7 +25,7 @@
  * conferir se o aparelho está na última publicação) e, ao mudar, a cópia
  * antiga dos arquivos é apagada.
  */
-const VERSAO_CACHE = 'painel-financeiro-v12';
+const VERSAO_CACHE = 'painel-financeiro-v13';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -121,6 +124,21 @@ self.addEventListener('message', (evento) => {
   }
 });
 
+/**
+ * A cópia guardada de um pedido, ou null se não houver.
+ * Para a página principal, qualquer endereço do app abre o index.html
+ * (ex.: "/#mes" ou um endereço que não existe).
+ */
+async function copiaGuardada(cache, pedido) {
+  const copia = await cache.match(pedido, { ignoreSearch: true });
+  if (copia) return copia;
+  if (pedido.mode === 'navigate') {
+    const inicio = await cache.match('./index.html');
+    if (inicio) return inicio;
+  }
+  return null;
+}
+
 // Cada pedido: rede primeiro, cópia como reserva.
 self.addEventListener('fetch', (evento) => {
   const { request } = evento;
@@ -130,26 +148,26 @@ self.addEventListener('fetch', (evento) => {
 
   evento.respondWith((async () => {
     const cache = await caches.open(VERSAO_CACHE);
+    let resposta;
     try {
-      const resposta = await buscarComPrazo(request);
-      if (resposta.ok) {
-        // Guarda a versão nova para a próxima vez sem internet.
-        cache.put(request, resposta.clone());
-      }
-      return resposta;
+      resposta = await buscarComPrazo(request);
     } catch {
-      // Sem internet: a cópia guardada. Para a página principal, qualquer
-      // endereço do app abre o index.html (ex.: "/#mes").
-      const copia = await cache.match(request, { ignoreSearch: true });
-      if (copia) return copia;
-      if (request.mode === 'navigate') {
-        const inicio = await cache.match('./index.html');
-        if (inicio) return inicio;
-      }
-      return new Response('Sem internet e sem cópia deste arquivo.', {
+      // Sem internet (ou a internet demorou demais): a cópia guardada.
+      return (await copiaGuardada(cache, request)) ?? new Response('Sem internet e sem cópia deste arquivo.', {
         status: 503,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       });
     }
+
+    if (resposta.ok) {
+      // Deu certo: guarda a versão nova para a próxima vez sem internet.
+      cache.put(request, resposta.clone());
+      return resposta;
+    }
+
+    // O servidor respondeu, mas com erro (ex.: 503 do site pausado, 404, 500).
+    // A cópia guardada é melhor que a página de erro; sem cópia, mostra o erro
+    // do servidor como ele veio (assim um arquivo que não existe continua dando 404).
+    return (await copiaGuardada(cache, request)) ?? resposta;
   })());
 });
