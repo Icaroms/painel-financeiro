@@ -51,6 +51,7 @@ import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
 import { iniciarInvestir } from './investir.js';
 import { iniciarRadar } from './radar.js';
+import { iniciarSimuladorInvestimentos } from './simulador-investimentos.js';
 import { dividirSobra } from '../destino.js';
 import { comEstimativas } from '../renda-fixa.js';
 import {
@@ -143,6 +144,9 @@ let dados = null;
  * estimar a renda fixa pela taxa contratada (parte 4.4c). null sem radar.
  */
 let historicoDasTaxas = null;
+
+/** Último radar baixado (taxas e Tesouro do simulador de investimentos, parte 4.5). null sem radar. */
+let radarGuardado = null;
 
 /** Última visão com estimativas calculada (reaproveitada enquanto nada muda). */
 let cacheEstimados = { dados: undefined, historico: undefined, hoje: undefined, visao: null };
@@ -675,6 +679,13 @@ const configurar = iniciarConfigurar({
 });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
 const historico = iniciarHistorico({ obterDados: () => dados });
+/** Parte "Investir" da sobra deste mês (destino da sobra), com a renda fixa estimada. */
+function investirDoMes() {
+  if (!dados) return 0;
+  const hoje = hojeLocal();
+  return dividirSobra(dadosEstimados(), mesDaData(hoje), hoje).investirCentavos;
+}
+
 const investir = iniciarInvestir({ obterDados: () => dados, obterDadosEstimados: dadosEstimados, aplicarMudanca });
 const radar = iniciarRadar({
   lerGuardado: lerRadarGuardado,
@@ -682,16 +693,21 @@ const radar = iniciarRadar({
   guardar: async (guardado) => {
     await gravarRadarGuardado(guardado);
     historicoDasTaxas = guardado?.radar?.taxas?.historico ?? null;
-    if (location.hash === '#investir') investir.renderizar();
+    radarGuardado = guardado?.radar ?? null;
+    if (location.hash === '#investir') {
+      investir.renderizar();
+      simuladorInvestimentos.renderizar();
+    }
   },
   obterDados: dadosEstimados,
   obterConfigIA: () => configIA,
   // Filtro "cabe no Investir deste mês" do radar: a parte Investir do destino da sobra.
-  obterInvestirCentavos: () => {
-    if (!dados) return 0;
-    const hoje = hojeLocal();
-    return dividirSobra(dadosEstimados(), mesDaData(hoje), hoje).investirCentavos;
-  },
+  obterInvestirCentavos: investirDoMes,
+});
+// Parte 4.5: simulador de investimentos, com as taxas do radar guardado.
+const simuladorInvestimentos = iniciarSimuladorInvestimentos({
+  obterRadar: () => radarGuardado,
+  obterInvestirCentavos: investirDoMes,
 });
 const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
@@ -806,6 +822,7 @@ function mostrarVista() {
   if (vista === 'historico') historico.renderizar();
   if (vista === 'investir') {
     investir.renderizar();
+    simuladorInvestimentos.renderizar();
     radar.renderizar(); // mostra o radar guardado e busca o novo se já passou da hora
   }
   if (vista === 'configurar') {
@@ -881,10 +898,11 @@ try {
   ultimaAnalise = null;
 }
 try {
-  historicoDasTaxas = (await lerRadarGuardado())?.radar?.taxas?.historico ?? null;
+  radarGuardado = (await lerRadarGuardado())?.radar ?? null;
 } catch {
-  historicoDasTaxas = null; // sem radar guardado: a renda fixa fica com o valor digitado
+  radarGuardado = null; // sem radar guardado: renda fixa com o valor digitado; simulador pede o radar
 }
+historicoDasTaxas = radarGuardado?.taxas?.historico ?? null;
 montarMarcas();
 montarParcelas();
 
