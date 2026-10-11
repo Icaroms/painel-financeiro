@@ -312,6 +312,40 @@
       <button type="button" class="botao-secundario" id="botao-novo-investimento">Adicionar investimento</button>
     </section>
 
+    <!-- Simulador de investimentos (parte 4.5): regras em src/simulador-investimentos.js. -->
+    <section class="cartao" aria-labelledby="titulo-sim-investimento">
+      <h2 id="titulo-sim-investimento">Simulador de investimentos</h2>
+      <p class="secundario explicacao">Quanto um valor vira em cada opção se as taxas de hoje continuarem por todo o prazo. As taxas mudam: é uma simulação, não uma promessa, e não é recomendação.</p>
+      <form class="form-fixo" id="form-sim-investimento" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Valor inicial</span>
+          <span class="campo-dinheiro"><span aria-hidden="true">R$</span><input id="sim-inv-inicial" inputmode="decimal" placeholder="0,00"></span>
+        </label>
+        <label class="campo">
+          <span class="secundario">Valor mensal</span>
+          <span class="campo-dinheiro"><span aria-hidden="true">R$</span><input id="sim-inv-mensal" inputmode="decimal" placeholder="0,00"></span>
+        </label>
+        <label class="campo">
+          <span class="secundario">Prazo (meses)</span>
+          <input id="sim-inv-meses" inputmode="numeric">
+        </label>
+        <label class="campo">
+          <span class="secundario">CDB (% do CDI)</span>
+          <input id="sim-inv-cdb" inputmode="decimal">
+        </label>
+        <label class="campo">
+          <span class="secundario">LCI/LCA (% do CDI)</span>
+          <input id="sim-inv-lci" inputmode="decimal">
+        </label>
+        <p class="dica secundario" id="sim-inv-dica"></p>
+        <span class="erro" id="sim-inv-erro" role="alert"></span>
+        <div class="acoes"><button type="submit" class="botao-pequeno">Simular</button></div>
+      </form>
+      <p class="secundario radar-fonte" id="sim-inv-fonte"></p>
+      <ul class="lista-mes" id="sim-inv-resultado"></ul>
+      <p class="secundario radar-fonte">O valor mensal entra todo mês a partir do mês que vem. IR pela tabela regressiva, contado aporte por aporte; LCI/LCA e poupança são isentas. "Em reais de hoje" desconta a inflação, supondo o IPCA dos últimos 12 meses. Não entram: IOF (resgate antes de 30 dias), taxa de custódia do Tesouro e a variação de preço ao vender um título antes do vencimento.</p>
+    </section>
+
     <!-- Radar de opções (parte 4.3): opções do mercado por números objetivos, com fonte e data.
          Os dados vêm do robô no GitHub (.github/workflows/radar.yml). -->
     <section class="cartao" aria-labelledby="titulo-radar">

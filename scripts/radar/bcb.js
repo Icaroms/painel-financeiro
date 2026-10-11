@@ -1,5 +1,5 @@
 /**
- * Robô do Radar (Fase 04, partes 4.4a e 4.4b): taxas do Banco Central.
+ * Robô do Radar (Fase 04, partes 4.4a, 4.4b e 4.5): taxas do Banco Central.
  *
  * Fonte oficial e gratuita: SGS (Sistema Gerenciador de Séries Temporais)
  * do Banco Central, pela API pública:
@@ -13,6 +13,8 @@
  * - 12: CDI diário (% ao dia). O CDI anual é calculado em 252 dias úteis.
  * - 433: IPCA, variação do mês (%). O IPCA de 12 meses é calculado
  *   ENCADEANDO os 12 meses (somar subestima o acumulado).
+ * - 195 (parte 4.5): rentabilidade da poupança no período de 1 mês (% ao mês,
+ *   depósitos a partir de 04/05/2012), já com a TR. Usada no simulador.
  *
  * Histórico (4.4b): CDI e IPCA de cada mês desde INICIO_HISTORICO, para o
  * app estimar o valor atual da renda fixa pela taxa contratada (4.4c).
@@ -34,7 +36,7 @@ export const FONTE_BCB = Object.freeze({
 });
 
 /** Códigos das séries. */
-export const SERIES = Object.freeze({ selicMeta: 432, cdiDiario: 12, ipcaMensal: 433 });
+export const SERIES = Object.freeze({ selicMeta: 432, cdiDiario: 12, ipcaMensal: 433, poupanca: 195 });
 
 /** Endereço dos últimos N valores de uma série (N de 1 a 20). */
 export const enderecoDaSerie = (codigo, ultimos) =>
@@ -52,6 +54,7 @@ export const FAIXAS = Object.freeze({
   cdiAnual: [2, 30], // % ao ano
   ipcaMensal: [-3, 5], // % no mês
   cdiMensal: [0.05, 3], // % no mês (em 2020-2021, com a Selic a 2%, o CDI rendeu ~0,15% ao mês)
+  poupancaMensal: [0.1, 2], // % no mês (com a Selic a 2%, a poupança rendeu ~0,12% ao mês)
 });
 
 /** Primeiro dia do histórico (cobre aplicações dos últimos 10 anos). */
@@ -242,4 +245,18 @@ export function montarHistorico({ cdiDiario, ipcaMensal: ipca }) {
     throw new Error(`BCB: o histórico precisa começar em ${inicio} (CDI: ${cdi[0]?.mes}, IPCA: ${ipcaMeses[0]?.mes}).`);
   }
   return { inicio, cdi, ipca: ipcaMeses };
+}
+
+/* ------------------------------------------------------------------ */
+/* Poupança (parte 4.5)                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rentabilidade da poupança no período mais recente (série 195).
+ * @param {{ data: string, valor: number }[]} serie Lida por lerSerieSgs.
+ * @returns {{ mensal: number, data: string }} data: início do período de 1 mês.
+ */
+export function montarPoupanca(serie) {
+  const ultimo = serie.at(-1);
+  return { mensal: exigirFaixa(ultimo.valor, FAIXAS.poupancaMensal, 'rendimento da poupança'), data: ultimo.data };
 }

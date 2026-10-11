@@ -19,6 +19,7 @@
  * - 4.4a: taxas do Banco Central (meta da Selic, CDI e IPCA).
  * - 4.4b: dentro das taxas, o histórico mensal do CDI e do IPCA desde 2016
  *   ("historico", opcional), para estimar o valor atual da renda fixa.
+ * - 4.5: dentro das taxas, o rendimento da poupança do mês ("poupanca", opcional).
  *
  * Cada parte do radar ("tesouro", "mercado", "fiis", "taxas") pode faltar (null) quando a
  * fonte ainda não foi baixada pelo robô; a tela mostra o que houver.
@@ -79,7 +80,9 @@ function taxasValidas(t) {
   return t && Number.isFinite(t.selicMeta?.valor) && ehDataValida(t.selicMeta?.data)
     && Number.isFinite(t.cdi?.anual) && ehDataValida(t.cdi?.data)
     && Number.isFinite(t.ipca?.mensal) && Number.isFinite(t.ipca?.acumulado12m) && /^\d{4}-\d{2}$/.test(t.ipca?.mes ?? '')
-    && historicoValido(t.historico);
+    && historicoValido(t.historico)
+    && (t.poupanca === undefined || t.poupanca === null
+      || (Number.isFinite(t.poupanca.mensal) && ehDataValida(t.poupanca.data)));
 }
 
 /**
