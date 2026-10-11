@@ -30,6 +30,7 @@ import { datasDosPeriodos, hojeEmBrasilia, pregaoMaisProximo, baixarZip, SemArqu
 import { enderecoDoAno, lerInformesFii, montarFiis } from './cvm.js';
 import {
   SERIES, INICIO_HISTORICO, enderecoDaSerie, enderecoDoPeriodo, periodosDeConsulta, lerSerieSgs, montarTaxas, montarHistorico,
+  montarPoupanca,
 } from './bcb.js';
 
 /** Identificação do arquivo. O app (src/radar.js) confere estes dois valores. */
@@ -180,8 +181,8 @@ async function historicoDasTaxas() {
 
 /**
  * Banco Central: meta da Selic, CDI diário (vira anual), os 12 últimos IPCAs
- * mensais e o histórico mensal (4.4b). Se só o histórico falhar, as taxas de
- * hoje seguem e o histórico do radar anterior é mantido.
+ * mensais, a poupança (4.5) e o histórico mensal (4.4b). Se só a poupança ou
+ * o histórico falhar, as taxas de hoje seguem e a parte do radar anterior é mantida.
  */
 async function parteDasTaxas(anterior) {
   console.log('Baixando as taxas do Banco Central…');
@@ -193,6 +194,13 @@ async function parteDasTaxas(anterior) {
   });
   console.log(`BCB: Selic meta ${taxas.selicMeta.valor}% · CDI ${taxas.cdi.anual}% ao ano (${taxas.cdi.data}) · ` +
     `IPCA ${taxas.ipca.mensal}% em ${taxas.ipca.mes}, ${taxas.ipca.acumulado12m}% em 12 meses.`);
+  try {
+    taxas.poupanca = montarPoupanca(await serie(SERIES.poupanca, 1));
+    console.log(`BCB poupança: ${taxas.poupanca.mensal}% ao mês (período que começa em ${taxas.poupanca.data}).`);
+  } catch (erro) {
+    taxas.poupanca = anterior?.taxas?.poupanca ?? null;
+    console.warn(`Aviso: poupança do Banco Central falhou (${erro.message}). ${taxas.poupanca ? 'Mantendo a do radar anterior.' : ''}`);
+  }
   try {
     taxas.historico = await historicoDasTaxas();
   } catch (erro) {

@@ -24,6 +24,7 @@ import {
   cdiMensal,
   ipcaMensal,
   montarHistorico,
+  montarPoupanca,
 } from '../scripts/radar/bcb.js';
 import { montarRadar } from '../scripts/radar/gerar-radar.js';
 import { lerRadar, linhasDasTaxas } from '../src/radar.js';
@@ -44,7 +45,7 @@ const series = () => ({
 
 describe('endereço e séries', () => {
   it('usa a API pública do SGS com os códigos conhecidos', () => {
-    assert.deepEqual({ ...SERIES }, { selicMeta: 432, cdiDiario: 12, ipcaMensal: 433 });
+    assert.deepEqual({ ...SERIES }, { selicMeta: 432, cdiDiario: 12, ipcaMensal: 433, poupanca: 195 });
     assert.equal(enderecoDaSerie(433, 12), 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json');
     assert.match(FONTE_BCB.pagina, /^https:\/\/www3\.bcb\.gov\.br\//);
   });
@@ -218,5 +219,24 @@ describe('ipcaMensal e montarHistorico', () => {
     assert.doesNotThrow(() => lerRadar(montarRadar({ tesouro: null, taxas })));
     const quebrado = { inicio: '2016-01', cdi: [{ mes: '2016-01', percentual: 1, ultimoDia: 40 }], ipca: [{ mes: '2016-01', percentual: 0.5 }] };
     assert.throws(() => lerRadar(montarRadar({ tesouro: null, taxas: { ...taxas, historico: quebrado } })), /taxas do Banco Central do radar está incompleta/);
+  });
+});
+
+/* ---------------- Poupança (4.5) ---------------- */
+
+describe('montarPoupanca', () => {
+  it('último período da série 195, conferido', () => {
+    const serie = lerSerieSgs([
+      { data: '09/10/2026', datafim: '09/11/2026', valor: '0.6745' },
+      { data: '10/10/2026', datafim: '10/11/2026', valor: '0.6751' },
+    ]);
+    assert.deepEqual(montarPoupanca(serie), { mensal: 0.6751, data: '2026-10-10' });
+    assert.throws(() => montarPoupanca([{ data: '2026-10-10', valor: 8.3 }]), /rendimento da poupança fora da faixa/);
+  });
+
+  it('o app aceita taxas com e sem poupança, e recusa poupança quebrada', () => {
+    const taxas = montarTaxas(series());
+    assert.equal(lerRadar(montarRadar({ tesouro: null, taxas: { ...taxas, poupanca: { mensal: 0.67, data: '2026-10-10' } } })).taxas.poupanca.mensal, 0.67);
+    assert.throws(() => lerRadar(montarRadar({ tesouro: null, taxas: { ...taxas, poupanca: { mensal: 'x', data: '2026-10-10' } } })), /incompleta/);
   });
 });
