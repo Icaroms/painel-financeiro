@@ -7,3 +7,8 @@
 # Arquivos binários (imagens e fontes): o Git nunca deve converter nada neles.
 *.png binary
 *.woff2 binary
+
+# Scripts do Maven Wrapper (backend): o mvnw precisa de LF para rodar no
+# Linux (GitHub Actions e hospedagem); o mvnw.cmd, de CRLF no Windows.
+mvnw text eol=lf
+*.cmd text eol=crlf
