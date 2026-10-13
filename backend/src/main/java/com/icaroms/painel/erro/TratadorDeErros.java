@@ -1,10 +1,15 @@
 package com.icaroms.painel.erro;
 
+import com.icaroms.painel.dados.comum.ConflitoDeVersaoException;
+import com.icaroms.painel.dados.comum.DadosInvalidosException;
+import com.icaroms.painel.dados.comum.RegistroNaoEncontradoException;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -52,6 +57,44 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
             HttpMessageNotReadableException erro, HttpHeaders cabecalhos, HttpStatusCode status, WebRequest pedido) {
         return ResponseEntity.badRequest()
                 .body(problema(HttpStatus.BAD_REQUEST, "Pedido inválido", "O corpo do pedido não é um JSON válido."));
+    }
+
+    /** Parâmetro em formato errado (ex.: id que não é UUID, "desde" que não é data). */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(
+            TypeMismatchException erro, HttpHeaders cabecalhos, HttpStatusCode status, WebRequest pedido) {
+        return ResponseEntity.badRequest().body(problema(HttpStatus.BAD_REQUEST, "Pedido inválido",
+                "O valor \"" + erro.getValue() + "\" não está no formato esperado."));
+    }
+
+    /** Regras de integridade conferidas nos serviços (ex.: mês final antes do inicial). */
+    @ExceptionHandler(DadosInvalidosException.class)
+    public ResponseEntity<ProblemDetail> dadosInvalidos(DadosInvalidosException erro) {
+        ProblemDetail problema = problema(HttpStatus.BAD_REQUEST, "Dados inválidos", erro.getMessage());
+        problema.setProperty("campos", erro.getCampos());
+        return ResponseEntity.badRequest().body(problema);
+    }
+
+    @ExceptionHandler(RegistroNaoEncontradoException.class)
+    public ResponseEntity<ProblemDetail> naoEncontrado(RegistroNaoEncontradoException erro) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(problema(HttpStatus.NOT_FOUND, "Não encontrado", erro.getMessage()));
+    }
+
+    /** O servidor tem uma versão mais nova: a resposta leva essa versão em "atual". */
+    @ExceptionHandler(ConflitoDeVersaoException.class)
+    public ResponseEntity<ProblemDetail> conflitoDeVersao(ConflitoDeVersaoException erro) {
+        ProblemDetail problema = problema(HttpStatus.CONFLICT, "Conflito", erro.getMessage());
+        problema.setProperty("atual", erro.getAtual());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problema);
+    }
+
+    /** Regra do banco violada (ex.: dois registros para o mesmo mês gravados ao mesmo tempo). */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> integridade(DataIntegrityViolationException erro) {
+        LOG.warn("Gravação recusada pelo banco: {}", erro.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problema(HttpStatus.CONFLICT, "Conflito",
+                "Esta gravação conflita com um dado que já está no servidor. Atualize e tente de novo."));
     }
 
     @ExceptionHandler(CredenciaisInvalidasException.class)
