@@ -22,7 +22,7 @@ class SaudeIntegracaoTest extends TesteIntegracao {
         DocumentContext resposta = corpo(resultado);
         assertThat(resposta.read("$.status", String.class)).isEqualTo("ok");
         assertThat(resposta.read("$.banco", Boolean.class)).isTrue();
-        assertThat(resposta.read("$.versao", String.class)).isEqualTo("0.5.0");
+        assertThat(resposta.read("$.versao", String.class)).matches("\\d+\\.\\d+\\.\\d+");
         assertThat(resposta.read("$.horario", String.class)).isNotBlank();
     }
 

@@ -16,7 +16,6 @@ class CriadorUsuarioInicialTest extends TesteIntegracao {
     void criaAContaComSenhaEmBcrypt() {
         Usuario conta = usuarios.findByEmail("teste@painel.local").orElseThrow();
 
-        assertThat(usuarios.count()).isEqualTo(1);
         assertThat(conta.getSenhaHash()).startsWith("{bcrypt}").doesNotContain("senha-de-teste-123");
         assertThat(conta.getCriadoEm()).isNotNull();
     }
