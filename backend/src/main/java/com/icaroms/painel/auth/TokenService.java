@@ -30,7 +30,21 @@ public class TokenService {
         this.relogio = relogio;
     }
 
-    public TokenResponse emitir(Usuario usuario) {
+    /**
+     * Token de acesso (JWT).
+     *
+     * @param token    o JWT assinado
+     * @param expiraEm quando deixa de valer
+     */
+    public record TokenDeAcesso(String token, Instant expiraEm) {
+
+        @Override
+        public String toString() {
+            return "TokenDeAcesso[token=***, expiraEm=" + expiraEm + "]";
+        }
+    }
+
+    public TokenDeAcesso emitir(Usuario usuario) {
         Instant agora = relogio.instant();
         Instant expiraEm = agora.plus(propriedades.jwt().validade());
 
@@ -44,6 +58,6 @@ public class TokenService {
         JwsHeader cabecalho = JwsHeader.with(MacAlgorithm.HS256).build();
 
         String token = codificador.encode(JwtEncoderParameters.from(cabecalho, dados)).getTokenValue();
-        return TokenResponse.bearer(token, expiraEm);
+        return new TokenDeAcesso(token, expiraEm);
     }
 }

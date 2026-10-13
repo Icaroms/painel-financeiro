@@ -25,7 +25,7 @@ class LimiteTentativasLoginTest {
     void preparar() {
         relogio = new RelogioAjustavel(Instant.parse("2026-10-13T12:00:00Z"));
         PainelProperties propriedades = new PainelProperties(
-                new PainelProperties.Jwt("x".repeat(32), Duration.ofHours(1), "teste"),
+                new PainelProperties.Jwt("x".repeat(32), Duration.ofHours(1), Duration.ofDays(30), "teste"),
                 new PainelProperties.Cors(List.of("http://localhost:8080")),
                 new PainelProperties.Login(3, Duration.ofMinutes(10)),
                 null);

@@ -27,7 +27,7 @@
  * - ao mudar, a cópia antiga dos arquivos é apagada;
  * - uma página aberta com versão menor mostra o aviso "Há uma versão nova".
  */
-const VERSAO_CACHE = 'painel-financeiro-v29';
+const VERSAO_CACHE = 'painel-financeiro-v30';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -70,6 +70,7 @@ const ARQUIVOS = [
   './src/meses.js',
   './src/modelo.js',
   './src/mostrador.js',
+  './src/nuvem-cliente.js',
   './src/painel.js',
   './src/persistencia.js',
   './src/radar.js',
@@ -77,6 +78,7 @@ const ARQUIVOS = [
   './src/receita.js',
   './src/renda-fixa.js',
   './src/resumo-mes.js',
+  './src/sincronizacao.js',
   './src/simulador.js',
   './src/simulador-investimentos.js',
   './src/veredito.js',
@@ -93,6 +95,7 @@ const ARQUIVOS = [
   './src/ui/historico.js',
   './src/ui/investir.js',
   './src/ui/mes.js',
+  './src/ui/nuvem.js',
   './src/ui/radar.js',
   './src/ui/simulador.js',
   './src/ui/simulador-investimentos.js',

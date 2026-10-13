@@ -45,7 +45,9 @@ painel:
   versao: '@project.version@'
   jwt:
     segredo: ${PAINEL_JWT_SEGREDO:}
-    validade: ${PAINEL_JWT_VALIDADE:12h}
+    # Token de acesso curto; o app renova sozinho com o token de renovação.
+    validade: ${PAINEL_JWT_VALIDADE:15m}
+    renovacao: ${PAINEL_JWT_RENOVACAO:30d}
     emissor: painel-financeiro-api
   cors:
     # Separadas por vírgula, sem barra no fim.

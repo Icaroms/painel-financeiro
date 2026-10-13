@@ -864,3 +864,7 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .receita-info { border-left-color: var(--verde); }
 .receita-ano { margin-bottom: 12px; }
 .receita-ano p { margin: 4px 0; }
+
+/* Fase 05, parte 5.3: indicador da sincronização no rodapé do Lançar */
+.nuvem-indicador { white-space: nowrap; }
+.nuvem-indicador.atencao { color: var(--amarelo); }

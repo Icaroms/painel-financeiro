@@ -39,6 +39,19 @@ class FixosLancamentosIntegracaoTest extends TesteDeDados {
     }
 
     @Test
+    @DisplayName("Fixo antigo sem pagamentoAutomatico: aceito, como false")
+    void fixoSemPagamentoAutomatico() throws Exception {
+        String conta = novaConta();
+        String id = novoId();
+        String json = fixo(id, "2026-10", null).replace("\"pagamentoAutomatico\": true", "\"outroCampo\": 1");
+
+        MvcResult resultado = gravar(conta, "/api/fixos/" + id, json);
+
+        assertThat(status(resultado)).isEqualTo(201);
+        assertThat(corpo(resultado).read("$.pagamentoAutomatico", Boolean.class)).isFalse();
+    }
+
+    @Test
     @DisplayName("Fixo parcelado com mês final antes do inicial: 400")
     void mesFinalAntesDoInicial() throws Exception {
         String conta = novaConta();

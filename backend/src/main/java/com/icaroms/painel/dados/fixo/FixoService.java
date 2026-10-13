@@ -39,7 +39,7 @@ public class FixoService extends ServicoDeRegistros<Fixo, FixoDto> {
         entidade.setFormaPagamento(dto.getFormaPagamento());
         entidade.setMesInicial(dto.getMesInicial());
         entidade.setMesFinal(dto.getMesFinal());
-        entidade.setPagamentoAutomatico(dto.getPagamentoAutomatico());
+        entidade.setPagamentoAutomatico(Boolean.TRUE.equals(dto.getPagamentoAutomatico()));
     }
 
     @Override

@@ -42,13 +42,16 @@ curl -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/
 | Método | Rota | Login? | O que faz |
 |---|---|---|---|
 | GET | `/api/saude` | não | 200 se a API e o banco estão no ar; 503 se o banco não responde |
-| POST | `/api/auth/login` | não | E-mail e senha → token JWT. Depois de 5 erros em 15 min, responde 429 |
+| POST | `/api/auth/login` | não | E-mail e senha → token de acesso (15 min) e token de renovação (30 dias). Depois de 5 erros em 15 min, responde 429 |
+| POST | `/api/auth/renovar` | não | Token de renovação → tokens novos. O usado deixa de valer; se for usado de novo, todas as sessões da conta são encerradas |
+| POST | `/api/auth/sair` | não | Encerra a sessão do aparelho (204) |
 | GET | `/api/auth/eu` | sim | Conta dona do token e quando ele expira |
 | GET | `/api/{lista}` | sim | Registros da conta, inclusive os excluídos. Com `?desde=<recebidoEm>`, só os gravados a partir daquele momento |
 | GET | `/api/{lista}/{id}` | sim | Um registro |
 | PUT | `/api/{lista}/{id}` | sim | Cria (201) ou atualiza (200). Se o servidor tem um `atualizadoEm` mais novo, responde 409 com a versão dele em `atual` |
 | DELETE | `/api/{lista}/{id}` | sim | Exclusão suave: o registro volta com `excluidoEm` preenchido |
 | GET / PUT | `/api/configuracao` | sim | Formas de pagamento, cartões, destino da sobra e último backup (um documento por conta) |
+| POST | `/api/sync` | sim | Sincronização num pedido só: grava o que o aparelho mandou (resultado por registro: `gravado`, `conflito` com `atual`, ou `recusado` com `campos`) e devolve o que mudou desde `desde`, com um `cursor` novo |
 
 Listas: `categorias`, `fixos`, `lancamentos`, `meses` e `investimentos`.
 
@@ -78,7 +81,8 @@ Segredos **nunca** vão para o código, para arquivos do projeto ou para o chat.
 | `PAINEL_JWT_SEGREDO` | sim | texto aleatório com 32+ caracteres (ver abaixo) |
 | `PAINEL_CORS_ORIGENS` | sim | endereço do app, ex.: `https://meu-app.exemplo` (sem barra no fim; várias separadas por vírgula) |
 | `PAINEL_USUARIO_EMAIL` / `PAINEL_USUARIO_SENHA` | 1ª subida | criam a única conta (senha com 12+ caracteres); depois podem ser apagadas |
-| `PAINEL_JWT_VALIDADE` | não | `12h` |
+| `PAINEL_JWT_VALIDADE` | não | `15m` (token de acesso) |
+| `PAINEL_JWT_RENOVACAO` | não | `30d` (token de renovação) |
 | `PAINEL_DB_POOL` | não | `5` |
 | `PAINEL_FORWARD_HEADERS` | não | `framework` quando estiver atrás do proxy da hospedagem |
 | `PAINEL_SWAGGER` | não | `false` (deixe desligado em produção) |
@@ -98,6 +102,7 @@ Trocar o `PAINEL_JWT_SEGREDO` desconecta todos os aparelhos. Faça isso se houve
 
 - **Cadastro fechado:** não existe rota de cadastro. A conta nasce das variáveis na primeira subida.
 - **Senha:** guardada só como hash BCrypt.
+- **Sessões:** token de acesso curto e token de renovação com rotação. O banco guarda só o SHA-256 do token de renovação, e o reuso de um token já trocado encerra todas as sessões da conta.
 - **E-mail:** a mensagem é a mesma para e-mail inexistente e para senha errada, e o tempo de resposta é igualado.
 - **Tentativas:** limite por IP e por e-mail.
 - **Sessão:** sem sessão no servidor e sem cookies (por isso o CSRF fica desligado). O token vai no cabeçalho `Authorization`.
@@ -119,10 +124,11 @@ backend/
     │   ├── auth/      login, token, limite de tentativas
     │   ├── dados/     listas do app (comum, categoria, fixo, lancamento, mes,
     │   │              investimento, configuracao)
+    │   ├── sincronizacao/  POST /api/sync
     │   └── erro/      respostas problem+json
     ├── main/resources/
     │   ├── application.yml
-    │   └── db/migration/   V1__criar_usuarios.sql, V2__dados_do_app.sql
+    │   └── db/migration/   V1__criar_usuarios.sql, V2__dados_do_app.sql, V3__sessoes.sql
     └── test/
         ├── java/com/icaroms/painel/    testes
         ├── java/com/icaroms/paineldev/ modo dev (PostgreSQL embutido)

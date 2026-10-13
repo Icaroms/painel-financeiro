@@ -6,6 +6,7 @@ import com.icaroms.painel.dados.comum.Formatos;
 import com.icaroms.painel.dados.comum.Gravacao;
 import com.icaroms.painel.dados.comum.RegistroNaoEncontradoException;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -37,6 +38,17 @@ public class ConfiguracaoService {
     public ConfiguracaoDto buscar(UUID usuarioId) {
         return configuracoes.findById(usuarioId).map(ConfiguracaoService::paraDto)
                 .orElseThrow(RegistroNaoEncontradoException::new);
+    }
+
+    /**
+     * A configuração, se foi gravada no servidor a partir de um momento
+     * (ou sempre, sem "desde"). Usada pela sincronização.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ConfiguracaoDto> buscarDesde(UUID usuarioId, Instant desde) {
+        return configuracoes.findById(usuarioId)
+                .filter(configuracao -> desde == null || !configuracao.getRecebidoEm().isBefore(desde))
+                .map(ConfiguracaoService::paraDto);
     }
 
     @Transactional

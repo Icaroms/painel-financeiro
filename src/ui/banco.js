@@ -16,6 +16,9 @@
  *     - um registro de chave "radar", com o último Radar de opções baixado
  *       (Fase 04, parte 4.3). Fora do backup: são dados públicos do mercado,
  *       não da pessoa, e o app busca de novo quando precisa.
+ *     - um registro de chave "nuvem", com a conta do servidor (endereço,
+ *       e-mail, tokens) e o estado da sincronização (Fase 05, parte 5.3).
+ *       Fora do backup: os tokens dão acesso à conta. A senha nunca é guardada.
  *
  * Guardar tudo num registro só é simples e seguro para o volume de um
  * app pessoal: cada gravação substitui o pacote inteiro de uma vez.
@@ -36,6 +39,8 @@ const CHAVE_CONFIG_IA = 'config-ia';
 const CHAVE_ANALISE_MES = 'analise-mes';
 // Último Radar de opções baixado (Fase 04): fora do backup.
 const CHAVE_RADAR = 'radar';
+// Conta do servidor e estado da sincronização (Fase 05): fora do backup.
+const CHAVE_NUVEM = 'nuvem';
 
 /** Guarda a conexão aberta, para não abrir o banco a cada gravação. */
 let conexao = null;
@@ -173,6 +178,25 @@ export function lerRadarGuardado() {
  */
 export async function gravarRadarGuardado(guardado) {
   await naGaveta('readwrite', (gaveta) => gaveta.put(guardado, CHAVE_RADAR));
+}
+
+/**
+ * Lê a conta do servidor e o estado da sincronização.
+ * @returns {Promise<{ endereco: string, email: string, sessao: object|null, sincronizacao: object|null }|undefined>}
+ */
+export function lerNuvem() {
+  return naGaveta('readonly', (gaveta) => gaveta.get(CHAVE_NUVEM));
+}
+
+/**
+ * Grava a conta do servidor e o estado da sincronização (null apaga).
+ * @param {object|null} nuvem
+ * @returns {Promise<void>}
+ */
+export async function gravarNuvem(nuvem) {
+  await naGaveta('readwrite', (gaveta) => (nuvem === null
+    ? gaveta.delete(CHAVE_NUVEM)
+    : gaveta.put(nuvem, CHAVE_NUVEM)));
 }
 
 /**

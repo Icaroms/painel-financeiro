@@ -158,6 +158,8 @@
     <footer class="rodape secundario">
       <!-- aria-live: leitores de tela anunciam as mensagens do rodapé -->
       <span id="rodape-texto" aria-live="polite"></span>
+      <!-- Situação da sincronização (Fase 05): aparece só com a conta conectada -->
+      <span class="nuvem-indicador" id="nuvem-indicador" hidden></span>
     </footer>
 
   </main>
@@ -634,6 +636,36 @@
         </div>
       </form>
       <p class="secundario ia-teste" id="ia-teste" aria-live="polite"></p>
+    </section>
+
+    <!-- Fase 05, parte 5.3: conta no servidor e sincronização. A senha nunca fica guardada. -->
+    <section class="cartao" aria-labelledby="titulo-nuvem">
+      <h2 id="titulo-nuvem">Conta e nuvem</h2>
+      <p class="secundario explicacao">Opcional. Entre na sua conta do servidor do Painel Financeiro para guardar uma cópia dos dados e usar o app em mais de um aparelho. Sem internet, o app funciona igual: o que mudar aqui é enviado quando a conexão voltar.</p>
+      <p class="resumo-dinheiro" id="nuvem-situacao" aria-live="polite"></p>
+      <p class="secundario aviso-saldo" id="nuvem-detalhe"></p>
+      <form class="form-config" id="form-nuvem" novalidate>
+        <label class="campo">
+          <span class="secundario">Endereço do servidor</span>
+          <input id="nuvem-endereco" type="url" inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" placeholder="http://localhost:8081">
+        </label>
+        <label class="campo">
+          <span class="secundario">E-mail</span>
+          <input id="nuvem-email" type="email" autocomplete="username" spellcheck="false" autocapitalize="off">
+        </label>
+        <label class="campo">
+          <span class="secundario">Senha</span>
+          <input id="nuvem-senha" type="password" autocomplete="current-password">
+        </label>
+        <span class="erro" id="nuvem-erro" aria-live="polite"></span>
+        <div class="acoes-ia">
+          <button type="submit" class="botao-pequeno" id="nuvem-entrar">Entrar</button>
+        </div>
+      </form>
+      <div class="acoes-ia" id="nuvem-conectado" hidden>
+        <button type="button" class="botao-pequeno perigo" id="nuvem-sair">Sair</button>
+        <button type="button" class="botao-pequeno" id="nuvem-sincronizar">Sincronizar agora</button>
+      </div>
     </section>
 
     <section class="cartao backup" aria-labelledby="titulo-backup">
