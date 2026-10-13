@@ -50,6 +50,9 @@ class AuthIntegracaoTest extends TesteIntegracao {
         DocumentContext resposta = corpo(resultado);
         assertThat(resposta.read("$.tipo", String.class)).isEqualTo("Bearer");
         assertThat(resposta.read("$.expiraEm", String.class)).isNotBlank();
+        assertThat(resposta.read("$.tokenRenovacao", String.class)).hasSizeGreaterThan(30);
+        assertThat(java.time.Instant.parse(resposta.read("$.expiraEm", String.class)))
+                .isBefore(java.time.Instant.now().plus(java.time.Duration.ofMinutes(16)));
 
         Jwt token = leitorDeToken.decode(resposta.read("$.token", String.class));
         String idDaConta = usuarios.findByEmail(EMAIL).orElseThrow().getId().toString();
@@ -158,7 +161,62 @@ class AuthIntegracaoTest extends TesteIntegracao {
         assertThat(corpo(resultado).read("$.title", String.class)).isEqualTo("Pedido inválido");
     }
 
+    @Test
+    @DisplayName("renovar: devolve tokens novos e o token de renovação usado deixa de valer")
+    void renovarTrocaOsTokens() throws Exception {
+        String primeiro = renovacaoDoLogin();
+
+        MvcResult resultado = mvc.perform(renovar(primeiro)).andExpect(status().isOk()).andReturn();
+
+        DocumentContext resposta = corpo(resultado);
+        String segundo = resposta.read("$.tokenRenovacao", String.class);
+        assertThat(segundo).isNotEqualTo(primeiro);
+        mvc.perform(get("/api/auth/eu").header(HttpHeaders.AUTHORIZATION, "Bearer " + resposta.read("$.token", String.class)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("renovar com um token já usado: 401 e todas as sessões da conta são encerradas")
+    void reusoEncerraTudo() throws Exception {
+        String primeiro = renovacaoDoLogin();
+        String segundo = corpo(mvc.perform(renovar(primeiro)).andExpect(status().isOk()).andReturn())
+                .read("$.tokenRenovacao", String.class);
+
+        mvc.perform(renovar(primeiro)).andExpect(status().isUnauthorized());
+        mvc.perform(renovar(segundo)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("sair: 204 e o token de renovação deixa de valer")
+    void sairEncerraASessao() throws Exception {
+        String token = renovacaoDoLogin();
+
+        mvc.perform(post("/api/auth/sair").contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("tokenRenovacao", token))))
+                .andExpect(status().isNoContent());
+
+        MvcResult resultado = mvc.perform(renovar(token)).andExpect(status().isUnauthorized()).andReturn();
+        assertThat(corpo(resultado).read("$.detail", String.class)).isEqualTo("Sessão encerrada. Entre de novo.");
+    }
+
+    @Test
+    @DisplayName("renovar com um token inventado: 401")
+    void tokenInventado() throws Exception {
+        mvc.perform(renovar("token-que-nunca-existiu-0000000000000000")).andExpect(status().isUnauthorized());
+    }
+
     /* ---------------------------------------------------------------- */
+
+    private org.springframework.test.web.servlet.RequestBuilder renovar(String tokenRenovacao) throws Exception {
+        return post("/api/auth/renovar")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("tokenRenovacao", tokenRenovacao)));
+    }
+
+    private String renovacaoDoLogin() throws Exception {
+        MvcResult resultado = mvc.perform(login(EMAIL, SENHA)).andExpect(status().isOk()).andReturn();
+        return corpo(resultado).read("$.tokenRenovacao", String.class);
+    }
 
     private org.springframework.test.web.servlet.RequestBuilder login(String email, String senha) throws Exception {
         return post("/api/auth/login")
