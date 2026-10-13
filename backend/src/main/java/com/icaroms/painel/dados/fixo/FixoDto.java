@@ -37,7 +37,7 @@ public class FixoDto extends RegistroDto {
     @Pattern(regexp = Formatos.MES, message = "Use o formato AAAA-MM.")
     private String mesFinal;
 
-    @NotNull(message = "Informe se o pagamento é automático.")
+    /** Fixos gravados antes desse campo existir no app não o têm: contam como false. */
     private Boolean pagamentoAutomatico;
 
     public String getNome() {
