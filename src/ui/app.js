@@ -37,7 +37,9 @@ import { nomeDoArquivoBackup, gerarBackup, lerBackup } from '../backup.js';
 import {
   lerPacote, gravarPacote, pedirArmazenamentoPersistente, lerConfigIA, gravarConfigIA,
   lerAnaliseMes, gravarAnaliseMes, apagarAnaliseMes, lerRadarGuardado, gravarRadarGuardado,
+  lerNuvem, gravarNuvem,
 } from './banco.js';
+import { iniciarNuvem } from './nuvem.js';
 import { iniciarConfigIA } from './configurar-ia.js';
 import { configuracaoVazia } from '../ia.js';
 import { mensagemDaCompra } from '../explicacoes.js';
@@ -270,6 +272,12 @@ async function carregarDados() {
 }
 
 /**
+ * Chamado depois de cada gravação bem-sucedida. A sincronização (Fase 05)
+ * troca por "agendar o envio para o servidor"; até lá, não faz nada.
+ */
+let aoGravar = () => {};
+
+/**
  * Grava os dados no aparelho.
  * @param {object} dadosParaGravar
  * @returns {Promise<boolean>} true se gravou.
@@ -278,6 +286,7 @@ async function gravar(dadosParaGravar) {
   if (!gravacaoDisponivel) return false;
   try {
     await gravarPacote(empacotar(dadosParaGravar));
+    aoGravar();
     return true;
   } catch (erro) {
     console.error(erro);
@@ -836,6 +845,7 @@ function mostrarVista() {
     configurar.renderizar();
     destinoConfig.renderizar();
     configuracaoIA.renderizar();
+    nuvem.renderizar();
   }
   if (vista === 'simular') simulador.renderizar();
   // Voltando ao Lançar (ex.: depois de salvar a chave da IA), a tela é refeita.
@@ -849,13 +859,66 @@ window.addEventListener('hashchange', mostrarVista);
 /* Início                                                             */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Conta e nuvem (Fase 05): sincronização com o servidor              */
+/* ------------------------------------------------------------------ */
+
+/** Redesenha a vista aberta depois que dados chegaram do servidor. */
+function redesenharVistaAberta() {
+  if (!el.telaMes.hidden) {
+    resumo.renderizar();
+    destinoMes.renderizar();
+  }
+  if (!el.telaHistorico.hidden) historico.renderizar();
+  if (!el.telaInvestir.hidden) investir.renderizar();
+  if (!el.telaConfigurar.hidden) {
+    configurar.renderizar();
+    destinoConfig.renderizar();
+  }
+}
+
+const nuvem = iniciarNuvem({
+  obterDados: () => dados,
+  // Os dados de exemplo são fictícios: nunca vão para o servidor.
+  podeSincronizar: () => dados !== null && !ehExemplo(dados),
+  // Dados juntados com os do servidor: redesenha e grava (sem novo envio).
+  aplicarDaNuvem: async (novos) => {
+    dados = novos;
+    montarChips();
+    atualizar();
+    atualizarPonto();
+    atualizarFaixaExemplo();
+    redesenharVistaAberta();
+    await gravar(dados);
+  },
+  // "Usar os dados do servidor neste aparelho": troca tudo e cria o mês atual, se faltar.
+  substituirPelaNuvem: async (novos) => {
+    const virada = prepararMesAtual(novos, hojeLocal());
+    const final = virada === null ? novos : virada.dados;
+    trocarDados(final, { daNuvem: true });
+    mostrarVista();
+    const gravou = await gravar(final);
+    avisar(gravou ? 'Pronto: os dados do servidor estão neste aparelho.' : avisoSemGravacao());
+  },
+  lerGuardado: lerNuvem,
+  gravarGuardado: gravarNuvem,
+});
+// Cada gravação no aparelho agenda o envio para o servidor (se houver conta).
+aoGravar = () => nuvem.agendar();
+
 /**
  * Troca todos os dados de uma vez (exemplo, começar do zero, backup) e
  * redesenha as duas vistas. Não grava: quem chama decide quando gravar.
  *
+ * Com a conta da nuvem conectada, a sincronização recomeça do zero: na
+ * próxima, o app pergunta se usa os dados do servidor ou junta com os daqui.
+ *
  * @param {object} novos
+ * @param {object} [opcoes]
+ * @param {boolean} [opcoes.daNuvem] true quando os dados vieram do servidor.
  */
-function trocarDados(novos) {
+function trocarDados(novos, { daNuvem = false } = {}) {
+  if (!daNuvem) nuvem.dadosTrocados();
   dados = novos;
   // A análise da IA guardada era dos dados antigos: deixa de valer.
   ultimaAnalise = null;
@@ -927,6 +990,10 @@ if (carregado.dados === null) {
 
 // Sem esperar: o pedido roda em segundo plano e não atrasa a tela.
 pedirArmazenamentoPersistente();
+
+// Conta da nuvem: lê a sessão guardada e sincroniza logo depois de abrir.
+await nuvem.carregar();
+nuvem.agendar(1000);
 
 /**
  * Mostra ou esconde uma faixa do topo (cópia guardada ou versão nova).
