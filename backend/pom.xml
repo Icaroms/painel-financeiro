@@ -24,7 +24,7 @@
 
   <groupId>com.icaroms</groupId>
   <artifactId>painel-financeiro-api</artifactId>
-  <version>0.5.0</version>
+  <version>0.5.2</version>
   <name>Painel Financeiro API</name>
   <description>Backend do Painel Financeiro: login, banco PostgreSQL e API REST.</description>
 

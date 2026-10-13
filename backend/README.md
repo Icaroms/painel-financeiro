@@ -44,6 +44,21 @@ curl -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/
 | GET | `/api/saude` | não | 200 se a API e o banco estão no ar; 503 se o banco não responde |
 | POST | `/api/auth/login` | não | E-mail e senha → token JWT. Depois de 5 erros em 15 min, responde 429 |
 | GET | `/api/auth/eu` | sim | Conta dona do token e quando ele expira |
+| GET | `/api/{lista}` | sim | Registros da conta, inclusive os excluídos. Com `?desde=<recebidoEm>`, só os gravados a partir daquele momento |
+| GET | `/api/{lista}/{id}` | sim | Um registro |
+| PUT | `/api/{lista}/{id}` | sim | Cria (201) ou atualiza (200). Se o servidor tem um `atualizadoEm` mais novo, responde 409 com a versão dele em `atual` |
+| DELETE | `/api/{lista}/{id}` | sim | Exclusão suave: o registro volta com `excluidoEm` preenchido |
+| GET / PUT | `/api/configuracao` | sim | Formas de pagamento, cartões, destino da sobra e último backup (um documento por conta) |
+
+Listas: `categorias`, `fixos`, `lancamentos`, `meses` e `investimentos`.
+
+Regras dos dados:
+
+- **Mesmo JSON do app.** Os nomes de campo são os do IndexedDB (`valorCentavos`, `mesInicial`...), então o app envia e recebe os registros como já guarda.
+- **Campos desconhecidos não se perdem.** O que o servidor não conhece fica na coluna `extras` e volta igual.
+- **Hora do servidor.** `recebidoEm` é a hora do servidor na última gravação, e é o que a sincronização usa no `?desde=`. Ela não depende do relógio do aparelho.
+- **Um registro por mês.** Se dois aparelhos criarem o mesmo mês com ids diferentes, o segundo recebe 409 com o mês que já está no servidor.
+- **Contas separadas.** Cada conta só vê os seus registros. Um id de outra conta responde 404.
 
 Os erros seguem o formato `application/problem+json` (RFC 9457), em português:
 
@@ -102,10 +117,12 @@ backend/
     │   ├── saude/     GET /api/saude
     │   ├── usuario/   conta (entidade, repositório, criação inicial)
     │   ├── auth/      login, token, limite de tentativas
+    │   ├── dados/     listas do app (comum, categoria, fixo, lancamento, mes,
+    │   │              investimento, configuracao)
     │   └── erro/      respostas problem+json
     ├── main/resources/
     │   ├── application.yml
-    │   └── db/migration/   V1__criar_usuarios.sql ...
+    │   └── db/migration/   V1__criar_usuarios.sql, V2__dados_do_app.sql
     └── test/
         ├── java/com/icaroms/painel/    testes
         ├── java/com/icaroms/paineldev/ modo dev (PostgreSQL embutido)
