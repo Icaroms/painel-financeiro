@@ -1,0 +1,68 @@
+# Configuração da API do Painel Financeiro.
+#
+# Segredos e endereços NUNCA ficam aqui: tudo vem de variáveis de ambiente
+# (${NOME:padrão}). Lista completa e exemplos no backend/README.md.
+
+spring:
+  application:
+    name: painel-financeiro-api
+  datasource:
+    # Ex.: jdbc:postgresql://host:5432/painel?sslmode=require
+    url: ${PAINEL_DB_URL:}
+    username: ${PAINEL_DB_USUARIO:}
+    password: ${PAINEL_DB_SENHA:}
+    hikari:
+      # Poucas conexões: bancos gratuitos limitam o total.
+      maximum-pool-size: ${PAINEL_DB_POOL:5}
+  jpa:
+    # Sem consultas ao banco depois que a resposta já foi montada.
+    open-in-view: false
+    hibernate:
+      # O esquema é do Flyway (db/migration); o Hibernate só confere se bate.
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  # PORT é a variável que as hospedagens costumam definir. 8081 em dev,
+  # porque o front (npm run dev) já usa a 8080.
+  port: ${PORT:8081}
+  # "framework" quando a API estiver atrás do proxy da hospedagem (IP real do pedido).
+  forward-headers-strategy: ${PAINEL_FORWARD_HEADERS:none}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+painel:
+  # Preenchido pelo Maven com a versão do pom.xml.
+  versao: '@project.version@'
+  jwt:
+    segredo: ${PAINEL_JWT_SEGREDO:}
+    validade: ${PAINEL_JWT_VALIDADE:12h}
+    emissor: painel-financeiro-api
+  cors:
+    # Separadas por vírgula, sem barra no fim.
+    origens: ${PAINEL_CORS_ORIGENS:http://localhost:8080,http://127.0.0.1:8080}
+  login:
+    max-tentativas: 5
+    janela: 15m
+  usuario-inicial:
+    email: ${PAINEL_USUARIO_EMAIL:}
+    senha: ${PAINEL_USUARIO_SENHA:}
+
+springdoc:
+  api-docs:
+    enabled: ${PAINEL_SWAGGER:false}
+  swagger-ui:
+    enabled: ${PAINEL_SWAGGER:false}
+
+logging:
+  level:
+    root: INFO
