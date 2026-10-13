@@ -856,3 +856,11 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .itens-fatura li span:last-child { font-family: var(--fonte-numero); white-space: nowrap; }
 /* Conferência com a fatura do banco (compras + contas fixas no cartão) */
 .total-banco { font-weight: 600; }
+
+/* Fase 04, parte 4.7: alertas da Receita (aba Investir) */
+.receita-alerta { padding: 10px 0 10px 12px; border-left: 3px solid var(--borda, #ccc); margin: 6px 0; line-height: 1.4; }
+.receita-pagar { border-left-color: var(--vermelho); font-weight: 600; }
+.receita-atencao { border-left-color: var(--amarelo, var(--vermelho)); }
+.receita-info { border-left-color: var(--verde); }
+.receita-ano { margin-bottom: 12px; }
+.receita-ano p { margin: 4px 0; }

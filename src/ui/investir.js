@@ -19,6 +19,8 @@
  *   aplicação × CDI e IPCA do mesmo período, pendências (src/investimentos-ia.js);
  *   o botão "Analisar a carteira com IA" manda esses números ao Gemini. Mudou
  *   a carteira, o comentário antigo some.
+ * - Imposto de renda (4.7): DARF a pagar, aviso perto do limite de isenção,
+ *   day trade, e o resumo para a declaração do ano atual e do anterior (src/receita.js).
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As regras ficam em
  * src/carteira.js e src/acoes.js (testados no Node). Todo texto entra com textContent.
@@ -45,6 +47,7 @@ import {
 } from '../carteira.js';
 import { INDEXADORES_CONTRATADOS, aceitaTaxa, lerPercentual, textoDaTaxa } from '../renda-fixa.js';
 import { indicadoresDaCarteira, linhasDosIndicadores, mensagemDaCarteira } from '../investimentos-ia.js';
+import { alertasDaReceita, resumoDoAno, linhasDoAno } from '../receita.js';
 import { chamarGemini, iaDisponivel } from '../ia.js';
 import { blocosDaResposta } from '../analise.js';
 import { elementosDosBlocos } from './blocos-ia.js';
@@ -155,6 +158,7 @@ export function iniciarInvestir({
     paginacao: elemento('paginacao-investimentos'),
     area: elemento('area-investimento'),
     botaoNovo: elemento('botao-novo-investimento'),
+    receita: { alertas: elemento('receita-alertas'), anos: elemento('receita-anos') },
     indicadores: {
       bloco: elemento('investir-indicadores-bloco'),
       lista: elemento('investir-indicadores'),
@@ -730,8 +734,28 @@ export function iniciarInvestir({
     );
   });
 
+  /** Cartão "Imposto de renda" (4.7): usa os dados digitados (operações e valores aplicados). */
+  function renderizarReceita() {
+    const hoje = hojeLocal();
+    const alertas = alertasDaReceita(obterDados(), hoje);
+    el.receita.alertas.replaceChildren(...(alertas.length === 0
+      ? [criar('li', { classe: 'lista-vazia secundario', texto: 'Nenhum imposto a pagar nem alerta de vendas agora.' })]
+      : alertas.map((a) => criar('li', { classe: `receita-alerta receita-${a.nivel}`, texto: a.texto }))));
+    const ano = Number(hoje.slice(0, 4));
+    el.receita.anos.replaceChildren(...[ano, ano - 1].map((a) => {
+      const bloco = criar('div', { classe: 'receita-ano' });
+      bloco.append(...linhasDoAno(resumoDoAno(obterDados(), a)).map((texto, i) => criar('p', {
+        classe: i === 0 ? 'resumo-dinheiro' : 'secundario',
+        // Ano atual ainda andando: "(ano de 2026, até hoje)".
+        texto: a === ano && i === 0 ? texto.replace(`(ano de ${a})`, `(ano de ${a}, até hoje)`) : texto,
+      })));
+      return bloco;
+    }));
+  }
+
   function renderizarResumo(r) {
     renderizarReserva();
+    renderizarReceita();
     renderizarIndicadores();
     el.total.textContent = formatarCentavos(r.atualCentavos);
     if (r.itens.length === 0) {
