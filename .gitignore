@@ -12,12 +12,3 @@ desktop.ini
 
 # Configurações locais de editor
 .vscode/
-# Backend (Fase 05)
-# - target/: arquivos gerados pelo Maven (compilação, .jar, relatórios)
-# - .banco-dev/: dados do PostgreSQL embutido do modo dev
-# - .env*: variáveis de ambiente locais (segredos NUNCA vão para o GitHub)
-backend/target/
-backend/.banco-dev/
-.env
-.env.*
-*.env
