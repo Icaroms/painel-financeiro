@@ -33,14 +33,16 @@ public record PainelProperties(
 
     /**
      * @param segredo  chave do HS256 (variável PAINEL_JWT_SEGREDO, mínimo 32 caracteres)
-     * @param validade quanto tempo um token vale (ex.: 12h)
-     * @param emissor  nome gravado no token e conferido na leitura
+     * @param validade  quanto tempo um token de acesso vale (ex.: 15m)
+     * @param renovacao quanto tempo um token de renovação vale (ex.: 30d)
+     * @param emissor   nome gravado no token e conferido na leitura
      */
     public record Jwt(
             @NotBlank(message = "Defina a variável PAINEL_JWT_SEGREDO.")
             @Size(min = 32, message = "PAINEL_JWT_SEGREDO precisa ter pelo menos 32 caracteres.")
             String segredo,
             @NotNull Duration validade,
+            @NotNull Duration renovacao,
             @NotBlank String emissor) {
     }
 

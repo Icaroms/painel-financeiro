@@ -51,7 +51,7 @@ public class SegurancaConfig {
                 .authorizeHttpRequests(regras -> regras
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/saude").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/renovar", "/api/auth/sair").permitAll()
                         .requestMatchers(ROTAS_DOCUMENTACAO).permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())

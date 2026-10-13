@@ -1,5 +1,6 @@
 package com.icaroms.painel.erro;
 
+import com.icaroms.painel.auth.SessaoInvalidaException;
 import com.icaroms.painel.dados.comum.ConflitoDeVersaoException;
 import com.icaroms.painel.dados.comum.DadosInvalidosException;
 import com.icaroms.painel.dados.comum.RegistroNaoEncontradoException;
@@ -99,6 +100,12 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(CredenciaisInvalidasException.class)
     public ResponseEntity<ProblemDetail> credenciaisInvalidas(CredenciaisInvalidasException erro) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(problema(HttpStatus.UNAUTHORIZED, "Não autenticado", erro.getMessage()));
+    }
+
+    @ExceptionHandler(SessaoInvalidaException.class)
+    public ResponseEntity<ProblemDetail> sessaoInvalida(SessaoInvalidaException erro) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(problema(HttpStatus.UNAUTHORIZED, "Não autenticado", erro.getMessage()));
     }

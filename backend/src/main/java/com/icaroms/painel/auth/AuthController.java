@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>POST /api/auth/login: e-mail + senha → token (público).</li>
+ *   <li>POST /api/auth/renovar: token de renovação → token novo (público).</li>
+ *   <li>POST /api/auth/sair: encerra a sessão do aparelho (público, 204).</li>
  *   <li>GET /api/auth/eu: quem está logado (exige token).</li>
  * </ul>
  * Não existe rota de cadastro: a conta é criada pela variável de ambiente
@@ -36,9 +39,24 @@ public class AuthController {
 
     @PostMapping("/login")
     @SecurityRequirements
-    @Operation(summary = "Entrar", description = "Devolve um token JWT. Após 5 erros em 15 minutos, bloqueia (429).")
+    @Operation(summary = "Entrar", description = "Devolve o token de acesso (curto) e o de renovação. Após 5 erros em 15 minutos, bloqueia (429).")
     public TokenResponse entrar(@Valid @RequestBody LoginRequest pedido, HttpServletRequest requisicao) {
         return autenticacao.entrar(pedido, requisicao.getRemoteAddr());
+    }
+
+    @PostMapping("/renovar")
+    @SecurityRequirements
+    @Operation(summary = "Renovar", description = "Troca o token de renovação por um token de acesso novo. O token usado deixa de valer.")
+    public TokenResponse renovar(@Valid @RequestBody RenovarRequest pedido) {
+        return autenticacao.renovar(pedido.tokenRenovacao());
+    }
+
+    @PostMapping("/sair")
+    @SecurityRequirements
+    @Operation(summary = "Sair", description = "Encerra a sessão deste aparelho (o token de renovação deixa de valer).")
+    public ResponseEntity<Void> sair(@Valid @RequestBody RenovarRequest pedido) {
+        autenticacao.sair(pedido.tokenRenovacao());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/eu")
