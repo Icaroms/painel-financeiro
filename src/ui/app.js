@@ -686,7 +686,14 @@ function investirDoMes() {
   return dividirSobra(dadosEstimados(), mesDaData(hoje), hoje).investirCentavos;
 }
 
-const investir = iniciarInvestir({ obterDados: () => dados, obterDadosEstimados: dadosEstimados, aplicarMudanca });
+const investir = iniciarInvestir({
+  obterDados: () => dados,
+  obterDadosEstimados: dadosEstimados,
+  aplicarMudanca,
+  // Parte 4.6: indicadores com o histórico das taxas e o botão da IA.
+  obterRadar: () => radarGuardado,
+  obterConfigIA: () => configIA,
+});
 const radar = iniciarRadar({
   lerGuardado: lerRadarGuardado,
   // Radar novo: guarda, troca o histórico das taxas e refaz a carteira com a estimativa nova.

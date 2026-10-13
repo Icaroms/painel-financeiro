@@ -15,6 +15,10 @@
  *   de hoje, bruta e líquida de IR (src/renda-fixa.js), a partir do último
  *   valor digitado. A tela mostra a "visão com estimativas" (obterDadosEstimados);
  *   toda mudança parte dos dados digitados (obterDados).
+ * - Indicadores (4.6): maior posição, liquidez, meses de reserva, cada
+ *   aplicação × CDI e IPCA do mesmo período, pendências (src/investimentos-ia.js);
+ *   o botão "Analisar a carteira com IA" manda esses números ao Gemini. Mudou
+ *   a carteira, o comentário antigo some.
  *
  * Como em toda a pasta src/ui, aqui só fica a TELA. As regras ficam em
  * src/carteira.js e src/acoes.js (testados no Node). Todo texto entra com textContent.
@@ -40,6 +44,10 @@ import {
   investimentosAtivos,
 } from '../carteira.js';
 import { INDEXADORES_CONTRATADOS, aceitaTaxa, lerPercentual, textoDaTaxa } from '../renda-fixa.js';
+import { indicadoresDaCarteira, linhasDosIndicadores, mensagemDaCarteira } from '../investimentos-ia.js';
+import { chamarGemini, iaDisponivel } from '../ia.js';
+import { blocosDaResposta } from '../analise.js';
+import { elementosDosBlocos } from './blocos-ia.js';
 import { situacaoDaReserva } from '../destino.js';
 import {
   ehPorOperacao,
@@ -131,9 +139,13 @@ function botoesDoFormulario(textoEnviar, aoCancelar) {
  * @param {() => object} opcoes.obterDados Dados digitados (toda mudança parte deles).
  * @param {() => object} [opcoes.obterDadosEstimados] Dados com a renda fixa estimada (só para mostrar).
  * @param {(novos: object, mensagem: string) => Promise<void>} opcoes.aplicarMudanca
+ * @param {() => object|null} [opcoes.obterRadar] Radar guardado (taxas e histórico, para os indicadores).
+ * @param {() => object} [opcoes.obterConfigIA] Configuração da IA (o botão só aparece com a IA disponível).
  * @returns {{ renderizar: () => void }}
  */
-export function iniciarInvestir({ obterDados, obterDadosEstimados = obterDados, aplicarMudanca }) {
+export function iniciarInvestir({
+  obterDados, obterDadosEstimados = obterDados, aplicarMudanca, obterRadar = () => null, obterConfigIA = () => null,
+}) {
   const el = {
     total: elemento('investir-total'),
     rendimento: elemento('investir-rendimento'),
@@ -143,6 +155,13 @@ export function iniciarInvestir({ obterDados, obterDadosEstimados = obterDados, 
     paginacao: elemento('paginacao-investimentos'),
     area: elemento('area-investimento'),
     botaoNovo: elemento('botao-novo-investimento'),
+    indicadores: {
+      bloco: elemento('investir-indicadores-bloco'),
+      lista: elemento('investir-indicadores'),
+      ia: elemento('carteira-ia'),
+      pedir: elemento('carteira-ia-pedir'),
+      resposta: elemento('carteira-ia-resposta'),
+    },
   };
 
   /**
@@ -657,8 +676,63 @@ export function iniciarInvestir({ obterDados, obterDadosEstimados = obterDados, 
     );
   }
 
+  /** Indicadores da carteira na tela agora (vão para a IA) e a mensagem que já foi comentada. */
+  let indicadoresAtuais = null;
+  let comentada = '';
+
+  /** Quadro "Indicadores" e o botão da IA (4.6). */
+  function renderizarIndicadores() {
+    const ind = indicadoresDaCarteira(obterDadosEstimados(), obterRadar(), hojeLocal());
+    indicadoresAtuais = ind;
+    const ui = el.indicadores;
+    ui.bloco.hidden = ind === null;
+    if (!ind) return;
+    ui.lista.replaceChildren(...linhasDosIndicadores(ind).map(({ titulo, texto }) => {
+      const li = criar('li', { classe: 'linha-mes' });
+      const info = criar('div', { classe: 'linha-mes-info' });
+      info.append(criar('span', { classe: 'linha-mes-nome', texto: titulo }), criar('span', { classe: 'linha-mes-detalhe secundario', texto }));
+      li.append(info);
+      return li;
+    }));
+    ui.ia.hidden = !iaDisponivel(obterConfigIA());
+    // Mudou a carteira (ou as taxas): o comentário antigo não vale mais.
+    if (ui.ia.hidden || mensagemDaCarteira(ind).conteudo !== comentada) {
+      ui.resposta.hidden = true;
+      ui.resposta.replaceChildren();
+      ui.pedir.textContent = 'Analisar a carteira com IA';
+      comentada = '';
+    }
+  }
+
+  el.indicadores.pedir.addEventListener('click', async () => {
+    if (!indicadoresAtuais) return;
+    const mensagem = mensagemDaCarteira(indicadoresAtuais);
+    const ui = el.indicadores;
+    ui.pedir.disabled = true;
+    ui.resposta.hidden = false;
+    ui.resposta.dataset.estado = 'carregando';
+    ui.resposta.replaceChildren(criar('p', { texto: 'Analisando a carteira…' }));
+
+    const resultado = await chamarGemini(obterConfigIA(), mensagem);
+
+    ui.pedir.disabled = false;
+    ui.pedir.textContent = 'Analisar de novo';
+    if (!resultado.ok) {
+      ui.resposta.dataset.estado = 'erro';
+      ui.resposta.replaceChildren(criar('p', { texto: resultado.erro }));
+      return;
+    }
+    comentada = mensagem.conteudo;
+    ui.resposta.dataset.estado = 'ok';
+    ui.resposta.replaceChildren(
+      ...elementosDosBlocos(blocosDaResposta(resultado.texto)),
+      criar('p', { classe: 'ia-selo', texto: 'Texto gerado por IA com os números da carteira deste momento. Não é recomendação de investimento: confira os números no app.' }),
+    );
+  });
+
   function renderizarResumo(r) {
     renderizarReserva();
+    renderizarIndicadores();
     el.total.textContent = formatarCentavos(r.atualCentavos);
     if (r.itens.length === 0) {
       el.rendimento.textContent = 'Nenhum investimento cadastrado ainda.';
