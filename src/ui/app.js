@@ -544,13 +544,32 @@ for (const botao of document.querySelectorAll('.botao-usar-de-verdade')) {
 }
 
 el.botaoZerar.addEventListener('click', async () => {
+  // Os dados de exemplo nunca foram para a nuvem: apagá-los não mexe na conta.
+  const naNuvemTambem = nuvem.conectado() && !ehExemplo(dados);
   const pergunta = ehExemplo(dados)
     ? 'Apagar os dados de exemplo e começar do zero?'
     : 'Apagar TODOS os dados deste aparelho e começar do zero?\n\n' +
-      'Se quiser guardar os dados atuais, cancele e exporte um backup antes.';
+      'Se quiser guardar os dados atuais, cancele e exporte um backup antes.' +
+      (naNuvemTambem
+        ? '\n\nOs dados também serão apagados na sua conta da nuvem (os backups da nuvem continuam guardados).'
+        : '');
   if (!window.confirm(pergunta)) return;
 
-  trocarDados(criarDadosIniciais(hojeLocal()));
+  let sincronizacaoTratada = false;
+  if (naNuvemTambem) {
+    try {
+      await nuvem.zerarNaNuvem();
+      sincronizacaoTratada = true;
+    } catch (erro) {
+      const soAqui = window.confirm(
+        `Não foi possível apagar na nuvem: ${erro.message}\n\nApagar só neste aparelho? ` +
+          'Na próxima sincronização, o app pergunta se junta com os dados da conta.',
+      );
+      if (!soAqui) return;
+    }
+  }
+
+  trocarDados(criarDadosIniciais(hojeLocal()), { manterSincronizacao: sincronizacaoTratada });
   const gravou = await gravar(dados);
   avisar(gravou ? 'Pronto: comece informando o saldo da conta em "Dinheiro do mês".' : avisoSemGravacao());
 });
@@ -625,7 +644,26 @@ el.arquivoBackup.addEventListener('change', async () => {
     return;
   }
 
-  trocarDados(virada.dados);
+  // Conta da nuvem conectada (e dados reais aqui): a conta também pode ficar com este backup.
+  let sincronizacaoTratada = false;
+  if (nuvem.conectado() && dados !== null && !ehExemplo(dados)) {
+    const naNuvemTambem = window.confirm(
+      'Substituir também os dados da sua conta na nuvem por este backup?\n\n' +
+        'OK: sim (os outros aparelhos vão perguntar se usam os dados novos).\n' +
+        'Cancelar: só neste aparelho (na próxima sincronização, o app pergunta se junta com os dados da conta).',
+    );
+    if (naNuvemTambem) {
+      try {
+        await nuvem.zerarNaNuvem();
+        sincronizacaoTratada = true;
+      } catch (erro) {
+        avisar(`Importação cancelada: não foi possível substituir na nuvem (${erro.message})`);
+        return;
+      }
+    }
+  }
+
+  trocarDados(virada.dados, { manterSincronizacao: sincronizacaoTratada });
   mostrarVista(); // sai das boas-vindas, se o backup foi importado no primeiro acesso
 
   // A pessoa confirmou a troca: grava mesmo se os dados antigos estavam
@@ -845,7 +883,7 @@ function mostrarVista() {
     configurar.renderizar();
     destinoConfig.renderizar();
     configuracaoIA.renderizar();
-    nuvem.renderizar();
+    nuvem.aoAbrirConfigurar();
   }
   if (vista === 'simular') simulador.renderizar();
   // Voltando ao Lançar (ex.: depois de salvar a chave da IA), a tela é refeita.
@@ -895,10 +933,29 @@ const nuvem = iniciarNuvem({
   substituirPelaNuvem: async (novos) => {
     const virada = prepararMesAtual(novos, hojeLocal());
     const final = virada === null ? novos : virada.dados;
-    trocarDados(final, { daNuvem: true });
+    trocarDados(final, { manterSincronizacao: true });
     mostrarVista();
     const gravou = await gravar(final);
     avisar(gravou ? 'Pronto: os dados do servidor estão neste aparelho.' : avisoSemGravacao());
+  },
+  // "Restaurar" um backup da nuvem: confere, apaga os dados da conta (antesDeTrocar) e troca tudo.
+  restaurarBackup: async (lidos, antesDeTrocar) => {
+    const virada = prepararMesAtual(lidos, hojeLocal());
+    if (virada === null) {
+      throw new ErroValidacao('backup', 'Este backup só tem meses posteriores a hoje. Confira a data do aparelho.');
+    }
+    await antesDeTrocar();
+    trocarDados(virada.dados, { manterSincronizacao: true });
+    mostrarVista();
+    gravacaoDisponivel = true;
+    const gravou = await gravar(dados);
+    avisar(gravou ? 'Backup restaurado neste aparelho e na nuvem.' : avisoSemGravacao());
+  },
+  // Backup enviado à nuvem: vale como "último backup" (o lembrete do cartão Backup acompanha).
+  backupFeito: async (agora) => {
+    dados = registrarBackup(dados, { agora });
+    atualizarPonto();
+    await gravar(dados);
   },
   lerGuardado: lerNuvem,
   gravarGuardado: gravarNuvem,
@@ -912,13 +969,15 @@ aoGravar = () => nuvem.agendar();
  *
  * Com a conta da nuvem conectada, a sincronização recomeça do zero: na
  * próxima, o app pergunta se usa os dados do servidor ou junta com os daqui.
+ * Quem já cuidou da sincronização (dados vindos do servidor, ou a conta
+ * zerada antes da troca) passa manterSincronizacao: true.
  *
  * @param {object} novos
  * @param {object} [opcoes]
- * @param {boolean} [opcoes.daNuvem] true quando os dados vieram do servidor.
+ * @param {boolean} [opcoes.manterSincronizacao]
  */
-function trocarDados(novos, { daNuvem = false } = {}) {
-  if (!daNuvem) nuvem.dadosTrocados();
+function trocarDados(novos, { manterSincronizacao = false } = {}) {
+  if (!manterSincronizacao) nuvem.dadosTrocados();
   dados = novos;
   // A análise da IA guardada era dos dados antigos: deixa de valer.
   ultimaAnalise = null;

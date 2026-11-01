@@ -666,11 +666,22 @@
         <button type="button" class="botao-pequeno perigo" id="nuvem-sair">Sair</button>
         <button type="button" class="botao-pequeno" id="nuvem-sincronizar">Sincronizar agora</button>
       </div>
+      <!-- Fase 05, parte 5.4: backups na nuvem (aparece só com a conta conectada) -->
+      <div class="nuvem-backups" id="nuvem-backups" hidden>
+        <h3 class="subtitulo-secao">Backups na nuvem</h3>
+        <p class="secundario explicacao">O app envia um backup sozinho a cada 7 dias, e a nuvem guarda os 10 mais recentes. Restaurar um backup substitui os dados deste aparelho e da conta.</p>
+        <p class="backup-situacao" id="nuvem-backup-situacao"></p>
+        <div class="acoes-ia">
+          <button type="button" class="botao-pequeno" id="nuvem-backup-enviar">Enviar backup agora</button>
+        </div>
+        <span class="erro" id="nuvem-backup-erro" aria-live="polite"></span>
+        <ul class="lista-backups" id="nuvem-backup-lista"></ul>
+      </div>
     </section>
 
     <section class="cartao backup" aria-labelledby="titulo-backup">
       <h2 id="titulo-backup">Backup</h2>
-      <p class="secundario explicacao">Os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
+      <p class="secundario explicacao">Sem a conta da nuvem, os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
       <!-- Quando foi o último backup; vira aviso âmbar depois de 7 dias -->
       <p class="backup-situacao" id="backup-situacao"></p>
       <div class="backup-botoes">
