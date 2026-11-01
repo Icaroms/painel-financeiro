@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import org.springframework.util.unit.DataSize;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +29,8 @@ class LimiteTentativasLoginTest {
                 new PainelProperties.Jwt("x".repeat(32), Duration.ofHours(1), Duration.ofDays(30), "teste"),
                 new PainelProperties.Cors(List.of("http://localhost:8080")),
                 new PainelProperties.Login(3, Duration.ofMinutes(10)),
-                null);
+                null,
+                new PainelProperties.Backups(10, DataSize.ofMegabytes(5)));
         limite = new LimiteTentativasLogin(propriedades, relogio);
     }
 
