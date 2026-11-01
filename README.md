@@ -30,6 +30,16 @@ App pessoal que avalia cada gasto no momento do registro e responde na hora se a
 
 Detalhes da API (rotas, variáveis de ambiente, segurança): [backend/README.md](backend/README.md).
 
+## Publicação (Netlify)
+
+O app fica em https://pianelfinanceiro.netlify.app. O plano gratuito do Netlify funciona por créditos: cada publicação em produção custa 15 dos 300 créditos do mês. Por isso:
+
+- um merge na `main` **só publica** quando a mensagem do commit tem `[publicar]` (regra no `netlify.toml`);
+- os outros merges ficam no GitHub e vão juntos na próxima publicação;
+- as prévias dos PRs continuam e não gastam créditos.
+
+Depois de publicar, no celular: **Configurar → Procurar atualização**.
+
 ## Fases
 
 | Fase | Assunto | Situação |

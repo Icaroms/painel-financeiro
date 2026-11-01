@@ -2,10 +2,29 @@
 #
 # O app é feito só com HTML, CSS e JavaScript puro: não há nada para
 # "construir". O Netlify publica os arquivos da raiz do repositório
-# exatamente como estão, a cada merge na branch main.
+# exatamente como estão.
+#
+# Publicação controlada (plano gratuito por créditos):
+# - cada publicação em produção custa 15 dos 300 créditos do mês;
+# - por isso, um merge na main SÓ publica quando a mensagem do commit
+#   tiver "[publicar]" (ex.: no título do PR ou no squash);
+# - os outros merges ficam guardados no GitHub e vão juntos na próxima
+#   publicação;
+# - as prévias dos PRs (deploy previews) continuam: não gastam créditos;
+# - branches que não são PR (ex.: radar-dados, do robô diário) não geram
+#   publicação nenhuma.
+#
+# Regra do Netlify para o "ignore": sair com 0 CANCELA a publicação;
+# sair com 1 continua.
 
 [build]
   publish = "."
+
+[context.production]
+  ignore = "if git log -1 --format=%B \"$COMMIT_REF\" | grep -qF '[publicar]'; then exit 1; else exit 0; fi"
+
+[context.branch-deploy]
+  ignore = "exit 0"
 
 # O service worker nunca pode ficar preso numa versão antiga guardada
 # pelo navegador: sem cache, cada atualização do app chega aos aparelhos.
