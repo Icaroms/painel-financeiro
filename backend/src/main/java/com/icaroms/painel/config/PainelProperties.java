@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Duration;
 import java.util.List;
+import org.springframework.util.unit.DataSize;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -22,6 +23,7 @@ import org.springframework.validation.annotation.Validated;
  * @param cors           sites (origens) que podem chamar a API pelo navegador
  * @param login          limite de tentativas erradas de login
  * @param usuarioInicial conta criada na primeira subida, se o banco estiver vazio
+ * @param backups        limites dos backups na nuvem
  */
 @Validated
 @ConfigurationProperties(prefix = "painel")
@@ -29,7 +31,8 @@ public record PainelProperties(
         @Valid @NotNull Jwt jwt,
         @Valid @NotNull Cors cors,
         @Valid @NotNull Login login,
-        UsuarioInicial usuarioInicial) {
+        UsuarioInicial usuarioInicial,
+        @Valid @NotNull Backups backups) {
 
     /**
      * @param segredo  chave do HS256 (variável PAINEL_JWT_SEGREDO, mínimo 32 caracteres)
@@ -55,6 +58,13 @@ public record PainelProperties(
      * @param janela        período em que as falhas são contadas (ex.: 15m)
      */
     public record Login(@Min(1) int maxTentativas, @NotNull Duration janela) {
+    }
+
+    /**
+     * @param maximo        quantos backups cada conta guarda (os mais antigos são apagados)
+     * @param tamanhoMaximo tamanho máximo de um backup (ex.: 5MB)
+     */
+    public record Backups(@Min(1) int maximo, @NotNull DataSize tamanhoMaximo) {
     }
 
     /**

@@ -868,3 +868,10 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 /* Fase 05, parte 5.3: indicador da sincronização no rodapé do Lançar */
 .nuvem-indicador { white-space: nowrap; }
 .nuvem-indicador.atencao { color: var(--amarelo); }
+
+/* Fase 05, parte 5.4: backups na nuvem, dentro de "Conta e nuvem" */
+.nuvem-backups { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--linha); }
+.lista-backups { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.item-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid var(--linha); }
+.item-backup:first-child { border-top: none; }
+.item-backup > div:first-child { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }

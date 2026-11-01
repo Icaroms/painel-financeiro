@@ -52,6 +52,10 @@ curl -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/
 | DELETE | `/api/{lista}/{id}` | sim | Exclusão suave: o registro volta com `excluidoEm` preenchido |
 | GET / PUT | `/api/configuracao` | sim | Formas de pagamento, cartões, destino da sobra e último backup (um documento por conta) |
 | POST | `/api/sync` | sim | Sincronização num pedido só: grava o que o aparelho mandou (resultado por registro: `gravado`, `conflito` com `atual`, ou `recusado` com `campos`) e devolve o que mudou desde `desde`, com um `cursor` novo |
+| POST | `/api/backups` | sim | Guarda um backup (o pacote do app, até 5 MB; 413 se passar). Cada conta guarda os 10 mais novos |
+| GET | `/api/backups` | sim | Lista dos backups (sem o conteúdo), com o máximo guardado e o tamanho máximo aceito |
+| GET / DELETE | `/api/backups/{id}` | sim | Baixa o pacote de um backup (para restaurar) / apaga um backup (204) |
+| DELETE | `/api/conta/dados` | sim | Apaga os dados do app na conta (a conta e os backups continuam). Na próxima sincronização, os outros aparelhos recebem `zerados: true` e perguntam o que fazer |
 
 Listas: `categorias`, `fixos`, `lancamentos`, `meses` e `investimentos`.
 
@@ -62,6 +66,7 @@ Regras dos dados:
 - **Hora do servidor.** `recebidoEm` é a hora do servidor na última gravação, e é o que a sincronização usa no `?desde=`. Ela não depende do relógio do aparelho.
 - **Um registro por mês.** Se dois aparelhos criarem o mesmo mês com ids diferentes, o segundo recebe 409 com o mês que já está no servidor.
 - **Contas separadas.** Cada conta só vê os seus registros. Um id de outra conta responde 404.
+- **Conta zerada.** Depois de um `DELETE /api/conta/dados`, um aparelho que sincronizou antes recebe `zerados: true` e nada do que ele mandou é gravado. Assim os dados apagados não voltam sem a pessoa decidir.
 
 Os erros seguem o formato `application/problem+json` (RFC 9457), em português:
 
@@ -125,10 +130,12 @@ backend/
     │   ├── dados/     listas do app (comum, categoria, fixo, lancamento, mes,
     │   │              investimento, configuracao)
     │   ├── sincronizacao/  POST /api/sync
+    │   ├── backup/    backups na nuvem (SQL direto com JdbcTemplate)
+    │   ├── conta/     DELETE /api/conta/dados
     │   └── erro/      respostas problem+json
     ├── main/resources/
     │   ├── application.yml
-    │   └── db/migration/   V1__criar_usuarios.sql, V2__dados_do_app.sql, V3__sessoes.sql
+    │   └── db/migration/   V1__criar_usuarios.sql, V2__dados_do_app.sql, V3__sessoes.sql, V4__backups_e_zerar_dados.sql
     └── test/
         ├── java/com/icaroms/painel/    testes
         ├── java/com/icaroms/paineldev/ modo dev (PostgreSQL embutido)

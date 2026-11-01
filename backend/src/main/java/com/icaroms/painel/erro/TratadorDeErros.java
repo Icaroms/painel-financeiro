@@ -1,6 +1,7 @@
 package com.icaroms.painel.erro;
 
 import com.icaroms.painel.auth.SessaoInvalidaException;
+import com.icaroms.painel.backup.BackupGrandeDemaisException;
 import com.icaroms.painel.dados.comum.ConflitoDeVersaoException;
 import com.icaroms.painel.dados.comum.DadosInvalidosException;
 import com.icaroms.painel.dados.comum.RegistroNaoEncontradoException;
@@ -102,6 +103,13 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> credenciaisInvalidas(CredenciaisInvalidasException erro) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(problema(HttpStatus.UNAUTHORIZED, "Não autenticado", erro.getMessage()));
+    }
+
+    @ExceptionHandler(BackupGrandeDemaisException.class)
+    public ResponseEntity<ProblemDetail> backupGrandeDemais(BackupGrandeDemaisException erro) {
+        ProblemDetail problema = problema(HttpStatus.PAYLOAD_TOO_LARGE, "Backup grande demais", erro.getMessage());
+        problema.setProperty("tamanhoMaximoBytes", erro.getLimiteBytes());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(problema);
     }
 
     @ExceptionHandler(SessaoInvalidaException.class)

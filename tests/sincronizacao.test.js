@@ -12,6 +12,7 @@ import {
   assinaturaDaConfiguracao,
   dadosDoServidor,
   estadoDepoisDeAdotar,
+  estadoDepoisDeZerar,
   estadoInicial,
   jsonEstavel,
   momento,
@@ -261,5 +262,37 @@ describe('primeira vez num aparelho com a conta já usada', () => {
   it('sem nenhum mês ou sem configuração no servidor, não dá para montar os dados', () => {
     assert.equal(dadosDoServidor(resposta({ configuracaoAtual: { formasPagamento: ['Pix'], cartoes: [] } })), null);
     assert.equal(dadosDoServidor(resposta({ mudancas: { ...resposta().mudancas, meses: [mes('m1', '2026-10')] } })), null);
+  });
+});
+
+describe('conta zerada (5.4)', () => {
+  it('o pedido leva o zeradosEm que o aparelho conhece', () => {
+    const pedido = montarPedido(dadosBase(), { ...estadoInicial(), cursor: 'C1', zeradosEm: 'Z1' }, AGORA);
+    assert.equal(pedido.zeradosEm, 'Z1');
+    assert.equal(montarPedido(dadosBase(), estadoInicial(), AGORA).zeradosEm, null);
+  });
+
+  it('o zeradosEm da resposta é guardado no estado (e o anterior fica se a resposta não trouxer)', () => {
+    const comZerado = aplicarResposta(dadosBase(), estadoInicial(), { listas: {} }, resposta({ zeradosEm: 'Z2' }));
+    assert.equal(comZerado.estado.zeradosEm, 'Z2');
+
+    const semCampo = aplicarResposta(dadosBase(), { ...estadoInicial(), zeradosEm: 'Z1' }, { listas: {} }, resposta());
+    assert.equal(semCampo.estado.zeradosEm, 'Z1');
+  });
+
+  it('depois de zerar, tudo daqui volta a ficar pendente, já sabendo do zerado', () => {
+    const estado = estadoDepoisDeZerar('Z3');
+    assert.equal(estado.cursor, null);
+    assert.equal(estado.zeradosEm, 'Z3');
+    assert.equal(pendentes(dadosBase(), estado).total, 3);
+  });
+
+  it('adotar os dados da conta guarda o zeradosEm do servidor', () => {
+    const tudo = resposta({
+      mudancas: { ...resposta().mudancas, meses: [mes('m9', '2026-09')] },
+      configuracaoAtual: { formasPagamento: ['Pix'], cartoes: [], atualizadoEm: T2 },
+      zeradosEm: 'Z4',
+    });
+    assert.equal(estadoDepoisDeAdotar(dadosDoServidor(tudo), tudo, AGORA).zeradosEm, 'Z4');
   });
 });

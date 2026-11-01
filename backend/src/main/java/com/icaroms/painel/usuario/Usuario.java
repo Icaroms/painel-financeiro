@@ -35,6 +35,10 @@ public class Usuario {
     @Column(name = "atualizado_em", nullable = false)
     private Instant atualizadoEm;
 
+    /** Quando os dados da conta foram apagados ou substituídos por um backup (null: nunca). */
+    @Column(name = "dados_zerados_em")
+    private Instant dadosZeradosEm;
+
     /** Exigido pelo JPA. */
     protected Usuario() {
     }
@@ -50,6 +54,16 @@ public class Usuario {
     /** E-mail sem espaços nas pontas e em minúsculas (comparação sem diferença de caixa). */
     public static String normalizarEmail(String email) {
         return Objects.requireNonNull(email, "email").trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** Marca que os dados da conta foram apagados agora. */
+    public void marcarDadosZerados(Instant agora) {
+        this.dadosZeradosEm = agora;
+        this.atualizadoEm = agora;
+    }
+
+    public Instant getDadosZeradosEm() {
+        return dadosZeradosEm;
     }
 
     public UUID getId() {

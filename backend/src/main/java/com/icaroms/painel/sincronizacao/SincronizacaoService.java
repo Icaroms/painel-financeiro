@@ -18,6 +18,7 @@ import com.icaroms.painel.dados.lancamento.LancamentoDto;
 import com.icaroms.painel.dados.lancamento.LancamentoService;
 import com.icaroms.painel.dados.mes.MesDto;
 import com.icaroms.painel.dados.mes.MesService;
+import com.icaroms.painel.usuario.UsuarioRepository;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.time.Clock;
@@ -40,6 +41,9 @@ import org.springframework.stereotype.Service;
  *   <li>devolve o que mudou no servidor desde a última sincronização do
  *       aparelho, e um "cursor" novo para a próxima.</li>
  * </ol>
+ * Se a conta foi zerada (DELETE /api/conta/dados) depois da última
+ * sincronização do aparelho, nada é gravado: a resposta vem com "zerados",
+ * para o aparelho não devolver ao servidor os dados que foram apagados.
  * As regras de cada gravação são as mesmas do PUT de cada lista: vale o
  * {@code atualizadoEm} mais recente.
  */
@@ -55,13 +59,14 @@ public class SincronizacaoService {
 
     private final List<Lista<?>> listas;
     private final ConfiguracaoService configuracoes;
+    private final UsuarioRepository usuarios;
     private final ObjectMapper json;
     private final Validator validador;
     private final Clock relogio;
 
     public SincronizacaoService(CategoriaService categorias, FixoService fixos, LancamentoService lancamentos,
             MesService meses, InvestimentoService investimentos, ConfiguracaoService configuracoes,
-            ObjectMapper json, Validator validador, Clock relogio) {
+            UsuarioRepository usuarios, ObjectMapper json, Validator validador, Clock relogio) {
         // Os meses vêm antes dos lançamentos só por clareza; cada registro é independente.
         this.listas = List.of(
                 new Lista<>("categorias", categorias, CategoriaDto.class),
@@ -70,6 +75,7 @@ public class SincronizacaoService {
                 new Lista<>("lancamentos", lancamentos, LancamentoDto.class),
                 new Lista<>("investimentos", investimentos, InvestimentoDto.class));
         this.configuracoes = configuracoes;
+        this.usuarios = usuarios;
         this.json = json;
         this.validador = validador;
         this.relogio = relogio;
@@ -83,6 +89,11 @@ public class SincronizacaoService {
     public RespostaSincronizacao sincronizar(UUID usuarioId, PedidoSincronizacao pedido) {
         Map<String, List<Map<String, Object>>> enviadas = pedido.listas() == null ? Map.of() : pedido.listas();
         conferirListas(enviadas);
+
+        Instant zeradosEm = usuarios.findById(usuarioId).map(usuario -> usuario.getDadosZeradosEm()).orElse(null);
+        if (naoSabeQueFoiZerada(pedido, zeradosEm)) {
+            return RespostaSincronizacao.contaZerada(zeradosEm);
+        }
 
         // O cursor é marcado ANTES de gravar e ler: o que for gravado depois
         // deste instante (por este ou por outro aparelho) aparece na próxima vez.
@@ -103,7 +114,20 @@ public class SincronizacaoService {
         }
         ConfiguracaoDto configuracaoAtual = configuracoes.buscarDesde(usuarioId, pedido.desde()).orElse(null);
 
-        return new RespostaSincronizacao(cursor, resultados, resultadoDaConfiguracao, mudancas, configuracaoAtual);
+        return new RespostaSincronizacao(cursor, resultados, resultadoDaConfiguracao, mudancas, configuracaoAtual,
+                zeradosEm, false);
+    }
+
+    /**
+     * O aparelho já sincronizou antes ("desde" preenchido) e não sabe que a
+     * conta foi zerada depois disso? Um aparelho que começa do zero ("desde"
+     * vazio) não tem dados antigos da conta para devolver, então passa.
+     */
+    static boolean naoSabeQueFoiZerada(PedidoSincronizacao pedido, Instant zeradosEm) {
+        if (zeradosEm == null || pedido.desde() == null) {
+            return false;
+        }
+        return pedido.zeradosEm() == null || pedido.zeradosEm().isBefore(zeradosEm);
     }
 
     private void conferirListas(Map<String, List<Map<String, Object>>> enviadas) {

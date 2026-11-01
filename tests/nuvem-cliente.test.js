@@ -15,7 +15,8 @@ const VENCIDO = '2026-10-13T14:00:00Z';
 
 /** Resposta HTTP de mentira. */
 function respostaHttp(status, corpo) {
-  return { status, text: async () => (corpo === undefined ? '' : JSON.stringify(corpo)) };
+  const texto = corpo === undefined ? '' : (typeof corpo === 'string' ? corpo : JSON.stringify(corpo));
+  return { status, text: async () => texto };
 }
 
 /**
@@ -28,7 +29,8 @@ function montar(respostas, sessaoInicial = null) {
   const buscar = async (url, opcoes) => {
     const caminho = url.replace('http://localhost:8081', '');
     const token = opcoes.headers.Authorization?.replace('Bearer ', '') ?? null;
-    const pedido = { caminho, corpo: JSON.parse(opcoes.body), token, referrerPolicy: opcoes.referrerPolicy };
+    const corpo = opcoes.body === undefined ? undefined : JSON.parse(opcoes.body);
+    const pedido = { caminho, metodo: opcoes.method, corpo, token, referrerPolicy: opcoes.referrerPolicy };
     pedidos.push(pedido);
     const proxima = respostas.shift();
     if (!proxima) throw new Error(`pedido inesperado: ${caminho}`);
@@ -149,5 +151,46 @@ describe('criarClienteNuvem', () => {
     const semRede = montar([() => { throw new TypeError('Failed to fetch'); }], tokens('1'));
     await semRede.cliente.sair();
     assert.equal(semRede.sessao(), null);
+  });
+
+  it('backups: envia o texto do pacote como veio, lista, baixa como texto e apaga', async () => {
+    const pacote = '{"formato":"painel-financeiro","versao":3,"dados":{}}';
+    const { cliente, pedidos } = montar([
+      () => respostaHttp(201, { id: 'b1', criadoEm: '2026-10-14T12:00:00Z' }),
+      () => respostaHttp(200, { backups: [{ id: 'b1' }], maximo: 10, tamanhoMaximoBytes: 5242880 }),
+      () => respostaHttp(200, pacote),
+      () => respostaHttp(204),
+    ], tokens('1'));
+
+    assert.equal((await cliente.enviarBackup(pacote)).id, 'b1');
+    assert.equal((await cliente.listarBackups()).maximo, 10);
+    assert.equal(await cliente.baixarBackup('b1'), pacote);
+    await cliente.apagarBackup('b1');
+
+    assert.deepEqual(pedidos.map((p) => `${p.metodo} ${p.caminho}`), [
+      'POST /api/backups', 'GET /api/backups', 'GET /api/backups/b1', 'DELETE /api/backups/b1',
+    ]);
+    assert.deepEqual(pedidos[0].corpo, JSON.parse(pacote));
+    assert.equal(pedidos[1].corpo, undefined);
+    assert.ok(pedidos.every((p) => p.token === 'acesso-1'));
+  });
+
+  it('backup grande demais (413) ou inexistente (404): erro do tipo "dados" com a mensagem', async () => {
+    const { cliente } = montar([
+      () => respostaHttp(413, { detail: 'O backup passa do tamanho máximo aceito pelo servidor (5 MB).' }),
+      () => respostaHttp(404, { detail: 'Registro não encontrado.' }),
+    ], tokens('1'));
+
+    await assert.rejects(cliente.enviarBackup('{}'), (erro) => erro.tipo === 'dados' && /5 MB/.test(erro.message));
+    await assert.rejects(cliente.baixarBackup('x'), (erro) => erro.tipo === 'dados' && /apagado/.test(erro.message));
+  });
+
+  it('zerarDados: DELETE /api/conta/dados e devolve o zeradosEm', async () => {
+    const { cliente, pedidos } = montar([() => respostaHttp(200, { zeradosEm: '2026-10-14T12:00:00Z' })], tokens('1'));
+
+    const resposta = await cliente.zerarDados();
+
+    assert.equal(resposta.zeradosEm, '2026-10-14T12:00:00Z');
+    assert.equal(`${pedidos[0].metodo} ${pedidos[0].caminho}`, 'DELETE /api/conta/dados');
   });
 });

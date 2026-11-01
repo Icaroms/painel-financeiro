@@ -1,7 +1,8 @@
 /**
  * Conversa com o servidor do Painel Financeiro (Fase 05, parte 5.3).
  *
- * Login, renovação do token, sincronização e saída. A sessão (tokens)
+ * Login, renovação do token, sincronização, saída, backups na nuvem (5.4)
+ * e "apagar os dados da conta" (5.4). A sessão (tokens)
  * fica guardada no aparelho por quem usa este módulo (src/ui/nuvem.js),
  * fora do backup; a senha nunca é guardada.
  *
@@ -62,14 +63,14 @@ export function normalizarEndereco(texto) {
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
-/** Lê o corpo da resposta como JSON (ou null se vazio ou não for JSON). */
-async function lerJson(resposta) {
+/** Lê o corpo da resposta: o texto e, se for JSON, o objeto (ou null). */
+async function lerCorpo(resposta) {
   const texto = await resposta.text();
-  if (!texto) return null;
+  if (!texto) return { texto: '', json: null };
   try {
-    return JSON.parse(texto);
+    return { texto, json: JSON.parse(texto) };
   } catch {
-    return null;
+    return { texto, json: null };
   }
 }
 
@@ -84,21 +85,33 @@ async function lerJson(resposta) {
  * @param {() => number} [opcoes.agoraMs] Relógio (nos testes, fixo).
  */
 export function criarClienteNuvem({ endereco, obterSessao, salvarSessao, buscar = globalThis.fetch?.bind(globalThis), agoraMs = () => Date.now() }) {
-  async function pedir(caminho, { corpo, token } = {}) {
-    const cabecalhos = { 'Content-Type': 'application/json' };
+  /**
+   * Um pedido ao servidor.
+   *
+   * @param {string} caminho Ex.: "/api/sync".
+   * @param {object} [opcoes]
+   * @param {string} [opcoes.metodo] "POST" (padrão), "GET" ou "DELETE".
+   * @param {object} [opcoes.corpo] Objeto enviado como JSON (só no POST).
+   * @param {string} [opcoes.texto] Corpo já pronto em JSON (ex.: o backup), no lugar de "corpo".
+   * @param {string} [opcoes.token] Token de acesso.
+   * @returns {Promise<{ status: number, texto: string, json: any }>}
+   */
+  async function pedir(caminho, { metodo = 'POST', corpo, texto, token } = {}) {
+    const cabecalhos = {};
+    if (metodo === 'POST') cabecalhos['Content-Type'] = 'application/json';
     if (token) cabecalhos.Authorization = `Bearer ${token}`;
     let resposta;
     try {
       resposta = await buscar(`${endereco}${caminho}`, {
-        method: 'POST',
+        method: metodo,
         headers: cabecalhos,
-        body: JSON.stringify(corpo ?? {}),
+        body: metodo === 'POST' ? (texto ?? JSON.stringify(corpo ?? {})) : undefined,
         referrerPolicy: 'no-referrer',
       });
     } catch {
       throw new ErroNuvem('rede', 'Sem conexão com o servidor. O que mudar fica guardado e vai depois.');
     }
-    return { status: resposta.status, json: await lerJson(resposta) };
+    return { status: resposta.status, ...(await lerCorpo(resposta)) };
   }
 
   /** Converte a resposta de login/renovação na sessão guardada. */
@@ -113,7 +126,8 @@ export function criarClienteNuvem({ endereco, obterSessao, salvarSessao, buscar 
 
   function erroDoServidor({ status, json }) {
     const detalhe = json?.detail ?? 'O servidor não respondeu como esperado.';
-    if (status === 400) return new ErroNuvem('dados', detalhe);
+    if (status === 400 || status === 413) return new ErroNuvem('dados', detalhe);
+    if (status === 404) return new ErroNuvem('dados', 'Não encontrado no servidor (pode ter sido apagado).');
     if (status === 429) return new ErroNuvem('limite', detalhe);
     return new ErroNuvem('servidor', `Erro do servidor (${status}). Tente de novo em instantes.`);
   }
@@ -133,16 +147,16 @@ export function criarClienteNuvem({ endereco, obterSessao, salvarSessao, buscar 
   }
 
   /** Pedido com token; renova uma vez se o token venceu. */
-  async function comToken(caminho, corpo) {
+  async function comToken(caminho, opcoes = {}) {
     let sessao = obterSessao();
     if (!sessao?.token) throw new ErroNuvem('sessao', 'Entre na sua conta para sincronizar.');
     const expira = Date.parse(sessao.expiraEm);
     if (Number.isNaN(expira) || expira - agoraMs() < FOLGA_DO_TOKEN_MS) sessao = await renovar();
 
-    let resposta = await pedir(caminho, { corpo, token: sessao.token });
+    let resposta = await pedir(caminho, { ...opcoes, token: sessao.token });
     if (resposta.status === 401) {
       sessao = await renovar();
-      resposta = await pedir(caminho, { corpo, token: sessao.token });
+      resposta = await pedir(caminho, { ...opcoes, token: sessao.token });
       if (resposta.status === 401) {
         await salvarSessao(null);
         throw new ErroNuvem('sessao', 'A sessão terminou. Entre de novo para sincronizar.');
@@ -164,7 +178,41 @@ export function criarClienteNuvem({ endereco, obterSessao, salvarSessao, buscar 
 
     /** POST /api/sync. */
     async sincronizar(pedido) {
-      const resposta = await comToken('/api/sync', pedido);
+      const resposta = await comToken('/api/sync', { corpo: pedido });
+      if (resposta.status !== 200) throw erroDoServidor(resposta);
+      return resposta.json;
+    },
+
+    /** POST /api/backups com o texto do pacote; devolve o resumo do backup guardado. */
+    async enviarBackup(textoDoPacote) {
+      const resposta = await comToken('/api/backups', { texto: textoDoPacote });
+      if (resposta.status !== 201) throw erroDoServidor(resposta);
+      return resposta.json;
+    },
+
+    /** GET /api/backups: { backups, maximo, tamanhoMaximoBytes }. */
+    async listarBackups() {
+      const resposta = await comToken('/api/backups', { metodo: 'GET' });
+      if (resposta.status !== 200) throw erroDoServidor(resposta);
+      return resposta.json;
+    },
+
+    /** GET /api/backups/{id}: o pacote, como TEXTO (para lerBackup). */
+    async baixarBackup(id) {
+      const resposta = await comToken(`/api/backups/${encodeURIComponent(id)}`, { metodo: 'GET' });
+      if (resposta.status !== 200) throw erroDoServidor(resposta);
+      return resposta.texto;
+    },
+
+    /** DELETE /api/backups/{id}. */
+    async apagarBackup(id) {
+      const resposta = await comToken(`/api/backups/${encodeURIComponent(id)}`, { metodo: 'DELETE' });
+      if (resposta.status !== 204) throw erroDoServidor(resposta);
+    },
+
+    /** DELETE /api/conta/dados: { zeradosEm }. */
+    async zerarDados() {
+      const resposta = await comToken('/api/conta/dados', { metodo: 'DELETE' });
       if (resposta.status !== 200) throw erroDoServidor(resposta);
       return resposta.json;
     },
