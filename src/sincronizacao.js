@@ -17,7 +17,9 @@
  *     assinaturaConfiguracao: "...",          ← a configuração que o servidor já tem
  *     configuracaoAtualizadaEm: "...",        ← atualizadoEm dela no servidor
  *     ultimaEm: "...",                        ← quando a última sincronização terminou
- *     recusados: [{ lista, id, campos }]      ← registros que o servidor recusou na última vez
+ *     recusados: [{ lista, id, campos }],     ← registros que o servidor recusou na última vez
+ *     zeradosEm: "..."                        ← última vez que a conta foi zerada, que este
+ *                                               aparelho já sabe (5.4); vai em cada pedido
  *   }
  *
  * Regra de conflito: vale a alteração mais recente (atualizadoEm). As datas
@@ -45,7 +47,18 @@ export function estadoInicial() {
     configuracaoAtualizadaEm: null,
     ultimaEm: null,
     recusados: [],
+    zeradosEm: null,
   };
+}
+
+/**
+ * Estado depois de a conta ser zerada (por este aparelho, ao apagar tudo ou
+ * restaurar um backup, ou por outro): tudo daqui volta a ficar pendente.
+ *
+ * @param {string|null} zeradosEm O "zeradosEm" do servidor.
+ */
+export function estadoDepoisDeZerar(zeradosEm) {
+  return { ...estadoInicial(), zeradosEm: zeradosEm ?? null };
 }
 
 /**
@@ -118,7 +131,7 @@ export function pendentes(dados, estado) {
  * @param {object} dados
  * @param {object} estado
  * @param {Date} [agora] Vira o atualizadoEm da configuração, se ela mudou.
- * @returns {{ desde: string|null, listas: Record<string, object[]>, configuracao: object|null }}
+ * @returns {{ desde: string|null, listas: Record<string, object[]>, configuracao: object|null, zeradosEm: string|null }}
  */
 export function montarPedido(dados, estado, agora = new Date()) {
   const { listas, configuracao } = pendentes(dados, estado);
@@ -127,6 +140,7 @@ export function montarPedido(dados, estado, agora = new Date()) {
     desde: estado.cursor ?? null,
     listas: comItens,
     configuracao: configuracao === null ? null : { ...configuracao, atualizadoEm: agora.toISOString() },
+    zeradosEm: estado.zeradosEm ?? null,
   };
 }
 
@@ -276,6 +290,7 @@ export function aplicarResposta(dados, estado, pedido, resposta, agora = new Dat
       configuracaoAtualizadaEm,
       ultimaEm: agora.toISOString(),
       recusados,
+      zeradosEm: resposta.zeradosEm ?? estado.zeradosEm ?? null,
     },
     mudou,
     recusados,
@@ -328,5 +343,6 @@ export function estadoDepoisDeAdotar(dados, resposta, agora = new Date()) {
   estado.assinaturaConfiguracao = assinaturaDaConfiguracao(resposta.configuracaoAtual ?? {});
   estado.configuracaoAtualizadaEm = resposta.configuracaoAtual?.atualizadoEm ?? null;
   estado.ultimaEm = agora.toISOString();
+  estado.zeradosEm = resposta.zeradosEm ?? null;
   return estado;
 }
