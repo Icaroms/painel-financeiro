@@ -55,6 +55,11 @@ painel:
   login:
     max-tentativas: 5
     janela: 15m
+  backups:
+    # Cada conta guarda os últimos 10; um backup pode ter até 5 MB
+    # (o mesmo limite do arquivo de backup no app).
+    maximo: 10
+    tamanho-maximo: 5MB
   usuario-inicial:
     email: ${PAINEL_USUARIO_EMAIL:}
     senha: ${PAINEL_USUARIO_SENHA:}
