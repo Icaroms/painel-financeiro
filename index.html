@@ -206,8 +206,20 @@
           <dd id="mes-sobra"></dd>
         </div>
       </dl>
-      <!-- Dinheiro do mês − já pago: serve para conferir o app com o saldo do banco -->
+      <!-- Saldo do início + o que já entrou − já pago: serve para conferir o app com o saldo do banco -->
       <p class="na-conta secundario" id="mes-na-conta"></p>
+      <!-- 11/2026: conferência com o saldo do banco (aponta entradas contadas duas vezes) -->
+      <form class="conferencia" id="form-conferencia" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Saldo no banco agora</span>
+          <span class="campo-dinheiro">
+            <span aria-hidden="true">R$</span>
+            <input id="conferencia-banco" inputmode="decimal" placeholder="0,00" data-sinal>
+          </span>
+        </label>
+        <button type="submit" class="botao-pequeno">Conferir</button>
+        <p class="conferencia-resultado" id="conferencia-resultado" aria-live="polite" hidden></p>
+      </form>
       <p class="aviso-saldo secundario" id="mes-aviso-saldo" hidden>
         O saldo do mês ainda não foi confirmado. <a href="#configurar">Confirmar em Configurar</a>.
       </p>
@@ -473,6 +485,13 @@
       <p class="secundario">À vista ou parcelado, agora ou mais tarde. Só uma consulta: nada é gravado.</p>
     </header>
 
+    <!-- 11/2026: lista de desejos com os preços registrados (aparece quando há produtos) -->
+    <section class="cartao" id="secao-desejos" aria-labelledby="titulo-desejos" hidden>
+      <h2 id="titulo-desejos">Lista de desejos <span class="secundario" id="desejos-contagem"></span></h2>
+      <p class="secundario explicacao">Registre os preços que encontrar: o app avalia a compra no menor deles.</p>
+      <ul class="lista-desejos" id="lista-desejos"></ul>
+    </section>
+
     <section class="cartao" aria-labelledby="titulo-simular-compra">
       <h2 id="titulo-simular-compra">Compra</h2>
       <label class="campo">
@@ -504,6 +523,9 @@
       </div>
       <p class="secundario explicacao" id="simular-so-avista" hidden>Fora do cartão a compra é à vista: o dinheiro sai da conta no dia. Para ver parcelas, escolha um cartão.</p>
       <span class="erro" id="simular-erro"></span>
+      <!-- Ainda pensando? Guarda o produto e o preço para acompanhar -->
+      <button type="button" class="botao-secundario" id="simular-guardar" hidden>Guardar na lista de desejos</button>
+      <span class="erro" id="simular-guardar-erro"></span>
     </section>
 
     <!-- Sugestão da IA para a compra inteira (melhor opção e momento) -->
@@ -555,7 +577,7 @@
           <span class="erro" id="erro-renda"></span>
         </label>
 
-        <p class="secundario explicacao">Salário e o que entra todo mês ficam em "Entradas fixas", logo abaixo. Se o salário já tinha caído quando você informou o saldo, marque "Já estava no saldo": ele não é contado de novo, mas os próximos meses recebem.</p>
+        <p class="secundario explicacao">Saldo do início do mês = o que havia na conta ANTES do salário e das outras entradas do mês. Salário e o que entra todo mês ficam em "Entradas fixas", logo abaixo.</p>
         <p class="resumo-dinheiro" id="resumo-dinheiro"></p>
         <button type="submit" class="botao-principal" id="botao-salvar-mes">Salvar</button>
       </form>
@@ -564,7 +586,7 @@
     <!-- 11/2026: salário e outras entradas que se repetem; a previsão dos próximos meses usa estas -->
     <section class="cartao" aria-labelledby="titulo-entradas-fixas">
       <h2 id="titulo-entradas-fixas">Entradas fixas</h2>
-      <p class="secundario explicacao">O que entra todo mês, como o salário. A previsão dos próximos meses (Avaliar compra, análise) usa estes valores.</p>
+      <p class="secundario explicacao">O que entra todo mês, como o salário. Vale o mês em que o dinheiro cai na conta: o salário de outubro pago em 5/11 é entrada de novembro.</p>
       <div class="alerta" id="alerta-sem-entradas" hidden>
         <span class="luz" aria-hidden="true"></span>
         <p id="alerta-sem-entradas-texto"></p>

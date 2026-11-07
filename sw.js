@@ -27,7 +27,7 @@
  * - ao mudar, a cópia antiga dos arquivos é apagada;
  * - uma página aberta com versão menor mostra o aviso "Há uma versão nova".
  */
-const VERSAO_CACHE = 'painel-financeiro-v33';
+const VERSAO_CACHE = 'painel-financeiro-v34';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -58,6 +58,7 @@ const ARQUIVOS = [
   './src/dados-exemplo.js',
   './src/destino.js',
   './src/datas.js',
+  './src/desejos.js',
   './src/dinheiro.js',
   './src/entradas.js',
   './src/erros.js',
@@ -95,6 +96,7 @@ const ARQUIVOS = [
   './src/ui/configurar.js',
   './src/ui/destino.js',
   './src/ui/campo-dinheiro.js',
+  './src/ui/desejos.js',
   './src/ui/entradas.js',
   './src/ui/explicar.js',
   './src/ui/historico.js',

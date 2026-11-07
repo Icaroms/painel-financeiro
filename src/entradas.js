@@ -323,16 +323,75 @@ export function removerEntradaAvulsa(estado, mes, id, { agora = new Date() } = {
 /**
  * O que entra no mês, em partes.
  *
+ * jaEntrouCentavos: o que JÁ caiu na conta depois do saldo do início do mês
+ * (entradas fixas "recebida" e avulsas). As "previstas" ainda não entraram.
+ * Dados antigos, sem entradas fixas: a renda prevista conta como já entrada
+ * (era assim antes, e é como a pessoa conferia com o banco).
+ *
  * @param {object} registroMes
  * @param {object[]} [entradasFixas]
- * @returns {{ outrasCentavos: number, fixasCentavos: number, avulsasCentavos: number, totalCentavos: number }}
+ * @returns {{ outrasCentavos: number, fixasCentavos: number, avulsasCentavos: number, totalCentavos: number,
+ *   jaEntrouCentavos: number }}
  */
 export function detalheDaRendaDoMes(registroMes, entradasFixas = []) {
   const outrasCentavos = registroMes.rendaPrevistaCentavos ?? 0;
-  const fixasCentavos = entradasAtivasNoMes(entradasFixas, registroMes.mes)
-    .reduce((soma, e) => soma + situacaoDaEntradaNoMes(e, registroMes).contaCentavos, 0);
+  const situacoes = entradasAtivasNoMes(entradasFixas, registroMes.mes).map((e) => situacaoDaEntradaNoMes(e, registroMes));
+  const fixasCentavos = situacoes.reduce((soma, s) => soma + s.contaCentavos, 0);
+  const recebidasCentavos = situacoes.filter((s) => s.status === 'recebida').reduce((soma, s) => soma + s.contaCentavos, 0);
   const avulsasCentavos = entradasAvulsasDe(registroMes).reduce((soma, e) => soma + e.valorCentavos, 0);
-  return { outrasCentavos, fixasCentavos, avulsasCentavos, totalCentavos: outrasCentavos + fixasCentavos + avulsasCentavos };
+  const semFixas = (entradasFixas ?? []).length === 0;
+  return {
+    outrasCentavos,
+    fixasCentavos,
+    avulsasCentavos,
+    totalCentavos: outrasCentavos + fixasCentavos + avulsasCentavos,
+    jaEntrouCentavos: (semFixas ? outrasCentavos : 0) + recebidasCentavos + avulsasCentavos,
+  };
+}
+
+/** Diferença até a qual dois valores são considerados iguais na conferência (R$ 1,00). */
+export const TOLERANCIA_CONFERENCIA = 100;
+
+/**
+ * Confere o saldo que o app calcula com o saldo do banco e aponta suspeitos.
+ *
+ * - App com MAIS que o banco: falta lançar um gasto, ou uma entrada foi
+ *   contada duas vezes (o caso clássico: o salário já estava no saldo do
+ *   início do mês e também foi marcado como recebido). Suspeitos: entradas
+ *   do mês com o valor da diferença.
+ * - App com MENOS que o banco: falta registrar uma entrada, ou um gasto foi
+ *   lançado duas vezes. Suspeitos: gastos do mês com o valor da diferença.
+ *
+ * @param {object} entrada
+ * @param {number} entrada.appCentavos    O que o app diz que a conta deve ter agora.
+ * @param {number} entrada.bancoCentavos  O saldo do banco, digitado pela pessoa.
+ * @param {object} entrada.registroMes
+ * @param {object[]} [entrada.entradasFixas]
+ * @param {object[]} [entrada.gastosDoMes] Lançamentos do mês (para o caso "app com menos").
+ * @returns {{ diferencaCentavos: number, situacao: 'bate'|'app-maior'|'app-menor',
+ *   suspeitas: { tipo: 'entrada-fixa'|'entrada-avulsa'|'gasto', nome: string, valorCentavos: number }[] }}
+ */
+export function conferirComBanco({ appCentavos, bancoCentavos, registroMes, entradasFixas = [], gastosDoMes = [] }) {
+  const diferencaCentavos = appCentavos - bancoCentavos;
+  if (Math.abs(diferencaCentavos) <= TOLERANCIA_CONFERENCIA) return { diferencaCentavos, situacao: 'bate', suspeitas: [] };
+  const perto = (valor) => Math.abs(valor - Math.abs(diferencaCentavos)) <= TOLERANCIA_CONFERENCIA;
+
+  if (diferencaCentavos > 0) {
+    const suspeitas = [];
+    for (const e of entradasAtivasNoMes(entradasFixas, registroMes.mes)) {
+      const s = situacaoDaEntradaNoMes(e, registroMes);
+      if (s.contaCentavos > 0 && perto(s.contaCentavos)) suspeitas.push({ tipo: 'entrada-fixa', nome: e.nome, valorCentavos: s.contaCentavos });
+    }
+    for (const e of entradasAvulsasDe(registroMes)) {
+      if (perto(e.valorCentavos)) suspeitas.push({ tipo: 'entrada-avulsa', nome: e.descricao || 'Entrada avulsa', valorCentavos: e.valorCentavos });
+    }
+    return { diferencaCentavos, situacao: 'app-maior', suspeitas };
+  }
+
+  const suspeitas = gastosDoMes
+    .filter((l) => l.excluidoEm === null && perto(l.valorCentavos))
+    .map((l) => ({ tipo: 'gasto', nome: l.descricao || 'Gasto', valorCentavos: l.valorCentavos }));
+  return { diferencaCentavos, situacao: 'app-menor', suspeitas };
 }
 
 /** Total que entra no mês: outras entradas previstas + entradas fixas que contam + avulsas. */

@@ -142,8 +142,9 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
     // Estipulado: contas e faturas que ainda vão sair (as contas dispensadas não contam).
     previstoCentavos: fixosPrevistos + faturasPrevistas,
     deveSobrarCentavos: saldoProjetadoCentavos,
-    // Dinheiro do mês menos o que já foi pago: deve bater com o saldo do banco.
-    naContaAgoraCentavos: dinheiroDoMes - jaPagoTotal,
+    // Saldo do início + o que JÁ entrou − o que já foi pago: deve bater com o saldo do banco.
+    // (Entradas ainda previstas não estão na conta.)
+    naContaAgoraCentavos: registro.saldoInicialCentavos + entradas.jaEntrouCentavos - jaPagoTotal,
     faturas,
     contagemFixos: {
       previstas: fixos.filter((f) => f.status === 'previsto').length,

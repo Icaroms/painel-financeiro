@@ -53,6 +53,9 @@ import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
 import { iniciarEntradasConfig, iniciarEntradasMes } from './entradas.js';
 import { iniciarOrcamentos } from './orcamentos.js';
+import { iniciarDesejos } from './desejos.js';
+import { adicionarDesejo } from '../desejos.js';
+import { textoDoValor } from '../configuracao.js';
 import { iniciarInvestir } from './investir.js';
 import { iniciarRadar } from './radar.js';
 import { iniciarSimuladorInvestimentos } from './simulador-investimentos.js';
@@ -799,7 +802,32 @@ const simuladorInvestimentos = iniciarSimuladorInvestimentos({
   obterRadar: () => radarGuardado,
   obterInvestirCentavos: investirDoMes,
 });
-const simulador = iniciarSimulador({ obterDados: () => dados, obterConfigIA: () => configIA });
+const simulador = iniciarSimulador({
+  obterDados: () => dados,
+  obterConfigIA: () => configIA,
+  // 11/2026: "Guardar na lista de desejos" (erros de validação voltam para a tela do simulador).
+  guardarDesejo: async (desejo) => {
+    await aplicarMudanca(adicionarDesejo(dados, desejo), `"${desejo.nome.trim()}" guardado na lista de desejos.`);
+    desejos.renderizar();
+    document.getElementById('secao-desejos').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+});
+// 11/2026: lista de desejos (vista Avaliar compra).
+const desejos = iniciarDesejos({
+  obterDados: () => dados,
+  aplicarMudanca,
+  obterConfigIA: () => configIA,
+  abrirNaAvaliacao: (desejo, menorCentavos) => {
+    simulador.preencher({
+      formaPagamento: desejo.formaPagamento,
+      valorTexto: textoDoValor(menorCentavos),
+      descricao: desejo.nome,
+      parcelas: desejo.parcelas,
+    });
+    simulador.renderizar();
+    document.getElementById('simular-avista').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  },
+});
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
 // A reserva usa o valor estimado da renda fixa (4.4c): só leitura, então a visão com estimativas.
 const destinoMes = iniciarDestinoMes({ obterDados: dadosEstimados });
@@ -934,7 +962,10 @@ function mostrarVista() {
     configuracaoIA.renderizar();
     nuvem.aoAbrirConfigurar();
   }
-  if (vista === 'simular') simulador.renderizar();
+  if (vista === 'simular') {
+    simulador.renderizar();
+    desejos.renderizar();
+  }
   // Voltando ao Lançar (ex.: depois de salvar a chave da IA), a tela é refeita.
   if (vista === 'lancar') atualizar();
   window.scrollTo(0, 0);

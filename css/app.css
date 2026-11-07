@@ -894,3 +894,22 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .premissas .aviso-previsao { padding: 8px 10px; border-left: 3px solid var(--amarelo, var(--vermelho)); background: var(--fundo); border-radius: 0 8px 8px 0; }
 .premissas .aviso-previsao.grave { border-left-color: var(--vermelho); }
 .premissas .aviso-previsao a { color: var(--texto); font-weight: 600; }
+
+/* 11/2026: lista de desejos (Avaliar compra) */
+.lista-desejos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.desejo { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--linha); border-left: 6px solid var(--cor, var(--linha)); border-radius: 12px; background: var(--fundo); }
+.desejo h3 { margin: 0; font-size: 16px; }
+.acoes-desejo { display: flex; flex-wrap: wrap; gap: 8px; }
+.historico-precos summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.historico-precos .itens-fatura { margin: 8px 0; }
+.historico-precos .itens-fatura li { align-items: center; }
+.historico-precos > .botao-pequeno { margin-top: 4px; }
+.botao-link { border: none; background: none; padding: 0 0 0 8px; color: var(--vermelho); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+#simular-guardar { margin-top: 4px; }
+/* Conferência com o banco (aba Mês) */
+.conferencia { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.conferencia .campo { flex: 1 1 180px; }
+.conferencia .botao-pequeno { min-height: 44px; }
+.conferencia-resultado { flex: 1 1 100%; margin: 0; padding: 8px 10px; border-left: 3px solid var(--cor, var(--linha)); background: var(--fundo); border-radius: 0 8px 8px 0; font-size: 14px; line-height: 1.4; }
+.mais-opcoes summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.mais-opcoes .opcao-check { margin-top: 6px; }

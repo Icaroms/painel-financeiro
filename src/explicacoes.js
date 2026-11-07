@@ -280,3 +280,64 @@ export function mensagemDaAvaliacao(resultado, {
     : 'Diga se este parece um bom momento para a compra e por quê.');
   return { instrucoes: INSTRUCOES_AVALIACAO, conteudo: texto(linhas) };
 }
+
+/**
+ * Papel da IA na lista de desejos (11/2026): dizer se, no MENOR preço
+ * registrado, a compra já cabe, com os números do app.
+ */
+export const INSTRUCOES_DESEJO = [
+  'Você é o assistente do Painel Financeiro, um app pessoal de finanças usado no Brasil.',
+  'A pessoa acompanha o preço de um produto que quer comprar e registrou à mão os preços que encontrou.',
+  'O app já simulou a compra no MENOR preço registrado, com regras fixas. A sua tarefa é dizer se, nesse preço, a compra já é possível.',
+  'Regras:',
+  '1. Use apenas os números fornecidos. Não invente valores, não refaça as contas do app e não mude a cor que o app deu.',
+  '2. Não preveja preços futuros nem cite promoções: comente só o histórico registrado (subiu, baixou, ficou parado).',
+  '3. Se o app indica um mês para comprar, use esse mês. Se houver "Aviso do app sobre a previsão", comece por ele.',
+  '4. A decisão é da pessoa: escreva como sugestão, nunca como ordem.',
+  '5. Não recomende investimentos, empréstimos nem produtos financeiros.',
+  '6. Seja breve: no máximo 140 palavras, tom direto e gentil, sem emojis.',
+  'Formato da resposta (use exatamente estes títulos, nesta ordem):',
+  '## Dá para comprar?',
+  '(1 ou 2 frases: sim agora, a partir de um mês, ou ainda não)',
+  '## O preço',
+  '(até 2 itens começando com "- ", sobre o histórico registrado)',
+  '## Cuidados',
+  '(até 2 itens começando com "- ")',
+  'Pode usar **negrito** em poucas palavras. Não use tabelas, links nem outros títulos.',
+].join('\n');
+
+/**
+ * Mensagem para a IA avaliar um produto da lista de desejos.
+ *
+ * @param {object} desejo O produto (src/desejos.js).
+ * @param {object} avaliacao O retorno de avaliarDesejo (com opcao).
+ * @param {object} contexto
+ * @param {string} contexto.hoje
+ * @param {object} [contexto.premissas] premissasDaPrevisao.
+ * @param {string[]} [contexto.avisos]
+ * @param {object} [limites]
+ * @returns {{ instrucoes: string, conteudo: string }}
+ */
+export function mensagemDoDesejo(desejo, avaliacao, { hoje, premissas = null, avisos = [] }, limites = LIMITES_PADRAO) {
+  const { precos, opcao, ehCartao } = avaliacao;
+  const linhas = [];
+  linhas.push(`Produto: "${desejo.nome}". Hoje é ${dataCompleta(hoje)}. Nada foi comprado.`);
+  linhas.push('Preços registrados pela pessoa (do mais antigo ao mais novo):');
+  for (const p of [...desejo.precos].sort((a, b) => a.data.localeCompare(b.data))) {
+    linhas.push(`- ${dataCompleta(p.data)}: ${reais(p.valorCentavos)}${p.loja ? ` (${p.loja})` : ''}`);
+  }
+  linhas.push(`Menor preço: ${reais(precos.menor.valorCentavos)} em ${dataCompleta(precos.menor.data)}. ` +
+    `Variação do primeiro para o último registro: ${precos.variacaoCentavos === 0 ? 'nenhuma' : `${precos.variacaoCentavos > 0 ? '+' : '-'}${reais(Math.abs(precos.variacaoCentavos))}`}.`);
+  linhas.push(`Como pretende pagar: ${comoPagaNaOpcao(opcao, desejo.formaPagamento)}` +
+    `${ehCartao ? '' : ' (fora do cartão: o dinheiro sai da conta no dia)'}.`);
+  linhas.push(`Folga mínima de saldo que o app usa: ${reais(limites.colchaoSaldoCentavos)}.`);
+  if (premissas) {
+    linhas.push(`Previsão dos próximos meses: entra ${reais(premissas.entrada.centavos)}, saem ${reais(premissas.contasCentavos)} de contas fixas ` +
+      `e ${reais(premissas.diaADia.centavos)} de dia a dia (${premissas.diaADia.fonte === 'media' ? 'média real' : 'soma dos orçamentos'}); os saldos são acumulados.`);
+  }
+  for (const aviso of avisos) linhas.push(`Aviso do app sobre a previsão: ${aviso}`);
+  linhas.push('Simulação do app no menor preço:');
+  linhas.push(...linhasDaOpcao(opcao, { formaPagamento: desejo.formaPagamento, hoje }).map((l) => `- ${l}`));
+  linhas.push('Diga se, no menor preço registrado, a compra já é possível e quando.');
+  return { instrucoes: INSTRUCOES_DESEJO, conteudo: texto(linhas) };
+}
