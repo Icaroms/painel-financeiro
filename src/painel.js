@@ -116,10 +116,13 @@ function dataCurta(data) {
  * @param {string} entrada.categoriaId    id da categoria escolhida.
  * @param {string} entrada.formaPagamento Forma de pagamento escolhida.
  * @param {string} entrada.hoje           "AAAA-MM-DD".
+ * @param {string} [entrada.descricao]    Nome do gasto (opcional), ex.: "Almoço com a equipe".
  * @returns {object} Tudo o que a tela mostra; `lancamento` é o gasto pronto
  *                   para gravar, ou null quando não há valor válido.
  */
-export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento, hoje, data = hoje, parcelas = 1 }) {
+export function calcularPainel({
+  dados, valorTexto, categoriaId, formaPagamento, hoje, data = hoje, parcelas = 1, descricao = '',
+}) {
   const { registroMes, categorias, fixos, lancamentos } = dados;
   const cartoes = dados.cartoes ?? [];
   const cartao = cartoes.find((c) => c.formaPagamento === formaPagamento) ?? null;
@@ -151,7 +154,7 @@ export function calcularPainel({ dados, valorTexto, categoriaId, formaPagamento,
     // O gasto é guardado com a data escolhida, mas o veredito julga o mês
     // como ele está HOJE: o ritmo compara o que já foi gasto com o dia de hoje.
     lancamento = criarLancamento({
-      valorCentavos: valor, categoriaId, formaPagamento, data, parcelas: ehCartao ? parcelas : 1,
+      valorCentavos: valor, categoriaId, formaPagamento, data, parcelas: ehCartao ? parcelas : 1, descricao,
     });
     const resultado = avaliarGasto({
       lancamento, categoria, registroMes, fixos, lancamentos, cartoes, categorias, hoje,
