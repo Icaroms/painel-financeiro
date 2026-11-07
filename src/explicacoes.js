@@ -65,7 +65,8 @@ export function mensagemDaCompra(painel, { hoje }, limites = LIMITES_PADRAO) {
   const { numeros, categoria, formaPagamento, limite, lancamento } = painel;
   const linhas = [];
 
-  linhas.push(`Compra que a pessoa está avaliando (ainda NÃO foi lançada): ${reais(lancamento.valorCentavos)}.`);
+  const oQue = lancamento.descricao ? ` ("${lancamento.descricao}")` : '';
+  linhas.push(`Compra que a pessoa está avaliando (ainda NÃO foi lançada)${oQue}: ${reais(lancamento.valorCentavos)}.`);
   linhas.push(`Hoje é ${dataCompleta(hoje)}, dia ${diaDaData(hoje)} de ${diasNoMes(mesDaData(hoje))} do mês.`);
 
   // Categoria: orçamento, margem e ritmo.
@@ -121,24 +122,19 @@ export function mensagemDaCompra(painel, { hoje }, limites = LIMITES_PADRAO) {
   return { instrucoes: INSTRUCOES_EXPLICAR, conteudo: texto(linhas) };
 }
 
-/**
- * Mensagem para explicar uma opção do simulador de compras.
- *
- * @param {object} opcao Uma opção de simularCompra (src/simulador.js).
- * @param {object} contexto
- * @param {string} contexto.formaPagamento O cartão.
- * @param {number} contexto.aVistaCentavos Preço à vista.
- * @param {string} contexto.hoje "AAAA-MM-DD".
- * @param {object} [limites]
- * @returns {{ instrucoes: string, conteudo: string }}
- */
-export function mensagemDaOpcaoSimulada(opcao, { formaPagamento, aVistaCentavos, hoje }, limites = LIMITES_PADRAO) {
-  const linhas = [];
-  const comoPaga = opcao.parcelas === 1
+/** "à vista no Pix, por R$ 300,00" ou "em 5x de R$ 520,00 no Cartão Nubank (total R$ 2.600,00)". */
+function comoPagaNaOpcao(opcao, formaPagamento) {
+  return opcao.parcelas === 1
     ? `à vista no ${formaPagamento}, por ${reais(opcao.totalCentavos)}`
     : `em ${opcao.parcelas}x de ${reais(opcao.valorParcelaCentavos)} no ${formaPagamento} (total ${reais(opcao.totalCentavos)})`;
+}
 
-  linhas.push(`Simulação (nada foi comprado nem gravado): compra ${comoPaga}. Preço à vista: ${reais(aVistaCentavos)}.`);
+/**
+ * Os números de uma opção simulada, em frases (usados na explicação de uma
+ * opção e na avaliação da compra inteira).
+ */
+function linhasDaOpcao(opcao, { formaPagamento, hoje }) {
+  const linhas = [];
   if (opcao.parcelas > 1) {
     linhas.push(opcao.jurosCentavos > 0
       ? `Juros: ${reais(opcao.jurosCentavos)}, cerca de ${(opcao.taxaMensal * 100).toFixed(1).replace('.', ',')}% ao mês.`
@@ -147,21 +143,25 @@ export function mensagemDaOpcaoSimulada(opcao, { formaPagamento, aVistaCentavos,
   linhas.push(opcao.compraFutura
     ? `Compra simulada para ${dataCompleta(opcao.dataDaCompra)} (hoje é ${dataCompleta(hoje)}).`
     : `Compra feita hoje, ${dataCompleta(hoje)}.`);
-  linhas.push(`1ª parcela paga em ${dataCompleta(opcao.primeiroVencimento)}.`);
+  linhas.push(opcao.limite === null
+    ? `O dinheiro sai da conta em ${dataCompleta(opcao.primeiroVencimento)} (${formaPagamento}, fora do cartão: não usa limite).`
+    : `1ª parcela paga em ${dataCompleta(opcao.primeiroVencimento)}.`);
 
-  const { limiteCentavos, disponivelDepoisCentavos, estimativa } = opcao.limite;
-  linhas.push(`Limite do cartão depois da compra: ${reais(disponivelDepoisCentavos)} de ${reais(limiteCentavos)}` +
-    `${estimativa ? ' (estimativa)' : ''}.`);
-  linhas.push(`Mês mais apertado com parcela: ${mesPorExtenso(opcao.piorMes.mes)}, com ${reais(opcao.piorMes.sobraCentavos)} de sobra` +
+  if (opcao.limite !== null) {
+    const { limiteCentavos, disponivelDepoisCentavos, estimativa } = opcao.limite;
+    linhas.push(`Limite do cartão depois da compra: ${reais(disponivelDepoisCentavos)} de ${reais(limiteCentavos)}` +
+      `${estimativa ? ' (estimativa)' : ''}.`);
+  }
+  const rotuloMes = opcao.limite === null ? 'Mês da compra' : 'Mês mais apertado com parcela';
+  linhas.push(`${rotuloMes}: ${mesPorExtenso(opcao.piorMes.mes)}, com ${reais(opcao.piorMes.sobraCentavos)} de sobra` +
     `${opcao.estimativa ? ' (estimativa do app com a renda e os orçamentos de agora)' : ''}.`);
-  linhas.push(`Folga mínima de saldo que o app usa: ${reais(limites.colchaoSaldoCentavos)}.`);
 
   // O "quando comprar" que o app calculou.
   const { esperaMeses, mesDaCompra, piorMes, piorMesAgora, terminam } = opcao.melhorMomento;
   if (esperaMeses === 0) {
-    linhas.push('Quando comprar, segundo o app: agora (nenhum mês com parcela fica abaixo da folga).');
+    linhas.push('Quando comprar, segundo o app: agora (nenhum mês afetado fica abaixo da folga).');
   } else if (esperaMeses === null) {
-    linhas.push(`Quando comprar, segundo o app: não cabe acima da folga nos próximos 12 meses. ` +
+    linhas.push('Quando comprar, segundo o app: não cabe acima da folga nos próximos 12 meses. ' +
       `Comprando agora, o mais apertado seria ${mesPorExtenso(piorMesAgora.mes)}, com ${reais(piorMesAgora.sobraCentavos)}.`);
   } else {
     const motivo = terminam.length > 0
@@ -171,9 +171,99 @@ export function mensagemDaOpcaoSimulada(opcao, { formaPagamento, aVistaCentavos,
       `Comprando agora, o mais apertado ficaria com ${reais(piorMesAgora.sobraCentavos)}; ` +
       `comprando em ${mesPorExtenso(mesDaCompra)}, com ${reais(piorMes.sobraCentavos)}.${motivo}`);
   }
-
   linhas.push(`Veredito do app para esta opção: ${VEREDITO[opcao.cor]}.`);
-  linhas.push('Explique esta opção para a pessoa: o custo dos juros (se houver), o peso nos meses e o momento de comprar.');
+  return linhas;
+}
+
+/**
+ * Mensagem para explicar uma opção do simulador de compras.
+ *
+ * @param {object} opcao Uma opção de simularCompra (src/simulador.js).
+ * @param {object} contexto
+ * @param {string} contexto.formaPagamento Cartão ou outra forma (Pix, débito...).
+ * @param {number} contexto.aVistaCentavos Preço à vista.
+ * @param {string} contexto.hoje "AAAA-MM-DD".
+ * @param {object} [limites]
+ * @returns {{ instrucoes: string, conteudo: string }}
+ */
+export function mensagemDaOpcaoSimulada(opcao, { formaPagamento, aVistaCentavos, hoje }, limites = LIMITES_PADRAO) {
+  const linhas = [];
+  linhas.push(`Simulação (nada foi comprado nem gravado): compra ${comoPagaNaOpcao(opcao, formaPagamento)}. ` +
+    `Preço à vista: ${reais(aVistaCentavos)}.`);
+  linhas.push(...linhasDaOpcao(opcao, { formaPagamento, hoje }));
+  linhas.push(`Folga mínima de saldo que o app usa: ${reais(limites.colchaoSaldoCentavos)}.`);
+  linhas.push(opcao.limite === null
+    ? 'Explique esta opção para a pessoa: o peso no mês e o momento de comprar.'
+    : 'Explique esta opção para a pessoa: o custo dos juros (se houver), o peso nos meses e o momento de comprar.');
 
   return { instrucoes: INSTRUCOES_EXPLICAR, conteudo: texto(linhas) };
+}
+
+/**
+ * Papel da IA na avaliação da compra inteira (11/2026): aqui ela PODE sugerir
+ * a melhor opção e o melhor momento, mas só a partir dos números do app.
+ */
+export const INSTRUCOES_AVALIACAO = [
+  'Você é o assistente do Painel Financeiro, um app pessoal de finanças usado no Brasil.',
+  'A pessoa está pensando numa compra e quer uma sugestão: se é o momento certo, à vista ou parcelado, em quantas vezes.',
+  'O app já calculou cada opção com regras fixas. A sua tarefa é comparar as opções e sugerir.',
+  'Regras:',
+  '1. Use apenas os números fornecidos. Não invente valores e não refaça as contas do app.',
+  '2. Não mude as cores que o app deu a cada opção (verde, amarelo, vermelho).',
+  '3. Pode dizer qual opção e qual momento parecem melhores, sempre explicando com os números ' +
+    '(juros, sobra do mês mais apertado, limite do cartão, quando o app diz que cabe).',
+  '4. Se nenhuma opção cabe agora, diga isso com clareza e mostre o que os números indicam (esperar o mês que o app indica, um valor menor).',
+  '5. A decisão é da pessoa: escreva como sugestão ("a opção que parece melhor é...", "dá para..."), nunca como ordem.',
+  '6. Não recomende investimentos, empréstimos nem produtos financeiros.',
+  '7. Seja breve: no máximo 160 palavras, tom direto e gentil, sem emojis.',
+  'Formato da resposta (use exatamente estes títulos, nesta ordem):',
+  '## Sugestão',
+  '(1 ou 2 frases: a opção e o momento que parecem melhores, ou que nenhuma cabe agora)',
+  '## Por quê',
+  '(até 3 itens começando com "- ", cada um com um número do app)',
+  '## Cuidados',
+  '(até 2 itens começando com "- ")',
+  'Pode usar **negrito** em poucas palavras. Não use tabelas, links nem outros títulos.',
+].join('\n');
+
+/**
+ * Mensagem para a IA avaliar a compra inteira: todas as opções simuladas,
+ * mais o resumo do mês, para sugerir a melhor opção e o melhor momento.
+ *
+ * @param {object} resultado O retorno de simularCompra: { opcoes, ehCartao }.
+ * @param {object} contexto
+ * @param {string} contexto.formaPagamento Cartão ou outra forma (Pix, débito...).
+ * @param {number} contexto.aVistaCentavos Preço à vista.
+ * @param {string} contexto.hoje "AAAA-MM-DD".
+ * @param {string} [contexto.descricao] O que é (ex.: "Tablet").
+ * @param {object} [contexto.mes] Resumo do mês atual: { deveSobrarCentavos, dinheiroDoMesCentavos }.
+ * @param {object} [limites]
+ * @returns {{ instrucoes: string, conteudo: string }}
+ */
+export function mensagemDaAvaliacao(resultado, {
+  formaPagamento, aVistaCentavos, hoje, descricao = '', mes = null,
+}, limites = LIMITES_PADRAO) {
+  const linhas = [];
+  const oQue = descricao.trim() !== '' ? `"${descricao.trim()}"` : 'uma compra';
+  linhas.push(`A pessoa está avaliando ${oQue} (nada foi comprado nem gravado). Preço à vista: ${reais(aVistaCentavos)}.`);
+  linhas.push(resultado.ehCartao
+    ? `Forma de pagamento: ${formaPagamento} (cartão de crédito: pode parcelar; entra na fatura).`
+    : `Forma de pagamento: ${formaPagamento} (fora do cartão: só à vista, o dinheiro sai da conta no dia).`);
+  linhas.push(`Hoje é ${dataCompleta(hoje)}. Folga mínima de saldo que o app usa: ${reais(limites.colchaoSaldoCentavos)}.`);
+  if (mes) {
+    linhas.push(`Mês atual sem esta compra: dinheiro do mês ${reais(mes.dinheiroDoMesCentavos)}; ` +
+      `deve sobrar ${reais(mes.deveSobrarCentavos)} no fim do mês.`);
+  }
+
+  resultado.opcoes.forEach((opcao, i) => {
+    linhas.push('');
+    linhas.push(`Opção ${i + 1}: ${comoPagaNaOpcao(opcao, formaPagamento)}.`);
+    linhas.push(...linhasDaOpcao(opcao, { formaPagamento, hoje }).map((l) => `- ${l}`));
+  });
+
+  linhas.push('');
+  linhas.push(resultado.opcoes.length > 1
+    ? 'Compare as opções e sugira a melhor e o melhor momento para comprar.'
+    : 'Diga se este parece um bom momento para a compra e por quê.');
+  return { instrucoes: INSTRUCOES_AVALIACAO, conteudo: texto(linhas) };
 }

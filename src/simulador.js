@@ -1,11 +1,13 @@
 /**
- * Simulador de compras (Fase 02, parte 2.5).
+ * Avaliar compra (Fase 02, parte 2.5; à vista fora do cartão desde 11/2026).
  *
  * Responde "posso comprar, em quantas vezes e quando?" só com as regras
  * do app, SEM GRAVAR NADA: é uma consulta.
  *
- * Entrada: o cartão, o preço à vista e as opções de parcelamento que a
- * loja oferece (número de parcelas e total parcelado de cada uma).
+ * Entrada: a forma de pagamento, o preço à vista e, no cartão, as opções de
+ * parcelamento que a loja oferece (número de parcelas e total parcelado).
+ * Fora do cartão (Pix, débito, dinheiro), a compra é à vista: o dinheiro
+ * sai da conta no dia da compra, e só existe a opção "à vista".
  *
  * Para cada opção (a primeira é sempre "à vista no cartão", 1x):
  * - Juros: total parcelado − preço à vista, e a taxa ao mês equivalente.
@@ -222,7 +224,7 @@ function limiteNaData(visao, cartao, data) {
  *
  * @param {object} visao  Visão do mês atual (src/meses.js, dadosDoMes).
  * @param {object} entrada
- * @param {object} entrada.cartao
+ * @param {object} entrada.cartao  O cartão, ou { formaPagamento } numa compra fora do cartão.
  * @param {number} entrada.aVistaCentavos
  * @param {number} entrada.parcelas
  * @param {number} entrada.totalCentavos
@@ -240,34 +242,41 @@ export function simularOpcao(
   const dataDaCompra = espera === 0 ? hoje : dataDaqui(hoje, espera);
   const compra = compraSimulada(cartao, totalCentavos, parcelas, dataDaCompra);
   const saidas = saidasDoLancamento(compra, visao.cartoes);
+  const ehCartao = saidas[0].cartao;
   const { meses, piorMes } = pesoNosMeses(visao, compra);
 
-  const limite = limiteNaData(visao, cartao, dataDaCompra);
-  const limiteDepoisCentavos = limite.disponivelCentavos - totalCentavos;
+  // Limite: só no cartão. Fora dele, o dinheiro sai da conta (vale só a sobra dos meses).
+  const limite = ehCartao ? limiteNaData(visao, cartao, dataDaCompra) : null;
+  const limiteDepoisCentavos = ehCartao ? limite.disponivelCentavos - totalCentavos : null;
 
   const colchao = limites.colchaoSaldoCentavos;
   let cor = 'verde';
-  if (limiteDepoisCentavos < 0 || piorMes.sobraCentavos < 0) cor = 'vermelho';
-  else if (piorMes.sobraCentavos < colchao || limiteApertado(limite, totalCentavos)) cor = 'amarelo';
+  if ((ehCartao && limiteDepoisCentavos < 0) || piorMes.sobraCentavos < 0) cor = 'vermelho';
+  else if (piorMes.sobraCentavos < colchao || (ehCartao && limiteApertado(limite, totalCentavos))) cor = 'amarelo';
 
   return {
     parcelas,
     totalCentavos,
     dataDaCompra,
+    ehCartao,
     compraFutura: espera > 0,
     // Valor das parcelas (a 1ª pode ter alguns centavos a mais: o resto da divisão).
     valorParcelaCentavos: saidas[saidas.length - 1].valorCentavos,
     primeiraParcelaCentavos: saidas[0].valorCentavos,
-    primeiroVencimento: saidas[0].vencimento,
+    // Fora do cartão, o dinheiro sai no dia da compra.
+    primeiroVencimento: saidas[0].vencimento ?? dataDaCompra,
     jurosCentavos: totalCentavos - aVistaCentavos,
     taxaMensal: taxaMensalEquivalente(aVistaCentavos, parcelas, totalCentavos),
-    limite: {
-      limiteCentavos: limite.limiteCentavos,
-      disponivelAntesCentavos: limite.disponivelCentavos,
-      disponivelDepoisCentavos: limiteDepoisCentavos,
-      // Compra num mês futuro: o limite daquele dia é estimado.
-      estimativa: espera > 0,
-    },
+    // null fora do cartão.
+    limite: ehCartao
+      ? {
+        limiteCentavos: limite.limiteCentavos,
+        disponivelAntesCentavos: limite.disponivelCentavos,
+        disponivelDepoisCentavos: limiteDepoisCentavos,
+        // Compra num mês futuro: o limite daquele dia é estimado.
+        estimativa: espera > 0,
+      }
+      : null,
     meses,
     piorMes,
     estimativa: piorMes.mes !== visao.registroMes.mes,
@@ -277,28 +286,35 @@ export function simularOpcao(
 }
 
 /**
- * Simula a compra em todas as opções: à vista no cartão (1x, preço à
- * vista) e cada opção de parcelamento.
+ * Simula a compra em todas as opções: à vista (1x, preço à vista) e, no
+ * cartão, cada opção de parcelamento.
  *
- * @param {object} visao  Visão do mês atual (dadosDoMes), com os cartões.
+ * @param {object} visao  Visão do mês atual (dadosDoMes), com os cartões e as formas de pagamento.
  * @param {object} entrada
- * @param {string} entrada.formaPagamento O cartão.
+ * @param {string} entrada.formaPagamento Um cartão, ou outra forma (Pix, débito...) para compra à vista.
  * @param {number} entrada.aVistaCentavos Maior que zero.
  * @param {{ parcelas: number, totalCentavos: number }[]} entrada.opcoes
  *   Parcelas de 2 a 24; total maior que zero (vazio na tela = igual ao à vista, sem juros).
  * @param {string} entrada.hoje "AAAA-MM-DD".
  * @param {string} [entrada.comprarEm] "AAAA-MM", do mês atual a 12 meses depois (padrão: agora).
  * @param {object} [limites]
- * @returns {{ opcoes: object[] }} A primeira é sempre o à vista (parcelas 1).
+ * @returns {{ opcoes: object[], ehCartao: boolean }} A primeira é sempre o à vista (parcelas 1).
  * @throws {ErroValidacao} Entrada inválida (mensagem para a tela).
  */
 export function simularCompra(
   visao, { formaPagamento, aVistaCentavos, opcoes = [], hoje, comprarEm = visao.registroMes.mes }, limites = LIMITES_PADRAO,
 ) {
-  const cartao = (visao.cartoes ?? []).find((c) => c.formaPagamento === formaPagamento);
-  if (!cartao) {
-    throw new ErroValidacao('formaPagamento', 'Escolha um cartão cadastrado.');
+  const cartaoCadastrado = (visao.cartoes ?? []).find((c) => c.formaPagamento === formaPagamento);
+  const formas = visao.formasPagamento ?? [];
+  if (!cartaoCadastrado && (typeof formaPagamento !== 'string' || formaPagamento === '' ||
+    (formas.length > 0 && !formas.includes(formaPagamento)))) {
+    throw new ErroValidacao('formaPagamento', 'Escolha como vai pagar.');
   }
+  if (!cartaoCadastrado && opcoes.length > 0) {
+    throw new ErroValidacao('opcoes', 'Parcelamento só no cartão: fora dele, a compra é à vista.');
+  }
+  // Fora do cartão, a "forma" basta para montar a compra simulada.
+  const cartao = cartaoCadastrado ?? { formaPagamento };
   if (!Number.isSafeInteger(aVistaCentavos) || aVistaCentavos <= 0) {
     throw new ErroValidacao('aVistaCentavos', 'Digite o preço à vista.');
   }
@@ -321,6 +337,7 @@ export function simularCompra(
 
   const todas = [{ parcelas: 1, totalCentavos: aVistaCentavos }, ...opcoes];
   return {
+    ehCartao: Boolean(cartaoCadastrado),
     opcoes: todas.map((opcao) => simularOpcao(visao, { cartao, aVistaCentavos, hoje, comprarEm, ...opcao }, limites)),
   };
 }

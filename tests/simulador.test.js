@@ -227,12 +227,59 @@ describe('comprar em um mês futuro', () => {
 describe('simularCompra: entrada inválida', () => {
   it('sem cartão, sem preço, parcelas fora do limite ou total zero: erro claro', () => {
     const v = visao();
-    assert.throws(() => simularCompra(v, { formaPagamento: 'Pix', aVistaCentavos: 100, hoje: HOJE }), /cartão cadastrado/);
+    assert.throws(() => simularCompra(v, { formaPagamento: 'Boleto', aVistaCentavos: 100, hoje: HOJE }), /como vai pagar/);
+    assert.throws(() => simularCompra(v, { formaPagamento: '', aVistaCentavos: 100, hoje: HOJE }), /como vai pagar/);
     assert.throws(() => simularCompra(v, { formaPagamento: 'Cartão Nubank', aVistaCentavos: 0, hoje: HOJE }), /preço à vista/);
     assert.throws(() => simular(100000, [{ parcelas: 25, totalCentavos: 100000 }]), /de 2 a 24/);
     assert.throws(() => simular(100000, [{ parcelas: 1, totalCentavos: 100000 }]), /de 2 a 24/);
     assert.throws(() => simular(100000, [{ parcelas: 3, totalCentavos: 0 }]), /maior que zero/);
     const cinco = Array.from({ length: 5 }, () => ({ parcelas: 3, totalCentavos: 100000 }));
     assert.throws(() => simular(100000, cinco), /até 4 opções/);
+  });
+});
+
+describe('simularCompra: à vista fora do cartão (Pix, débito, dinheiro)', () => {
+  const pix = (aVistaCentavos, opcoes = [], extra = {}) => simularCompra(visao(), {
+    formaPagamento: 'Pix', aVistaCentavos, opcoes, hoje: HOJE, ...extra,
+  });
+
+  it('só a opção à vista, sem limite, e o dinheiro sai no dia da compra', () => {
+    const resultado = pix(30000);
+    assert.equal(resultado.ehCartao, false);
+    assert.equal(resultado.opcoes.length, 1);
+    const [opcao] = resultado.opcoes;
+    assert.equal(opcao.parcelas, 1);
+    assert.equal(opcao.ehCartao, false);
+    assert.equal(opcao.limite, null);
+    assert.equal(opcao.primeiroVencimento, HOJE);
+    assert.equal(opcao.jurosCentavos, 0);
+  });
+
+  it('a cor vem só da sobra dos meses: cabe → verde; passa da sobra → vermelho', () => {
+    assert.equal(pix(30000).opcoes[0].cor, 'verde');
+    assert.equal(pix(500000).opcoes[0].cor, 'vermelho');
+  });
+
+  it('pesa no mês da compra (sai da conta), não no mês seguinte como a fatura', () => {
+    const [opcao] = pix(30000).opcoes;
+    assert.equal(opcao.meses[0].mes, MES);
+    assert.equal(opcao.meses[0].parcelaCentavos, 30000);
+  });
+
+  it('comprar mais tarde também funciona fora do cartão', () => {
+    const [opcao] = pix(30000, [], { comprarEm: '2026-12' }).opcoes;
+    assert.equal(opcao.compraFutura, true);
+    assert.equal(opcao.dataDaCompra.slice(0, 7), '2026-12');
+    assert.equal(opcao.primeiroVencimento, opcao.dataDaCompra);
+  });
+
+  it('parcelamento fora do cartão: erro claro', () => {
+    assert.throws(() => pix(30000, [{ parcelas: 3, totalCentavos: 30000 }]), /só no cartão/);
+  });
+
+  it('no cartão, ehCartao vem true e a opção tem limite', () => {
+    const resultado = simular(30000);
+    assert.equal(resultado.ehCartao, true);
+    assert.notEqual(resultado.opcoes[0].limite, null);
   });
 });
