@@ -86,6 +86,7 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null, guard
     iaConteudo: elemento('simular-ia-conteudo'),
     comprarEm: elemento('simular-comprar-em'),
     voltar: elemento('simular-voltar'),
+    voltarTexto: elemento('simular-voltar-texto'),
     aVista: elemento('simular-avista'),
     opcoes: elemento('simular-opcoes'),
     adicionar: elemento('simular-adicionar'),
@@ -352,7 +353,7 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null, guard
     }));
     for (const aviso of avisos) {
       const p = criar('p', { classe: `aviso-previsao${aviso.grave ? ' grave' : ''}`, texto: `${aviso.texto} ` });
-      if (aviso.link) p.append(criar('a', { href: '#configurar', texto: 'Cadastrar o salário em Configurar →' }));
+      if (aviso.link) p.append(criar('a', { href: '#ajustes/dinheiro', texto: 'Cadastrar o salário em Ajustes →' }));
       quadro.append(p);
     }
     return quadro;
@@ -554,11 +555,11 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null, guard
     // Vindo da lista de desejos: as parcelas guardadas na 1ª opção.
     const parcelasIniciais = inicial?.parcelas ?? null;
 
-    // Botão Voltar: para a tela de onde a pessoa veio (Lançar ou Configurar).
-    if (inicial?.origem) {
-      el.voltar.href = inicial.origem;
-      el.voltar.textContent = inicial.origem === '#configurar' ? '‹ Configurar' : '‹ Lançar';
-    }
+    // Botão Voltar: para a tela de onde a pessoa veio (Novo gasto, Ajustes) ou, sem origem, Planejar.
+    const ORIGENS = { '#lancar': 'Novo gasto', '#ajustes/pagamentos': 'Ajustes', '#planejar': 'Planejar' };
+    const origem = inicial?.origem in ORIGENS ? inicial.origem : (inicial === null ? '#planejar' : el.voltar.getAttribute('href'));
+    el.voltar.href = origem;
+    el.voltarTexto.textContent = ORIGENS[origem] ?? 'Planejar';
     inicial = null;
 
     // "Comprar em": agora e os próximos 12 meses (a lista acompanha a virada do mês).

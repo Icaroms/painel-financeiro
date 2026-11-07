@@ -59,7 +59,10 @@ function textoDoMomento(opcao) {
  * @returns {{ renderizar: () => void }}
  */
 export function iniciarDesejos({ obterDados, aplicarMudanca, obterConfigIA, abrirNaAvaliacao }) {
-  const el = { secao: elemento('secao-desejos'), lista: elemento('lista-desejos'), contagem: elemento('desejos-contagem') };
+  const el = {
+    secao: elemento('secao-desejos'), lista: elemento('lista-desejos'), contagem: elemento('desejos-contagem'),
+    vazio: elemento('desejos-vazio'),
+  };
   /** Qual produto está com o formulário "Novo preço" aberto. */
   let precoAberto = null;
 
@@ -222,6 +225,7 @@ export function iniciarDesejos({ obterDados, aplicarMudanca, obterConfigIA, abri
     const dados = obterDados();
     const desejos = dados ? desejosDe(dados) : [];
     el.secao.hidden = desejos.length === 0;
+    el.vazio.hidden = desejos.length > 0;
     if (desejos.length === 0) {
       el.lista.replaceChildren();
       return;

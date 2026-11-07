@@ -1,13 +1,16 @@
 /**
  * Tela de lançamento e navegação: liga o HTML (index.html) às regras do app.
  *
- * O app tem quatro vistas, trocadas pelo endereço:
- * - #lancar (padrão): lançar gasto com o veredito ao vivo (este arquivo);
- * - #mes: o resumo do mês, as categorias e as listas (./mes.js);
+ * Novo layout (11/2026): barra com Início, Mês, [+], Planejar e Ajustes
+ * (vira barra lateral em telas largas). As vistas trocam pelo endereço
+ * (as rotas estão em src/rotas.js):
+ * - #inicio (padrão): o essencial do mês (./inicio-tela.js);
+ * - #lancar: Novo gasto, com o veredito ao vivo (este arquivo), aberto pelo "+";
+ * - #mes/<parte>: resumo, entradas, contas e gastos do mês (./mes.js e outros);
  * - #historico: todos os gastos e os totais por semana (./historico.js);
- * - #investir: a carteira de investimentos (./investir.js);
- * - #configurar: dinheiro do mês, contas fixas, categorias, pagamentos e
- *   backup (a parte da configuração fica em ./configurar.js).
+ * - #planejar/<parte>: Avaliar compra, lista de desejos e Investir;
+ * - #investir/<página>: carteira, simulador, radar e imposto (./investir.js...);
+ * - #ajustes e #ajustes/<página>: o antigo Configurar, em páginas (./configurar.js...).
  * No primeiro acesso (nada gravado no aparelho), aparece antes a vista de
  * boas-vindas, com a escolha entre começar do zero e ver o exemplo.
  *
@@ -41,7 +44,12 @@ import {
 } from './banco.js';
 import { iniciarNuvem } from './nuvem.js';
 import { iniciarConfigIA } from './configurar-ia.js';
-import { configuracaoVazia } from '../ia.js';
+import { configuracaoVazia, iaDisponivel } from '../ia.js';
+import { lerRota } from '../rotas.js';
+import { resumosDosAjustes } from '../resumo-ajustes.js';
+import { excluirLancamento } from '../resumo-mes.js';
+import { iniciarInicio } from './inicio-tela.js';
+import { iniciarTema, iniciarOcultarValores, iniciarFolha, criarToast, ligarAjudas } from './interface.js';
 import { mensagemDaCompra } from '../explicacoes.js';
 import { blocoExplicar } from './explicar.js';
 import { iniciarAnaliseMes } from './analise-mes.js';
@@ -56,6 +64,7 @@ import { iniciarOrcamentos } from './orcamentos.js';
 import { iniciarDesejos } from './desejos.js';
 import { adicionarDesejo } from '../desejos.js';
 import { textoDoValor } from '../configuracao.js';
+import { resumoDaCarteira, investimentosAtivos } from '../carteira.js';
 import { iniciarInvestir } from './investir.js';
 import { iniciarRadar } from './radar.js';
 import { iniciarSimuladorInvestimentos } from './simulador-investimentos.js';
@@ -118,14 +127,18 @@ const el = {
   telaConfigurar: elemento('tela-configurar'),
   telaSimular: elemento('tela-simular'),
   configMensagem: elemento('config-mensagem'),
-  abaLancar: elemento('aba-lancar'),
-  abaConfigurar: elemento('aba-configurar'),
+  telaInicio: elemento('tela-inicio'),
   telaMes: elemento('tela-mes'),
-  abaMes: elemento('aba-mes'),
   telaHistorico: elemento('tela-historico'),
-  abaHistorico: elemento('aba-historico'),
+  telaPlanejar: elemento('tela-planejar'),
   telaInvestir: elemento('tela-investir'),
-  abaInvestir: elemento('aba-investir'),
+  telaAjustes: elemento('tela-ajustes'),
+  configTitulo: elemento('config-titulo'),
+  investirTitulo: elemento('investir-titulo'),
+  abaRegistrar: elemento('aba-registrar'),
+  folhaRegistrar: elemento('folha-registrar'),
+  gastoFechar: elemento('gasto-fechar'),
+  botaoOcultar: elemento('botao-ocultar'),
   pontoConfigurar: elemento('ponto-configurar'),
   telaBoasVindas: elemento('tela-boas-vindas'),
   botaoComecarZero: elemento('botao-comecar-zero'),
@@ -212,7 +225,7 @@ function prepararMesAtual(dadosAtuais, hoje) {
       aviso:
         `${tituloDoMes(mesAtual)} começou com ${formatarCentavos(criado.saldoInicialCentavos)}, ` +
         `o que sobrou de ${tituloDoMes(mesBase).toLowerCase()}. ` +
-        'Confira e confirme o saldo em Configurar.',
+        'Confira e confirme o saldo em Ajustes → Dinheiro e entradas.',
     };
   } catch (erro) {
     if (!(erro instanceof ErroValidacao)) throw erro;
@@ -508,22 +521,32 @@ el.formulario.addEventListener('submit', async (evento) => {
 
   dados = { ...dados, lancamentos: [...dados.lancamentos, painel.lancamento] };
 
-  const categoria = dados.categorias.find((c) => c.id === painel.lancamento.categoriaId);
-  const parcelasTexto = painel.lancamento.parcelas > 1 ? ` em ${painel.lancamento.parcelas}x` : '';
+  const { lancamento } = painel;
+  const categoria = dados.categorias.find((c) => c.id === lancamento.categoriaId);
+  const parcelasTexto = lancamento.parcelas > 1 ? ` em ${lancamento.parcelas}x` : '';
   el.valor.value = '';
   el.descricao.value = '';
   el.parcelas.value = '1'; // a próxima compra volta a ser à vista
   atualizar();
-  el.valor.focus();
 
   // A data escolhida continua escolhida: facilita lançar vários gastos
   // esquecidos do mesmo dia. A borda âmbar avisa que não é hoje.
   const doDia = painel.dataAnterior ? `, ${painel.dataTexto.replace('Gasto do dia', 'no dia')}` : '';
-  const nome = painel.lancamento.descricao ? ` (${painel.lancamento.descricao})` : '';
+  const nome = lancamento.descricao ? ` (${lancamento.descricao})` : '';
   const gravou = await gravar(dados);
-  el.rodapeTexto.textContent = gravou
-    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)}${parcelasTexto} em ${categoria.nome}${nome}${doDia}.`
-    : avisoSemGravacao();
+  if (!gravou) {
+    el.rodapeTexto.textContent = avisoSemGravacao();
+    return;
+  }
+  el.rodapeTexto.textContent = '';
+  // Volta para onde a pessoa estava e oferece "Desfazer" (o gasto é excluído, inclusive na nuvem).
+  voltarDoGasto();
+  avisar(`Lançado: ${formatarCentavos(lancamento.valorCentavos)}${parcelasTexto} em ${categoria.nome}${nome}${doDia}.`, {
+    acao: {
+      rotulo: 'Desfazer',
+      aoClicar: () => aplicarMudanca(excluirLancamento(dados, lancamento.id), 'Gasto desfeito.'),
+    },
+  });
 });
 
 el.botaoRestaurar.addEventListener('click', async () => {
@@ -546,14 +569,14 @@ el.botaoRestaurar.addEventListener('click', async () => {
 async function usarDeVerdade() {
   const confirmou = window.confirm(
     'Apagar os dados de exemplo e começar a usar de verdade?\n\n' +
-      'O app começa vazio: em Configurar, você informa o saldo da conta, a renda, as contas fixas e as categorias.',
+      'O app começa vazio: em Ajustes, você informa o saldo da conta, o salário, as contas fixas e as categorias.',
   );
   if (!confirmou) return;
 
   trocarDados(criarDadosIniciais(hojeLocal()));
-  location.hash = '#configurar';
+  location.hash = '#ajustes/dinheiro';
   const gravou = await gravar(dados);
-  avisar(gravou ? 'Pronto: comece informando o saldo da conta em "Dinheiro do mês".' : avisoSemGravacao());
+  avisar(gravou ? 'Pronto: comece informando o saldo da conta e o salário.' : avisoSemGravacao());
 }
 for (const botao of document.querySelectorAll('.botao-usar-de-verdade')) {
   botao.addEventListener('click', usarDeVerdade);
@@ -695,7 +718,8 @@ el.arquivoBackup.addEventListener('change', async () => {
 /* Vistas Mês e Configurar, e mensagens                              */
 /* ------------------------------------------------------------------ */
 
-let temporizadorMensagem = null;
+/** Mensagem rápida embaixo da tela (toast), com ação opcional ("Desfazer"). */
+const mostrarToast = criarToast(el.configMensagem);
 
 /**
  * Mostra uma mensagem das vistas Mês e Configurar. Ela fica presa acima das abas
@@ -703,13 +727,8 @@ let temporizadorMensagem = null;
  *
  * @param {string} texto
  */
-function avisar(texto) {
-  clearTimeout(temporizadorMensagem);
-  el.configMensagem.textContent = texto;
-  el.configMensagem.hidden = !texto;
-  temporizadorMensagem = setTimeout(() => {
-    el.configMensagem.hidden = true;
-  }, 6000);
+function avisar(texto, opcoes = {}) {
+  mostrarToast(texto, opcoes);
 }
 
 /**
@@ -723,6 +742,8 @@ async function aplicarMudanca(novos, mensagem) {
   // A aba Mês aberta (ex.: uma conta marcada como paga): o destino da sobra acompanha.
   if (!el.telaMes.hidden) destinoMes.renderizar();
   // Configurar aberta (ex.: um orçamento mudou): o custo do mês e a meta da reserva acompanham.
+  if (!el.telaInicio.hidden) inicio.renderizar();
+  if (!el.telaAjustes.hidden) renderizarAjustes();
   if (!el.telaConfigurar.hidden) {
     destinoConfig.renderizar();
     // Entradas e orçamentos (11/2026): o livre do mês, o alerta e o dinheiro do mês acompanham.
@@ -742,7 +763,7 @@ const configurar = iniciarConfigurar({
   // Botão "Avaliar compra" de cada cartão: abre o simulador com aquele cartão.
   // (O simulador é criado logo abaixo; o clique só acontece depois.)
   abrirSimulador: (formaPagamento) => {
-    simulador.preencher({ formaPagamento, origem: '#configurar' });
+    simulador.preencher({ formaPagamento, origem: '#ajustes/pagamentos' });
     location.hash = '#simular';
   },
 });
@@ -787,7 +808,7 @@ const radar = iniciarRadar({
     await gravarRadarGuardado(guardado);
     historicoDasTaxas = guardado?.radar?.taxas?.historico ?? null;
     radarGuardado = guardado?.radar ?? null;
-    if (location.hash === '#investir') {
+    if (lerRota(location.hash).vista === 'investir') {
       investir.renderizar();
       simuladorInvestimentos.renderizar();
     }
@@ -807,9 +828,10 @@ const simulador = iniciarSimulador({
   obterConfigIA: () => configIA,
   // 11/2026: "Guardar na lista de desejos" (erros de validação voltam para a tela do simulador).
   guardarDesejo: async (desejo) => {
-    await aplicarMudanca(adicionarDesejo(dados, desejo), `"${desejo.nome.trim()}" guardado na lista de desejos.`);
-    desejos.renderizar();
-    document.getElementById('secao-desejos').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    await aplicarMudanca(adicionarDesejo(dados, desejo), '');
+    avisar(`"${desejo.nome.trim()}" guardado na lista de desejos.`, {
+      acao: { rotulo: 'Ver lista', aoClicar: () => { location.hash = '#planejar'; } },
+    });
   },
 });
 // 11/2026: lista de desejos (vista Avaliar compra).
@@ -823,9 +845,9 @@ const desejos = iniciarDesejos({
       valorTexto: textoDoValor(menorCentavos),
       descricao: desejo.nome,
       parcelas: desejo.parcelas,
+      origem: '#planejar',
     });
-    simulador.renderizar();
-    document.getElementById('simular-avista').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    location.hash = '#simular';
   },
 });
 // Fase 04, parte 4.1: destino da sobra (aba Mês e Configurar).
@@ -874,10 +896,68 @@ const analiseMes = iniciarAnaliseMes({
   },
 });
 
-// Atalho do Lançar para registrar dinheiro que entrou (aba Mês, seção Entradas do mês).
-elemento('link-entrada').addEventListener('click', () => {
-  focarEntradaAoAbrirMes = true;
+// Botão "+": Gasto, Entrada ou Avaliar compra. "Entrada" abre o Mês com o foco no formulário.
+iniciarFolha({
+  botao: el.abaRegistrar,
+  fundo: el.folhaRegistrar,
+  aoEscolher: (destino) => {
+    if (destino === '#mes/entradas') focarEntradaAoAbrirMes = true;
+  },
 });
+
+/* ------------------------------------------------------------------ */
+/* Início, Ajustes, tema e ajuda                                       */
+/* ------------------------------------------------------------------ */
+
+const inicio = iniciarInicio({ obterDados: () => dados, backupAtrasado: () => situacaoDoBackup(dados).atrasado });
+iniciarTema(el.telaAjustes);
+iniciarOcultarValores(el.botaoOcultar);
+// Os textos explicativos fixos viram ajuda "?" ao lado do título.
+for (const vista of [el.telaConfigurar, el.telaMes, el.telaInvestir, el.telaPlanejar]) ligarAjudas(vista);
+
+/** Escreve o resumo de cada item do menu de Ajustes e os pontos de atenção. */
+function renderizarAjustes() {
+  if (!dados) return;
+  const backup = situacaoDoBackup(dados);
+  const { textos, pontos } = resumosDosAjustes(dados, hojeLocal(), {
+    iaLigada: iaDisponivel(configIA), backupTexto: backup.texto, backupAtrasado: backup.atrasado, versao: numeroDaVersao(VERSAO_APP),
+  });
+  for (const [pagina, texto] of Object.entries(textos)) {
+    const linha = document.getElementById(`ajuste-resumo-${pagina}`);
+    if (linha) linha.textContent = texto;
+  }
+  for (const pagina of ['dinheiro', 'categorias', 'conta']) {
+    document.getElementById(`ajuste-ponto-${pagina}`).hidden = !pontos[pagina];
+  }
+}
+
+/** Títulos das páginas de Ajustes e de Investir. */
+const TITULOS_DE_AJUSTES = {
+  dinheiro: 'Dinheiro e entradas', contas: 'Contas fixas', categorias: 'Categorias e orçamentos',
+  pagamentos: 'Cartões e pagamentos', sobra: 'Destino da sobra', ia: 'IA (Gemini)', conta: 'Conta, nuvem e backup',
+  app: 'Sobre e atualização',
+};
+const TITULOS_DE_INVESTIR = {
+  carteira: 'Carteira', simulador: 'Simulador de investimentos', radar: 'Radar de opções', receita: 'Imposto de renda',
+};
+
+/** Linha de resumo da carteira no menu Investir (Planejar). */
+function renderizarResumoDaCarteira() {
+  const linha = document.getElementById('planejar-resumo-carteira');
+  const quantos = investimentosAtivos(dados).length;
+  linha.textContent = quantos === 0
+    ? 'Cadastre o que você já tem aplicado'
+    : `${quantos} ${quantos === 1 ? 'investimento' : 'investimentos'} · ${formatarCentavos(resumoDaCarteira(dadosEstimados()).atualCentavos)}`;
+}
+
+/** Último endereço fora do Novo gasto: para onde o "Fechar" (e o "Lançar") volta. */
+let enderecoAntesDoGasto = '#inicio';
+
+/** Sai do Novo gasto para a tela de onde a pessoa veio. */
+function voltarDoGasto() {
+  location.hash = enderecoAntesDoGasto;
+}
+el.gastoFechar.addEventListener('click', voltarDoGasto);
 
 // Atalho do Lançar para o simulador: leva o valor digitado e o cartão escolhido.
 el.linkSimular.addEventListener('click', () => {
@@ -894,50 +974,55 @@ el.linkSimular.addEventListener('click', () => {
 /* ------------------------------------------------------------------ */
 
 /**
- * Mostra a vista indicada no endereço: #mes, #historico, #investir, #configurar
- * ou, para qualquer outro valor, a vista de lançamento. Usar o endereço permite voltar
- * com o botão "voltar" do navegador e abrir direto numa vista.
+ * Mostra a vista indicada no endereço (src/rotas.js). Usar o endereço
+ * permite voltar com o botão "voltar" do navegador e abrir direto numa vista.
  */
 function mostrarVista() {
   // Primeiro acesso: só as boas-vindas, sem abas, até a pessoa escolher.
   const primeiroAcesso = dados === null;
   el.telaBoasVindas.hidden = !primeiroAcesso;
   el.abas.hidden = primeiroAcesso;
+  const telas = {
+    inicio: el.telaInicio,
+    lancar: el.tela,
+    mes: el.telaMes,
+    historico: el.telaHistorico,
+    planejar: el.telaPlanejar,
+    investir: el.telaInvestir,
+    simular: el.telaSimular,
+    ajustes: el.telaAjustes,
+    configurar: el.telaConfigurar,
+  };
   if (primeiroAcesso) {
-    el.tela.hidden = true;
-    el.telaMes.hidden = true;
-    el.telaHistorico.hidden = true;
-    el.telaInvestir.hidden = true;
-    el.telaConfigurar.hidden = true;
-    el.telaSimular.hidden = true;
+    for (const tela of Object.values(telas)) tela.hidden = true;
     return;
   }
 
-  const vistas = {
-    '#mes': 'mes', '#historico': 'historico', '#investir': 'investir', '#configurar': 'configurar', '#simular': 'simular',
-  };
-  const vista = vistas[location.hash] ?? 'lancar';
+  const { vista, parte, aba } = lerRota(location.hash);
+  for (const [nome, tela] of Object.entries(telas)) tela.hidden = nome !== vista;
+  document.body.dataset.vista = vista;
+  if (vista !== 'lancar') enderecoAntesDoGasto = location.hash || '#inicio';
+  // O toast continua ao trocar de tela: o "Desfazer" do gasto aparece no Início.
 
-  el.tela.hidden = vista !== 'lancar';
-  el.telaMes.hidden = vista !== 'mes';
-  el.telaHistorico.hidden = vista !== 'historico';
-  el.telaInvestir.hidden = vista !== 'investir';
-  el.telaConfigurar.hidden = vista !== 'configurar';
-  el.telaSimular.hidden = vista !== 'simular';
-  el.configMensagem.hidden = true;
-
-  // aria-current="page" marca a aba ativa (para o estilo e para leitores de tela).
-  const abas = [
-    [el.abaLancar, 'lancar'], [el.abaMes, 'mes'], [el.abaHistorico, 'historico'], [el.abaInvestir, 'investir'],
-    [el.abaConfigurar, 'configurar'],
-  ];
-  // O simulador não tem aba própria: ele é aberto pelo Lançar, que fica marcado.
-  const abaAtiva = vista === 'simular' ? 'lancar' : vista;
-  for (const [aba, nome] of abas) {
-    if (nome === abaAtiva) aba.setAttribute('aria-current', 'page');
-    else aba.removeAttribute('aria-current');
+  // Aba marcada (aria-current="page": estilo e leitores de tela). O Novo gasto não marca nenhuma.
+  for (const link of el.abas.querySelectorAll('.aba[data-aba]')) {
+    if (link.dataset.aba === aba) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
   }
 
+  // Partes (Mês e Planejar): mostra só a escolhida e marca o segmento.
+  const tela = telas[vista];
+  for (const bloco of tela.querySelectorAll(':scope > .parte')) bloco.hidden = bloco.dataset.parte !== parte;
+  for (const link of tela.querySelectorAll(':scope > .segmentos a')) {
+    if (link.dataset.parte === parte) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  // Páginas (Ajustes e Investir): só as seções daquela página.
+  if (vista === 'configurar' || vista === 'investir') {
+    for (const secao of tela.querySelectorAll(':scope > [data-pagina]')) secao.hidden = secao.dataset.pagina !== parte;
+  }
+
+  if (vista === 'inicio') inicio.renderizar();
   if (vista === 'mes') {
     resumo.renderizar();
     entradasMes.renderizar();
@@ -949,12 +1034,19 @@ function mostrarVista() {
     analiseMes.renderizar(); // mostra a última análise do mês, com a hora em que foi feita
   }
   if (vista === 'historico') historico.renderizar();
+  if (vista === 'planejar') {
+    desejos.renderizar();
+    renderizarResumoDaCarteira();
+  }
   if (vista === 'investir') {
+    el.investirTitulo.textContent = TITULOS_DE_INVESTIR[parte];
     investir.renderizar();
     simuladorInvestimentos.renderizar();
-    radar.renderizar(); // mostra o radar guardado e busca o novo se já passou da hora
+    if (parte === 'radar') radar.renderizar(); // mostra o radar guardado e busca o novo se já passou da hora
   }
+  if (vista === 'ajustes') renderizarAjustes();
   if (vista === 'configurar') {
+    el.configTitulo.textContent = TITULOS_DE_AJUSTES[parte];
     configurar.renderizar();
     entradasConfig.renderizar();
     orcamentos.renderizar();
@@ -962,12 +1054,12 @@ function mostrarVista() {
     configuracaoIA.renderizar();
     nuvem.aoAbrirConfigurar();
   }
-  if (vista === 'simular') {
-    simulador.renderizar();
-    desejos.renderizar();
+  if (vista === 'simular') simulador.renderizar();
+  // Abrindo o Novo gasto, a tela é refeita e o valor recebe o foco.
+  if (vista === 'lancar') {
+    atualizar();
+    requestAnimationFrame(() => el.valor.focus({ preventScroll: true }));
   }
-  // Voltando ao Lançar (ex.: depois de salvar a chave da IA), a tela é refeita.
-  if (vista === 'lancar') atualizar();
   window.scrollTo(0, 0);
 }
 
@@ -983,6 +1075,9 @@ window.addEventListener('hashchange', mostrarVista);
 
 /** Redesenha a vista aberta depois que dados chegaram do servidor. */
 function redesenharVistaAberta() {
+  if (!el.telaInicio.hidden) inicio.renderizar();
+  if (!el.telaAjustes.hidden) renderizarAjustes();
+  if (!el.telaPlanejar.hidden) desejos.renderizar();
   if (!el.telaMes.hidden) {
     resumo.renderizar();
     destinoMes.renderizar();
@@ -1074,10 +1169,10 @@ function trocarDados(novos, { manterSincronizacao = false } = {}) {
 // Boas-vindas: "Começar do zero" leva direto para Configurar.
 el.botaoComecarZero.addEventListener('click', async () => {
   trocarDados(criarDadosIniciais(hojeLocal()));
-  location.hash = '#configurar';
+  location.hash = '#ajustes/dinheiro';
   mostrarVista();
   const gravou = await gravar(dados);
-  avisar(gravou ? 'Comece informando o saldo da conta em "Dinheiro do mês".' : avisoSemGravacao());
+  avisar(gravou ? 'Comece informando o saldo da conta e o salário.' : avisoSemGravacao());
 });
 
 // Aparelho novo com backup de outro: importa sem passar pelo exemplo.
@@ -1088,7 +1183,7 @@ el.botaoBoasVindasBackup.addEventListener('click', () => {
 
 el.botaoVerExemplo.addEventListener('click', async () => {
   trocarDados(criarDadosDeExemplo(hojeLocal()));
-  location.hash = '#lancar';
+  location.hash = '#inicio';
   mostrarVista();
   const gravou = await gravar(dados);
   el.rodapeTexto.textContent = gravou ? '' : avisoSemGravacao();
@@ -1152,6 +1247,8 @@ document.getElementById('aviso-copia-fechar')?.addEventListener('click', () => m
 // "Atualizar" recarrega a página: com internet, os arquivos novos vêm do servidor.
 // Os dados não são afetados: eles ficam no IndexedDB, não na página.
 document.getElementById('aviso-versao-atualizar')?.addEventListener('click', () => window.location.reload());
+// "Depois" esconde o aviso da versão nova até a próxima vez que o app abrir (a versão nova continua esperando).
+document.getElementById('aviso-versao-depois')?.addEventListener('click', () => mostrarAvisoDoTopo('aviso-versao', null));
 
 /** Última versão que o service worker informou (usada pelo botão "Procurar atualização"). */
 let versaoDoServiceWorker = null;

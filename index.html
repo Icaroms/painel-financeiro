@@ -5,8 +5,10 @@
   <!-- viewport-fit=cover: no iPhone, a tela usa a área toda; as margens seguras ficam no CSS -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#DDE3E8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#F2F4F7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#16212B" media="(prefers-color-scheme: dark)">
+  <!-- Tema escolhido em Ajustes (Automático, Claro ou Escuro): aplicado antes de pintar, sem piscar -->
+  <script>try{var t=localStorage.getItem('painel-tema');if(t==='claro'||t==='escuro')document.documentElement.dataset.tema=t;if(localStorage.getItem('painel-ocultar')==='1')document.documentElement.classList.add('valores-ocultos');}catch(e){}</script>
   <title>Painel Financeiro</title>
 
   <!-- PWA: nome, ícones e cores do app instalado (manifest) -->
@@ -31,13 +33,18 @@
   <div class="avisos-topo">
     <!-- Só quando o app abriu com a cópia guardada no aparelho (servidor fora do ar ou sem internet) -->
     <div class="aviso-topo aviso-copia" id="aviso-copia" role="status" hidden>
+      <span class="aviso-topo-icone" aria-hidden="true"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 0 1-.6-10 6 6 0 0 1 11.4 1.5A4.5 4.5 0 0 1 17.5 18z"/></svg></span>
       <p id="aviso-copia-texto"></p>
       <button type="button" class="botao-pequeno" id="aviso-copia-fechar">Entendi</button>
     </div>
     <!-- Só quando chegou uma publicação nova com o app aberto -->
     <div class="aviso-topo aviso-versao" id="aviso-versao" role="status" hidden>
+      <span class="aviso-topo-icone" aria-hidden="true"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></span>
       <p id="aviso-versao-texto"></p>
-      <button type="button" class="botao-pequeno" id="aviso-versao-atualizar">Atualizar</button>
+      <div class="aviso-topo-botoes">
+        <button type="button" class="botao-texto" id="aviso-versao-depois">Depois</button>
+        <button type="button" class="botao-pequeno botao-cheio" id="aviso-versao-atualizar">Atualizar</button>
+      </div>
     </div>
   </div>
 
@@ -64,20 +71,76 @@
     </div>
   </main>
 
-  <!-- Vista "Lançar": a tela principal. As vistas trocam pelo endereço (#lancar / #configurar). -->
-  <main class="tela" id="tela" data-cor="neutro">
-
+  <!-- Vista "Início" (novo layout, 11/2026): o essencial do mês numa olhada -->
+  <main class="tela tela-inicio" id="tela-inicio" hidden>
     <header class="cabecalho">
       <div class="cabecalho-linha">
-        <h1 id="titulo-mes">Painel Financeiro</h1>
-        <span class="secundario" id="dia-texto"></span>
+        <div class="titulo-bloco">
+          <h1 id="inicio-mes"></h1>
+          <span class="secundario" id="inicio-dia"></span>
+        </div>
+        <div class="cabecalho-acoes">
+          <!-- Situação da sincronização (Fase 05): aparece só com a conta conectada -->
+          <span class="nuvem-indicador" id="nuvem-indicador" hidden></span>
+          <button type="button" class="botao-icone" id="botao-ocultar" aria-pressed="false" aria-label="Ocultar valores" title="Ocultar valores"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
       </div>
-      <p class="secundario" id="linha-saldo"></p>
       <!-- Aparece só com os dados fictícios -->
       <div class="faixa-exemplo" id="faixa-exemplo" hidden>
         <p>Você está vendo <strong>dados de exemplo</strong> (fictícios).</p>
         <button type="button" class="botao-pequeno botao-usar-de-verdade">Usar de verdade</button>
       </div>
+    </header>
+
+    <div class="inicio-grade">
+      <section class="cartao destaque" id="inicio-destaque" data-cor="neutro" aria-labelledby="inicio-rotulo">
+        <span class="secundario" id="inicio-rotulo">Deve sobrar no fim do mês</span>
+        <span class="destaque-numero valor-sensivel" id="inicio-sobra"></span>
+        <span class="selo-situacao"><span class="luz" aria-hidden="true"></span><span id="inicio-situacao"></span></span>
+        <div class="destaque-rodape">
+          <span class="secundario">Na conta agora: <strong class="valor-sensivel" id="inicio-na-conta"></strong></span>
+          <a href="#mes" class="link-forte">Conferir <span class="chevron" aria-hidden="true">›</span></a>
+        </div>
+      </section>
+
+      <!-- Um aviso por vez: o mais importante primeiro -->
+      <div class="aviso-inicio" id="inicio-aviso" data-cor="amarelo" role="status" hidden>
+        <span class="aviso-inicio-icone" aria-hidden="true"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+        <p id="inicio-aviso-texto"></p>
+        <div class="aviso-inicio-acoes">
+          <button type="button" class="botao-texto" id="inicio-aviso-proximo" hidden>Próximo</button>
+          <a class="botao-pequeno" id="inicio-aviso-link" href="#ajustes"></a>
+        </div>
+      </div>
+
+      <section class="cartao" aria-labelledby="titulo-inicio-saidas">
+        <div class="cartao-topo">
+          <h2 id="titulo-inicio-saidas">Próximas saídas</h2>
+          <a href="#mes/contas" class="link-discreto">Ver todas <span class="chevron" aria-hidden="true">›</span></a>
+        </div>
+        <ul class="lista-simples" id="inicio-saidas"></ul>
+      </section>
+
+      <section class="cartao" aria-labelledby="titulo-inicio-categorias">
+        <div class="cartao-topo">
+          <h2 id="titulo-inicio-categorias">Categorias</h2>
+          <a href="#mes" class="link-discreto">Ver mês <span class="chevron" aria-hidden="true">›</span></a>
+        </div>
+        <ul class="lista-simples" id="inicio-categorias"></ul>
+      </section>
+    </div>
+  </main>
+
+  <!-- Vista "Lançar" (Novo gasto, aberto pelo "+" ou por #lancar). As vistas trocam pelo endereço (src/rotas.js). -->
+  <main class="tela" id="tela" data-cor="neutro">
+
+    <header class="cabecalho cabecalho-folha">
+      <div class="barra-topo">
+        <button type="button" class="botao-icone" id="gasto-fechar" aria-label="Fechar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <h1>Novo gasto</h1>
+      </div>
+      <p class="secundario"><span id="titulo-mes"></span> · <span id="dia-texto"></span></p>
+      <p class="secundario" id="linha-saldo"></p>
     </header>
 
     <section class="mostrador" aria-label="Mostrador da categoria">
@@ -150,7 +213,6 @@
       </div>
       <!-- Atalho para "Avaliar compra": leva o valor, a forma de pagamento e o nome já preenchidos -->
       <a href="#simular" class="link-simular" id="link-simular">Pensando numa compra? Avaliar antes →</a>
-      <a href="#mes" class="link-simular" id="link-entrada">Recebeu dinheiro? Registrar entrada →</a>
 
       <!-- Data do gasto: já vem como hoje; muda só para lançar um gasto esquecido do mês -->
       <label class="campo-data" id="campo-data">
@@ -165,8 +227,6 @@
     <footer class="rodape secundario">
       <!-- aria-live: leitores de tela anunciam as mensagens do rodapé -->
       <span id="rodape-texto" aria-live="polite"></span>
-      <!-- Situação da sincronização (Fase 05): aparece só com a conta conectada -->
-      <span class="nuvem-indicador" id="nuvem-indicador" hidden></span>
     </footer>
 
   </main>
@@ -186,24 +246,32 @@
       </div>
     </header>
 
+    <nav class="segmentos" aria-label="Partes do mês">
+      <a href="#mes" data-parte="resumo">Resumo</a>
+      <a href="#mes/entradas" data-parte="entradas">Entradas</a>
+      <a href="#mes/contas" data-parte="contas">Contas</a>
+      <a href="#mes/gastos" data-parte="gastos">Gastos</a>
+    </nav>
+
+    <div class="parte" data-parte="resumo">
     <section class="cartao" aria-label="Resumo do dinheiro do mês">
       <!-- dl: lista de "termo e valor", como as linhas de um extrato -->
       <dl class="contas">
         <div class="conta-linha">
           <dt>Dinheiro do mês <span class="secundario">saldo + entradas</span></dt>
-          <dd id="mes-dinheiro"></dd>
+          <dd class="valor-sensivel" id="mes-dinheiro"></dd>
         </div>
         <div class="conta-linha">
           <dt>Já pago <span class="secundario" id="mes-ja-pago-detalhe"></span></dt>
-          <dd id="mes-ja-pago"></dd>
+          <dd class="valor-sensivel" id="mes-ja-pago"></dd>
         </div>
         <div class="conta-linha">
           <dt>Ainda previsto <span class="secundario">contas fixas e faturas que ainda vão sair</span></dt>
-          <dd id="mes-previsto"></dd>
+          <dd class="valor-sensivel" id="mes-previsto"></dd>
         </div>
         <div class="conta-linha conta-total" id="mes-linha-sobra" data-cor="neutro">
           <dt><span class="luz" aria-hidden="true"></span>Deve sobrar</dt>
-          <dd id="mes-sobra"></dd>
+          <dd class="valor-sensivel" id="mes-sobra"></dd>
         </div>
       </dl>
       <!-- Saldo do início + o que já entrou − já pago: serve para conferir o app com o saldo do banco -->
@@ -221,38 +289,10 @@
         <p class="conferencia-resultado" id="conferencia-resultado" aria-live="polite" hidden></p>
       </form>
       <p class="aviso-saldo secundario" id="mes-aviso-saldo" hidden>
-        O saldo do mês ainda não foi confirmado. <a href="#configurar">Confirmar em Configurar</a>.
+        O saldo do mês ainda não foi confirmado. <a href="#ajustes/dinheiro">Confirmar em Ajustes</a>.
       </p>
     </section>
 
-    <!-- 11/2026: salário e outras entradas fixas neste mês, e entradas avulsas -->
-    <section class="cartao" aria-labelledby="titulo-mes-entradas" id="secao-mes-entradas">
-      <h2 id="titulo-mes-entradas">Entradas do mês</h2>
-      <p class="resumo-dinheiro" id="mes-entradas-total"></p>
-      <h3 class="subtitulo-secao">Fixas</h3>
-      <ul class="lista-fixos" id="mes-entradas-fixas"></ul>
-      <h3 class="subtitulo-secao">Avulsas</h3>
-      <ul class="lista-fixos" id="mes-entradas-avulsas"></ul>
-      <form class="form-fixo" id="form-entrada-avulsa" autocomplete="off" novalidate>
-        <label class="campo">
-          <span class="secundario">Valor que entrou</span>
-          <span class="campo-dinheiro">
-            <span aria-hidden="true">R$</span>
-            <input id="entrada-avulsa-valor" inputmode="numeric" placeholder="0,00">
-          </span>
-        </label>
-        <label class="campo">
-          <span class="secundario">Dia</span>
-          <input id="entrada-avulsa-data" type="date">
-        </label>
-        <label class="campo inteira">
-          <span class="secundario">De onde veio (opcional)</span>
-          <input id="entrada-avulsa-descricao" placeholder="Ex.: Freela do site">
-        </label>
-        <span class="erro" id="erro-entrada-avulsa"></span>
-        <div class="acoes"><button type="submit" class="botao-pequeno">Registrar entrada</button></div>
-      </form>
-    </section>
 
     <!-- Fase 04, parte 4.1: destino da sobra (sugestão; o app não move dinheiro) -->
     <section class="cartao" aria-labelledby="titulo-mes-destino">
@@ -283,6 +323,40 @@
       <ul class="lista-reguas" id="mes-categorias"></ul>
     </section>
 
+    </div>
+
+    <div class="parte" data-parte="entradas">
+    <!-- 11/2026: salário e outras entradas fixas neste mês, e entradas avulsas -->
+    <section class="cartao" aria-labelledby="titulo-mes-entradas" id="secao-mes-entradas">
+      <h2 id="titulo-mes-entradas">Entradas do mês</h2>
+      <p class="resumo-dinheiro" id="mes-entradas-total"></p>
+      <h3 class="subtitulo-secao">Fixas</h3>
+      <ul class="lista-fixos" id="mes-entradas-fixas"></ul>
+      <h3 class="subtitulo-secao">Avulsas</h3>
+      <ul class="lista-fixos" id="mes-entradas-avulsas"></ul>
+      <form class="form-fixo" id="form-entrada-avulsa" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Valor que entrou</span>
+          <span class="campo-dinheiro">
+            <span aria-hidden="true">R$</span>
+            <input id="entrada-avulsa-valor" inputmode="numeric" placeholder="0,00">
+          </span>
+        </label>
+        <label class="campo">
+          <span class="secundario">Dia</span>
+          <input id="entrada-avulsa-data" type="date">
+        </label>
+        <label class="campo inteira">
+          <span class="secundario">De onde veio (opcional)</span>
+          <input id="entrada-avulsa-descricao" placeholder="Ex.: Freela do site">
+        </label>
+        <span class="erro" id="erro-entrada-avulsa"></span>
+        <div class="acoes"><button type="submit" class="botao-pequeno">Registrar entrada</button></div>
+      </form>
+    </section>
+    </div>
+
+    <div class="parte" data-parte="contas">
     <section class="cartao" aria-labelledby="titulo-mes-faturas" id="secao-faturas" hidden>
       <h2 id="titulo-mes-faturas">Faturas do cartão</h2>
       <p class="secundario explicacao">Compras no cartão saem da conta no vencimento da fatura. Marque Pago quando pagar.</p>
@@ -297,11 +371,16 @@
       <nav class="paginacao" id="paginacao-mes-fixos" aria-label="Páginas das contas fixas do mês"></nav>
     </section>
 
+    </div>
+
+    <div class="parte" data-parte="gastos">
     <section class="cartao" aria-labelledby="titulo-mes-gastos">
       <h2 id="titulo-mes-gastos">Gastos lançados</h2>
       <ul class="lista-mes" id="mes-gastos"></ul>
       <nav class="paginacao" id="paginacao-mes-gastos" aria-label="Páginas dos gastos do mês"></nav>
     </section>
+    <a href="#historico" class="item-menu item-solto"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span class="item-menu-texto"><span>Histórico completo</span><span class="secundario">Todos os meses, por semana e por categoria</span></span><span class="chevron" aria-hidden="true">›</span></a>
+    </div>
 
   </main>
 
@@ -309,6 +388,7 @@
   <main class="tela tela-historico" id="tela-historico" hidden>
 
     <header class="cabecalho">
+      <a href="#mes/gastos" class="voltar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Mês</a>
       <h1>Histórico</h1>
     </header>
 
@@ -338,14 +418,51 @@
 
   </main>
 
-  <!-- Vista "Investir" (Fase 04, parte 4.2a): a carteira de investimentos -->
+  <!-- Vista "Planejar" (novo layout, 11/2026): compras (Avaliar compra e lista de desejos) e investimentos -->
+  <main class="tela tela-planejar" id="tela-planejar" hidden>
+    <header class="cabecalho">
+      <h1>Planejar</h1>
+    </header>
+
+    <nav class="segmentos" aria-label="Partes de Planejar">
+      <a href="#planejar" data-parte="compras">Compras</a>
+      <a href="#planejar/investir" data-parte="investir">Investir</a>
+    </nav>
+
+    <div class="parte" data-parte="compras">
+    <a href="#simular" class="acao-destaque">
+      <span class="acao-destaque-icone"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 11h11.2L21 8H6.2"/></svg></span>
+      <span class="item-menu-texto"><strong>Avaliar uma compra</strong><span>À vista ou parcelado, agora ou mais tarde</span></span>
+      <span class="chevron" aria-hidden="true">›</span>
+    </a>
+    <!-- 11/2026: lista de desejos com os preços registrados (aparece quando há produtos) -->
+    <section class="cartao" id="secao-desejos" aria-labelledby="titulo-desejos" hidden>
+      <h2 id="titulo-desejos">Lista de desejos <span class="secundario" id="desejos-contagem"></span></h2>
+      <p class="secundario explicacao">Registre os preços que encontrar: o app avalia a compra no menor deles.</p>
+      <ul class="lista-desejos" id="lista-desejos"></ul>
+    </section>
+    <p class="vazio secundario" id="desejos-vazio" hidden>Nenhum produto na lista de desejos. Em “Avaliar uma compra”, use “Guardar na lista de desejos” para acompanhar o preço de algo que você quer.</p>
+    </div>
+
+    <div class="parte" data-parte="investir">
+    <nav class="menu" aria-label="Investir">
+      <a href="#investir/carteira" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2z"/><circle cx="16" cy="14.5" r="1"/></svg><span class="item-menu-texto"><span>Carteira e investimentos</span><span class="secundario" id="planejar-resumo-carteira"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#investir/simulador" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/></svg><span class="item-menu-texto"><span>Simulador de investimentos</span><span class="secundario">Quanto rende cada opção</span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#investir/radar" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="item-menu-texto"><span>Radar de opções</span><span class="secundario">Taxas do dia e onde investir</span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#investir/receita" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span class="item-menu-texto"><span>Imposto de renda</span><span class="secundario">Avisos e o que declarar</span></span><span class="chevron" aria-hidden="true">›</span></a>
+    </nav>
+    </div>
+  </main>
+
+  <!-- Vista "Investir" (Fase 04): cada parte abre como página de Planejar (#investir/carteira...) -->
   <main class="tela tela-investir" id="tela-investir" hidden>
 
     <header class="cabecalho">
-      <h1>Investir</h1>
+      <a href="#planejar/investir" class="voltar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Planejar</a>
+      <h1 id="investir-titulo">Investir</h1>
     </header>
 
-    <section class="cartao" aria-labelledby="titulo-carteira">
+    <section class="cartao" aria-labelledby="titulo-carteira" data-pagina="carteira">
       <h2 id="titulo-carteira">Carteira</h2>
       <p class="investir-total" id="investir-total"></p>
       <p class="resumo-dinheiro" id="investir-rendimento"></p>
@@ -363,7 +480,7 @@
       <p class="secundario explicacao">Os valores atuais são os que você digita, conferindo no app ou no extrato do banco. Na renda fixa com taxa contratada, o app estima o valor de hoje com o CDI e o IPCA oficiais do Banco Central, a partir do último valor digitado: pode diferir um pouco do banco (dias úteis, IOF e taxas não entram), então confira no extrato de vez em quando. O app só mostra números: não indica o que comprar ou vender.</p>
     </section>
 
-    <section class="cartao" aria-labelledby="titulo-investimentos">
+    <section class="cartao" aria-labelledby="titulo-investimentos" data-pagina="carteira">
       <h2 id="titulo-investimentos">Investimentos</h2>
       <ul class="lista-fixos" id="lista-investimentos"></ul>
       <nav class="paginacao" id="paginacao-investimentos" aria-label="Páginas dos investimentos"></nav>
@@ -372,7 +489,7 @@
     </section>
 
     <!-- Alertas da Receita (parte 4.7): regras em src/receita.js, conferidas em 12/10/2026. -->
-    <section class="cartao" aria-labelledby="titulo-receita">
+    <section class="cartao" aria-labelledby="titulo-receita" data-pagina="receita">
       <h2 id="titulo-receita">Imposto de renda</h2>
       <ul class="lista-mes" id="receita-alertas"></ul>
       <h3 class="subtitulo-secao">Para a declaração anual</h3>
@@ -381,7 +498,7 @@
     </section>
 
     <!-- Simulador de investimentos (parte 4.5): regras em src/simulador-investimentos.js. -->
-    <section class="cartao" aria-labelledby="titulo-sim-investimento">
+    <section class="cartao" aria-labelledby="titulo-sim-investimento" data-pagina="simulador">
       <h2 id="titulo-sim-investimento">Simulador de investimentos</h2>
       <p class="secundario explicacao">Quanto um valor vira em cada opção se as taxas de hoje continuarem por todo o prazo. As taxas mudam: é uma simulação, não uma promessa, e não é recomendação.</p>
       <form class="form-fixo" id="form-sim-investimento" autocomplete="off" novalidate>
@@ -416,7 +533,7 @@
 
     <!-- Radar de opções (parte 4.3): opções do mercado por números objetivos, com fonte e data.
          Os dados vêm do robô no GitHub (.github/workflows/radar.yml). -->
-    <section class="cartao" aria-labelledby="titulo-radar">
+    <section class="cartao" aria-labelledby="titulo-radar" data-pagina="radar">
       <h2 id="titulo-radar">Radar de opções</h2>
       <p class="secundario explicacao">Opções do mercado por números objetivos, sempre com a fonte e a data. Não é recomendação: o app não diz o que comprar, e rendimento passado não garante rendimento futuro.</p>
       <p class="secundario radar-situacao" id="radar-situacao" role="status"></p>
@@ -478,19 +595,11 @@
   <main class="tela tela-simular" id="tela-simular" hidden>
 
     <header class="cabecalho">
-      <div class="cabecalho-linha">
-        <h1>Avaliar compra</h1>
-        <a href="#lancar" class="botao-pequeno link-voltar" id="simular-voltar">‹ Lançar</a>
-      </div>
+      <a href="#planejar" class="voltar" id="simular-voltar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span id="simular-voltar-texto">Planejar</span></a>
+      <h1>Avaliar compra</h1>
       <p class="secundario">À vista ou parcelado, agora ou mais tarde. Só uma consulta: nada é gravado.</p>
     </header>
 
-    <!-- 11/2026: lista de desejos com os preços registrados (aparece quando há produtos) -->
-    <section class="cartao" id="secao-desejos" aria-labelledby="titulo-desejos" hidden>
-      <h2 id="titulo-desejos">Lista de desejos <span class="secundario" id="desejos-contagem"></span></h2>
-      <p class="secundario explicacao">Registre os preços que encontrar: o app avalia a compra no menor deles.</p>
-      <ul class="lista-desejos" id="lista-desejos"></ul>
-    </section>
 
     <section class="cartao" aria-labelledby="titulo-simular-compra">
       <h2 id="titulo-simular-compra">Compra</h2>
@@ -531,7 +640,7 @@
     <!-- Sugestão da IA para a compra inteira (melhor opção e momento) -->
     <section class="cartao ia-avaliacao" id="simular-ia" aria-labelledby="titulo-simular-ia" hidden>
       <h2 id="titulo-simular-ia">Sugestão da IA</h2>
-      <p class="secundario explicacao" id="simular-ia-desligada" hidden>Ligue a IA em Configurar para receber uma sugestão: se é o momento certo, à vista ou em quantas vezes.</p>
+      <p class="secundario explicacao" id="simular-ia-desligada" hidden>Ligue a IA em Ajustes → IA para receber uma sugestão: se é o momento certo, à vista ou em quantas vezes.</p>
       <div id="simular-ia-conteudo"></div>
     </section>
 
@@ -541,15 +650,58 @@
 
   </main>
 
-  <!-- Vista "Configurar" -->
+  <!-- Vista "Ajustes" (novo layout, 11/2026): menu curto; cada item abre uma página do antigo Configurar -->
+  <main class="tela tela-ajustes" id="tela-ajustes" hidden>
+    <header class="cabecalho">
+      <h1>Ajustes</h1>
+    </header>
+
+    <section class="grupo-menu" aria-labelledby="g-ajustes-dinheiro">
+      <h2 class="titulo-grupo" id="g-ajustes-dinheiro">Seu dinheiro</h2>
+      <nav class="menu">
+      <a href="#ajustes/dinheiro" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg><span class="item-menu-texto"><span>Dinheiro e entradas</span><span class="secundario" id="ajuste-resumo-dinheiro"></span></span><span class="ponto-item" id="ajuste-ponto-dinheiro" hidden></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#ajustes/contas" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg><span class="item-menu-texto"><span>Contas fixas</span><span class="secundario" id="ajuste-resumo-contas"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#ajustes/categorias" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg><span class="item-menu-texto"><span>Categorias e orçamentos</span><span class="secundario" id="ajuste-resumo-categorias"></span></span><span class="ponto-item" id="ajuste-ponto-categorias" hidden></span><span class="chevron" aria-hidden="true">›</span></a>
+      </nav>
+    </section>
+
+    <section class="grupo-menu" aria-labelledby="g-ajustes-pagar">
+      <h2 class="titulo-grupo" id="g-ajustes-pagar">Pagamentos e planos</h2>
+      <nav class="menu">
+      <a href="#ajustes/pagamentos" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span class="item-menu-texto"><span>Cartões e formas de pagamento</span><span class="secundario" id="ajuste-resumo-pagamentos"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#ajustes/sobra" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="item-menu-texto"><span>Destino da sobra</span><span class="secundario" id="ajuste-resumo-sobra"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      </nav>
+    </section>
+
+    <section class="grupo-menu" aria-labelledby="g-ajustes-app">
+      <h2 class="titulo-grupo" id="g-ajustes-app">App</h2>
+      <nav class="menu">
+      <a href="#ajustes/ia" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg><span class="item-menu-texto"><span>IA (Gemini)</span><span class="secundario" id="ajuste-resumo-ia"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#ajustes/conta" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 0 1-.6-10 6 6 0 0 1 11.4 1.5A4.5 4.5 0 0 1 17.5 18z"/></svg><span class="item-menu-texto"><span>Conta, nuvem e backup</span><span class="secundario" id="ajuste-resumo-conta"></span></span><span class="ponto-item" id="ajuste-ponto-conta" hidden></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#ajustes/app" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="item-menu-texto"><span>Sobre e atualização</span><span class="secundario" id="ajuste-resumo-app"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      </nav>
+      <!-- Aparência: guardada só neste aparelho -->
+      <fieldset class="seletor-tema">
+        <legend class="item-menu-texto"><span class="linha-icone"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><span>Aparência</span></span></legend>
+        <div class="segmentos segmentos-radio">
+          <label><input type="radio" name="tema" value="auto" checked><span>Automática</span></label>
+          <label><input type="radio" name="tema" value="claro"><span>Clara</span></label>
+          <label><input type="radio" name="tema" value="escuro"><span>Escura</span></label>
+        </div>
+      </fieldset>
+    </section>
+  </main>
+
+  <!-- Vista "Configurar": as páginas de Ajustes (#ajustes/dinheiro...); cada seção diz a que página pertence -->
   <main class="tela tela-configurar" id="tela-configurar" hidden>
 
     <header class="cabecalho">
-      <h1>Configurar</h1>
+      <a href="#ajustes" class="voltar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Ajustes</a>
+      <h1 id="config-titulo">Ajustes</h1>
       <p class="secundario" id="config-subtitulo"></p>
     </header>
 
-    <section class="cartao" aria-labelledby="titulo-dinheiro">
+    <section class="cartao" aria-labelledby="titulo-dinheiro" data-pagina="dinheiro">
       <h2 id="titulo-dinheiro">Dinheiro do mês</h2>
 
       <!-- Aparece quando o saldo foi só sugerido pela virada do mês -->
@@ -584,7 +736,7 @@
     </section>
 
     <!-- 11/2026: salário e outras entradas que se repetem; a previsão dos próximos meses usa estas -->
-    <section class="cartao" aria-labelledby="titulo-entradas-fixas">
+    <section class="cartao" aria-labelledby="titulo-entradas-fixas" data-pagina="dinheiro">
       <h2 id="titulo-entradas-fixas">Entradas fixas</h2>
       <p class="secundario explicacao">O que entra todo mês, como o salário. Vale o mês em que o dinheiro cai na conta: o salário de outubro pago em 5/11 é entrada de novembro.</p>
       <div class="alerta" id="alerta-sem-entradas" hidden>
@@ -600,7 +752,7 @@
       </div>
     </section>
 
-    <section class="cartao" aria-labelledby="titulo-fixos">
+    <section class="cartao" aria-labelledby="titulo-fixos" data-pagina="contas">
       <h2 id="titulo-fixos">Contas fixas</h2>
       <p class="secundario explicacao">Assinaturas, mensalidades e parcelas. Elas já são descontadas do mês sozinhas: não lance também como gasto.</p>
       <p class="resumo-dinheiro" id="total-fixos"></p>
@@ -609,7 +761,7 @@
       <button type="button" class="botao-secundario" id="botao-novo-fixo">Adicionar conta fixa</button>
     </section>
 
-    <section class="cartao" aria-labelledby="titulo-categorias">
+    <section class="cartao" aria-labelledby="titulo-categorias" data-pagina="categorias">
       <h2 id="titulo-categorias">Categorias e orçamentos</h2>
       <p class="secundario explicacao">O orçamento é um limite para o dia a dia, não uma previsão de gasto. Orçamento zero deixa a categoria sem limite: nela, vale só o saldo do mês.</p>
       <p class="resumo-dinheiro" id="livre-do-mes"></p>
@@ -639,7 +791,7 @@
       </form>
     </section>
 
-    <section class="cartao" aria-labelledby="titulo-pagamentos">
+    <section class="cartao" aria-labelledby="titulo-pagamentos" data-pagina="pagamentos">
       <h2 id="titulo-pagamentos">Formas de pagamento</h2>
 
       <ul class="lista-formas" id="lista-formas"></ul>
@@ -654,7 +806,7 @@
       </form>
     </section>
 
-    <section class="cartao" aria-labelledby="titulo-cartoes">
+    <section class="cartao" aria-labelledby="titulo-cartoes" data-pagina="pagamentos">
       <h2 id="titulo-cartoes">Cartões de crédito</h2>
       <p class="secundario explicacao">Uma forma de pagamento vira cartão com limite, dia de fechamento e dia de vencimento. Compra antes do fechamento entra na fatura do mês; no dia do fechamento ou depois, na seguinte.</p>
       <ul class="lista-cartoes" id="lista-cartoes"></ul>
@@ -663,7 +815,7 @@
     </section>
 
     <!-- Fase 02, parte 2.3: contas fixas parceladas que viram compras no cartão -->
-    <section class="cartao" aria-labelledby="titulo-conversao">
+    <section class="cartao" aria-labelledby="titulo-conversao" data-pagina="pagamentos">
       <h2 id="titulo-conversao">Parcelas antigas no cartão</h2>
       <p class="secundario explicacao">Contas fixas parceladas pagas num cartão cadastrado. Converter troca a conta fixa por uma compra parcelada no cartão: as parcelas que faltam entram nas faturas. O saldo do mês não muda.</p>
       <ul class="lista-fixos" id="lista-conversao"></ul>
@@ -672,7 +824,7 @@
     </section>
 
     <!-- Fase 04, parte 4.1: como dividir a sobra e a meta da reserva de emergência -->
-    <section class="cartao" aria-labelledby="titulo-destino">
+    <section class="cartao" aria-labelledby="titulo-destino" data-pagina="sobra">
       <h2 id="titulo-destino">Destino da sobra</h2>
       <p class="secundario explicacao">A sobra prevista acima da folga de R$ 200 é dividida entre a reserva de emergência, investir e o alívio do mês seguinte. É uma sugestão: o app não move dinheiro. Enquanto a reserva não chega na meta, ela vem primeiro; com a meta batida, a parte dela vai para Investir.</p>
       <form class="form-config" id="form-destino" autocomplete="off" novalidate>
@@ -706,7 +858,7 @@
     </section>
 
     <!-- Fase 03, parte 3.1: IA (Gemini). A chave fica só neste aparelho e não vai no backup. -->
-    <section class="cartao" aria-labelledby="titulo-ia">
+    <section class="cartao" aria-labelledby="titulo-ia" data-pagina="ia">
       <h2 id="titulo-ia">IA (Gemini)</h2>
       <p class="secundario explicacao">Opcional. Com a sua chave do Gemini, o app explica os vereditos e analisa o mês. As contas continuam sendo feitas pelo app: a IA só explica.</p>
       <p class="secundario explicacao"><strong>Privacidade:</strong> no plano gratuito do Gemini, o Google pode usar o que é enviado para melhorar os produtos, e pessoas podem ler. O app envia números e nomes de categorias e de contas; nunca o seu nome, e-mail ou senhas. A chave fica só neste aparelho e não vai no backup.</p>
@@ -736,7 +888,7 @@
     </section>
 
     <!-- Fase 05, parte 5.3: conta no servidor e sincronização. A senha nunca fica guardada. -->
-    <section class="cartao" aria-labelledby="titulo-nuvem">
+    <section class="cartao" aria-labelledby="titulo-nuvem" data-pagina="conta">
       <h2 id="titulo-nuvem">Conta e nuvem</h2>
       <p class="secundario explicacao">Opcional. Entre na sua conta do servidor do Painel Financeiro para guardar uma cópia dos dados e usar o app em mais de um aparelho. Sem internet, o app funciona igual: o que mudar aqui é enviado quando a conexão voltar.</p>
       <p class="resumo-dinheiro" id="nuvem-situacao" aria-live="polite"></p>
@@ -776,7 +928,7 @@
       </div>
     </section>
 
-    <section class="cartao backup" aria-labelledby="titulo-backup">
+    <section class="cartao backup" aria-labelledby="titulo-backup" data-pagina="conta">
       <h2 id="titulo-backup">Backup</h2>
       <p class="secundario explicacao">Sem a conta da nuvem, os dados ficam só neste aparelho. Exporte um backup de vez em quando e guarde fora dele.</p>
       <!-- Quando foi o último backup; vira aviso âmbar depois de 7 dias -->
@@ -795,7 +947,9 @@
 
     <!-- Versão que está rodando neste aparelho (vem do service worker): para comparar celular e PC -->
     <!-- Versão do código desta página e o botão que pergunta ao servidor se há publicação nova -->
-    <div class="versao-app-bloco">
+    <div class="cartao versao-app-bloco" data-pagina="app">
+      <h2>Sobre e atualização</h2>
+      <p class="secundario">Painel Financeiro: seu controle de gastos, com os dados guardados neste aparelho (e na sua conta, se conectada).</p>
       <p class="secundario versao-app" id="versao-app">Versão do app: verificando…</p>
       <button type="button" class="botao-pequeno" id="botao-procurar-atualizacao">Procurar atualização</button>
       <p class="secundario versao-app" id="procura-atualizacao" role="status"></p>
@@ -804,17 +958,42 @@
   </main>
 
   <!-- Mensagens das vistas Mês e Configurar: ficam presas acima das abas para serem vistas de qualquer ponto da página -->
-  <p class="mensagem" id="config-mensagem" aria-live="polite" hidden></p>
+  <div class="toast" id="config-mensagem" role="status" aria-live="polite" hidden>
+    <span id="toast-texto"></span>
+    <button type="button" class="toast-acao" id="toast-acao" hidden></button>
+  </div>
 
-  <nav class="abas" id="abas" aria-label="Seções do app">
-    <a href="#lancar" class="aba" id="aba-lancar">Lançar</a>
-    <a href="#mes" class="aba" id="aba-mes">Mês</a>
-    <a href="#historico" class="aba" id="aba-historico">Histórico</a>
-    <a href="#investir" class="aba" id="aba-investir">Investir</a>
-    <a href="#configurar" class="aba" id="aba-configurar">
-      Configurar
-      <span class="ponto" id="ponto-configurar" hidden></span>
-    </a>
+  <!-- Botão "+": registrar gasto, entrada ou avaliar uma compra -->
+  <div class="folha-fundo" id="folha-registrar" hidden>
+    <section class="folha" role="dialog" aria-modal="true" aria-labelledby="titulo-folha-registrar">
+      <div class="folha-alca" aria-hidden="true"></div>
+      <div class="folha-topo">
+        <h2 id="titulo-folha-registrar">O que você quer fazer?</h2>
+        <button type="button" class="botao-icone" data-fechar-folha aria-label="Fechar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <a href="#lancar" class="opcao-folha" data-cor="vermelho" data-fechar-folha>
+        <span class="opcao-folha-icone"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></span>
+        <span class="item-menu-texto"><strong>Gasto</strong><span class="secundario">Saiu dinheiro. O app diz se cabe.</span></span><span class="chevron" aria-hidden="true">›</span>
+      </a>
+      <a href="#mes/entradas" class="opcao-folha" data-cor="verde" data-fechar-folha id="folha-entrada">
+        <span class="opcao-folha-icone"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+        <span class="item-menu-texto"><strong>Entrada</strong><span class="secundario">Entrou dinheiro: Pix, freela, 13º.</span></span><span class="chevron" aria-hidden="true">›</span>
+      </a>
+      <a href="#simular" class="opcao-folha" data-cor="amarelo" data-fechar-folha>
+        <span class="opcao-folha-icone"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 11h11.2L21 8H6.2"/></svg></span>
+        <span class="item-menu-texto"><strong>Avaliar compra</strong><span class="secundario">Antes de comprar: à vista, parcelas, quando.</span></span><span class="chevron" aria-hidden="true">›</span>
+      </a>
+    </section>
+  </div>
+
+  <nav class="abas" id="abas" aria-label="Navegação principal">
+    <a href="#inicio" class="aba" id="aba-inicio" data-aba="inicio"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Início</span></a>
+    <a href="#mes" class="aba" id="aba-mes" data-aba="mes"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Mês</span></a>
+    <button type="button" class="aba aba-registrar" id="aba-registrar" aria-label="Registrar" aria-haspopup="dialog" aria-controls="folha-registrar" aria-expanded="false">
+      <span class="aba-mais"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></span><span class="aba-registrar-rotulo">Registrar</span>
+    </button>
+    <a href="#planejar" class="aba" id="aba-planejar" data-aba="planejar"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg><span>Planejar</span></a>
+    <a href="#ajustes" class="aba" id="aba-ajustes" data-aba="ajustes"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Ajustes</span><span class="ponto" id="ponto-configurar" hidden></span></a>
   </nav>
 </body>
 </html>
