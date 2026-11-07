@@ -33,8 +33,10 @@
 export const LISTAS_SINCRONIZADAS = Object.freeze(['categorias', 'fixos', 'meses', 'lancamentos', 'investimentos']);
 
 /** Campos do app que viajam juntos, como "configuração". */
-// entradasFixas (11/2026): o servidor guarda nos "extras" da configuração, sem mudar o banco.
-export const CAMPOS_DA_CONFIGURACAO = Object.freeze(['formasPagamento', 'cartoes', 'destinoSobra', 'ultimoBackupEm', 'entradasFixas']);
+// entradasFixas e desejos (11/2026): o servidor guarda nos "extras" da configuração, sem mudar o banco.
+export const CAMPOS_DA_CONFIGURACAO = Object.freeze([
+  'formasPagamento', 'cartoes', 'destinoSobra', 'ultimoBackupEm', 'entradasFixas', 'desejos',
+]);
 
 /** Campos que só existem no servidor e não entram nos dados do app. */
 const CAMPOS_DO_SERVIDOR = ['recebidoEm'];
