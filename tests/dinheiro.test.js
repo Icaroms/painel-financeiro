@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { reaisParaCentavos, formatarCentavos } from '../src/dinheiro.js';
+import { reaisParaCentavos, formatarCentavos, mascararDinheiro, DIGITOS_MAXIMOS } from '../src/dinheiro.js';
 
 describe('reaisParaCentavos', () => {
   it('converte valores com vírgula', () => {
@@ -71,3 +71,44 @@ describe('formatarCentavos', () => {
     assert.throws(() => formatarCentavos(118.51), { name: 'ErroValidacao', campo: 'centavos' });
   });
 });
+
+describe('mascararDinheiro (digitação como no banco)', () => {
+  it('os dígitos entram pelos centavos: 9 → 0,09; 95 → 0,95; 9550 → 95,50', () => {
+    assert.equal(mascararDinheiro('9'), '0,09');
+    assert.equal(mascararDinheiro('95'), '0,95');
+    assert.equal(mascararDinheiro('955'), '9,55');
+    assert.equal(mascararDinheiro('9550'), '95,50');
+    assert.equal(mascararDinheiro('260000'), '2.600,00');
+  });
+
+  it('reformata o que já estava no campo mais a tecla nova', () => {
+    assert.equal(mascararDinheiro('0,955'), '9,55');
+    assert.equal(mascararDinheiro('1.500,001'), '15.000,01');
+    // Apagar o último dígito: "95,5" → 9,55
+    assert.equal(mascararDinheiro('95,5'), '9,55');
+  });
+
+  it('campo vazio ou só zeros fica vazio; letras são ignoradas', () => {
+    assert.equal(mascararDinheiro(''), '');
+    assert.equal(mascararDinheiro('0,0'), '');
+    assert.equal(mascararDinheiro(null), '');
+    assert.equal(mascararDinheiro('R$ 1a2'), '0,12');
+  });
+
+  it('o resultado é lido por reaisParaCentavos', () => {
+    assert.equal(reaisParaCentavos(mascararDinheiro('9550')), 9550);
+    assert.equal(reaisParaCentavos(mascararDinheiro('123456789')), 123456789);
+  });
+
+  it(`no máximo ${DIGITOS_MAXIMOS} dígitos`, () => {
+    const muitos = '9'.repeat(DIGITOS_MAXIMOS + 5);
+    assert.equal(mascararDinheiro(muitos).replace(/\D/g, '').length, DIGITOS_MAXIMOS);
+  });
+
+  it('com sinal: o "-" é mantido (saldo negativo); sem a opção, é ignorado', () => {
+    assert.equal(mascararDinheiro('-5000', { comSinal: true }), '-50,00');
+    assert.equal(mascararDinheiro('-', { comSinal: true }), '-');
+    assert.equal(mascararDinheiro('-5000'), '50,00');
+  });
+});
+

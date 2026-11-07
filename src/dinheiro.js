@@ -80,3 +80,42 @@ export function formatarCentavos(centavos) {
   }
   return formatadorReais.format(centavos / 100);
 }
+
+/* ------------------------------------------------------------------ */
+/* Digitação "de banco" (os números entram pelos centavos)            */
+/* ------------------------------------------------------------------ */
+
+/** Até 99.999.999.999,99: mais que isso não é um gasto pessoal. */
+export const DIGITOS_MAXIMOS = 13;
+
+const formatadorDigitacao = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * Formata o que está no campo como nos apps de banco: os números entram
+ * pela direita, começando pelos centavos.
+ *
+ *   digita 9      → "0,09"
+ *   digita 5      → "0,95"
+ *   digita 5      → "9,55"
+ *   digita 0      → "95,50"
+ *   apaga (←)     → "9,55"
+ *
+ * Só os algarismos contam: vírgula, ponto e "R$" são ignorados, então colar
+ * "1.234,56" dá "1.234,56" e colar "16" dá "0,16" (como no banco).
+ *
+ * @param {string} texto O valor do campo depois da tecla.
+ * @param {object} [opcoes]
+ * @param {boolean} [opcoes.comSinal] Aceita "-" (ex.: saldo negativo): fica na frente.
+ * @returns {string} O texto formatado ("" quando não há algarismos).
+ */
+export function mascararDinheiro(texto, { comSinal = false } = {}) {
+  const original = String(texto ?? '');
+  const negativo = comSinal && original.includes('-');
+  const digitos = original.replace(/\D/g, '').replace(/^0+/, '').slice(0, DIGITOS_MAXIMOS);
+  if (digitos === '') return negativo ? '-' : '';
+  const formatado = formatadorDigitacao.format(Number(digitos) / 100);
+  return negativo ? `-${formatado}` : formatado;
+}

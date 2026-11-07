@@ -259,3 +259,19 @@ describe('compra no cartão no painel', () => {
     assert.equal(p.limiteApertado, false);
   });
 });
+
+describe('calcularPainel: nome do gasto', () => {
+  it('o nome digitado vai para o lançamento (aparece no histórico)', () => {
+    const dados = exemploDeNovembro();
+    const categoria = dados.categorias.find((c) => c.nome === 'Lanches');
+    const p = calcularPainel({
+      dados, valorTexto: '30,00', categoriaId: categoria.id, formaPagamento: 'Pix', hoje: HOJE, descricao: '  Almoço com a equipe ',
+    });
+    assert.equal(p.lancamento.descricao, 'Almoço com a equipe');
+  });
+
+  it('sem nome, a descrição fica vazia', () => {
+    assert.equal(painel('30,00', 'Lanches').lancamento.descricao, '');
+  });
+});
+

@@ -794,7 +794,7 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     });
     // Atalho para o simulador (parte 2.5), já com este cartão escolhido.
     const simular = criar('button', {
-      classe: 'botao-pequeno', type: 'button', texto: 'Simular compra', 'aria-label': `Simular uma compra no ${cartao.formaPagamento}`,
+      classe: 'botao-pequeno', type: 'button', texto: 'Avaliar compra', 'aria-label': `Avaliar uma compra no ${cartao.formaPagamento}`,
     });
     simular.addEventListener('click', () => abrirSimulador(cartao.formaPagamento));
     acoes.append(remover, editar, simular);

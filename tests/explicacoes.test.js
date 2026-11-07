@@ -9,7 +9,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { INSTRUCOES_EXPLICAR, mensagemDaCompra, mensagemDaOpcaoSimulada } from '../src/explicacoes.js';
+import {
+  INSTRUCOES_EXPLICAR, INSTRUCOES_AVALIACAO, mensagemDaCompra, mensagemDaOpcaoSimulada, mensagemDaAvaliacao,
+} from '../src/explicacoes.js';
 import { calcularPainel } from '../src/painel.js';
 import { criarDadosDeExemplo } from '../src/dados-exemplo.js';
 import { dadosDoMes } from '../src/meses.js';
@@ -138,3 +140,57 @@ describe('mensagemDaOpcaoSimulada', () => {
     semDefeitos(conteudo.replace('piorMes: null', ''));
   });
 });
+
+describe('mensagemDaAvaliacao (sugestão da IA para a compra)', () => {
+  it('instruções: pode sugerir, mas só com os números e sem mandar; formato com títulos', () => {
+    assert.match(INSTRUCOES_AVALIACAO, /Use apenas os números fornecidos/);
+    assert.match(INSTRUCOES_AVALIACAO, /nunca como ordem/);
+    assert.match(INSTRUCOES_AVALIACAO, /Não recomende investimentos/);
+    assert.match(INSTRUCOES_AVALIACAO, /## Sugestão/);
+    assert.match(INSTRUCOES_AVALIACAO, /## Por quê/);
+    assert.match(INSTRUCOES_AVALIACAO, /## Cuidados/);
+  });
+
+  it('à vista no Pix: nome, forma fora do cartão, sem limite, mês e pedido de avaliação', () => {
+    const resultado = simularCompra(dados(), { formaPagamento: 'Pix', aVistaCentavos: 30000, hoje: HOJE });
+    const { instrucoes, conteudo } = mensagemDaAvaliacao(resultado, {
+      formaPagamento: 'Pix', aVistaCentavos: 30000, hoje: HOJE, descricao: 'Projeto',
+      mes: { dinheiroDoMesCentavos: 500000, deveSobrarCentavos: 120000 },
+    });
+    assert.equal(instrucoes, INSTRUCOES_AVALIACAO);
+    assert.match(conteudo, /A pessoa está avaliando "Projeto"/);
+    assert.match(conteudo, /Preço à vista: R\$ 300,00\./);
+    assert.match(conteudo, /fora do cartão: só à vista/);
+    assert.match(conteudo, /deve sobrar R\$ 1\.200,00 no fim do mês/);
+    assert.match(conteudo, /Opção 1: à vista no Pix, por R\$ 300,00\./);
+    assert.match(conteudo, /sai da conta em 10\/11\/2026/);
+    assert.ok(!conteudo.includes('Limite do cartão'), 'Pix não tem limite');
+    assert.match(conteudo, /Diga se este parece um bom momento/);
+    semDefeitos(conteudo);
+  });
+
+  it('no cartão com parcelas: todas as opções e pedido para comparar', () => {
+    const cartao = dados().cartoes[0].formaPagamento;
+    const resultado = simularCompra(dados(), {
+      formaPagamento: cartao, aVistaCentavos: 260000, hoje: HOJE, opcoes: [{ parcelas: 5, totalCentavos: 260000 }],
+    });
+    const { conteudo } = mensagemDaAvaliacao(resultado, { formaPagamento: cartao, aVistaCentavos: 260000, hoje: HOJE });
+    assert.match(conteudo, /A pessoa está avaliando uma compra/);
+    assert.match(conteudo, /cartão de crédito: pode parcelar/);
+    assert.match(conteudo, /Opção 1: à vista no/);
+    assert.match(conteudo, /Opção 2: em 5x de R\$ 520,00/);
+    assert.match(conteudo, /Limite do cartão depois da compra/);
+    assert.match(conteudo, /Compare as opções e sugira a melhor/);
+    semDefeitos(conteudo);
+  });
+
+  it('explicar uma opção à vista fora do cartão não fala de parcela nem de limite', () => {
+    const resultado = simularCompra(dados(), { formaPagamento: 'Pix', aVistaCentavos: 30000, hoje: HOJE });
+    const { conteudo } = mensagemDaOpcaoSimulada(resultado.opcoes[0], { formaPagamento: 'Pix', aVistaCentavos: 30000, hoje: HOJE });
+    assert.ok(!conteudo.includes('1ª parcela'));
+    assert.ok(!conteudo.includes('Limite do cartão'));
+    assert.match(conteudo, /o peso no mês e o momento de comprar/);
+    semDefeitos(conteudo);
+  });
+});
+
