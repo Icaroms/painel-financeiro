@@ -26,7 +26,8 @@ import { definirStatusDoFixo } from '../fixos.js';
 import { definirStatusDaFatura, limiteDoCartao } from '../fluxo.js';
 import { buscarMes } from '../meses.js';
 import { ErroValidacao } from '../erros.js';
-import { textoDoValor } from '../configuracao.js';
+import { textoDoValor, lerValorComSinal } from '../configuracao.js';
+import { conferirComBanco } from '../entradas.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -66,6 +67,9 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     jaPagoDetalhe: elemento('mes-ja-pago-detalhe'),
     previsto: elemento('mes-previsto'),
     naConta: elemento('mes-na-conta'),
+    formConferencia: elemento('form-conferencia'),
+    conferenciaBanco: elemento('conferencia-banco'),
+    conferenciaResultado: elemento('conferencia-resultado'),
     contagemFixos: elemento('mes-contagem-fixos'),
     paginacaoFixos: elemento('paginacao-mes-fixos'),
     secaoFaturas: elemento('secao-faturas'),
@@ -412,7 +416,7 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     el.naConta.replaceChildren(
       'Pelo app, a conta deve ter agora ',
       criar('strong', { texto: formatarCentavos(r.naContaAgoraCentavos) }),
-      '. Confira com o saldo do banco.',
+      '. Confira com o saldo do banco (as entradas ainda previstas não contam).',
     );
     el.sobra.textContent = formatarCentavos(r.deveSobrarCentavos);
     el.linhaSobra.dataset.cor = r.corSaldo;
@@ -444,6 +448,54 @@ export function iniciarMes({ obterDados, aplicarMudanca }) {
     montarPaginacao(el.paginacaoGastos, 'gastos', paginaGastos);
     preencherLista(el.gastos, paginaGastos.itens.map(itemDoGasto), 'Nenhum gasto lançado neste mês.');
   }
+
+  /* ---------------- Conferência com o banco (11/2026) ---------------- */
+
+  /** Texto de um suspeito: "Salário (R$ 2.312,00)". */
+  const suspeito = (s) => `${s.nome} (${formatarCentavos(s.valorCentavos)})`;
+
+  el.formConferencia.addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    const saida = el.conferenciaResultado;
+    saida.hidden = false;
+    let bancoCentavos;
+    try {
+      bancoCentavos = lerValorComSinal(el.conferenciaBanco.value, 'banco');
+    } catch (falha) {
+      if (!(falha instanceof ErroValidacao)) throw falha;
+      saida.dataset.cor = 'vermelho';
+      saida.textContent = falha.message;
+      return;
+    }
+    const dados = obterDados();
+    const hoje = hojeLocal();
+    const mes = mesDaData(hoje);
+    const r = resumoDoMes(dados, mes, hoje);
+    const c = conferirComBanco({
+      appCentavos: r.naContaAgoraCentavos,
+      bancoCentavos,
+      registroMes: buscarMes(dados, mes),
+      entradasFixas: dados.entradasFixas ?? [],
+      gastosDoMes: r.gastos.map((g) => g.lancamento),
+    });
+    const diferenca = formatarCentavos(Math.abs(c.diferencaCentavos));
+    if (c.situacao === 'bate') {
+      saida.dataset.cor = 'verde';
+      saida.textContent = 'Bateu com o banco.';
+      return;
+    }
+    saida.dataset.cor = 'amarelo';
+    if (c.situacao === 'app-maior') {
+      saida.textContent = c.suspeitas.length > 0
+        ? `O app tem ${diferenca} a mais que o banco, o mesmo valor de ${c.suspeitas.map(suspeito).join(' ou ')}. ` +
+          'Ela pode estar contada duas vezes: se o saldo do início do mês já tinha esse dinheiro, marque-a como "Já estava no saldo" em Entradas do mês.'
+        : `O app tem ${diferenca} a mais que o banco. Falta lançar algum gasto, ou alguma entrada já estava no saldo do início do mês.`;
+    } else {
+      saida.textContent = c.suspeitas.length > 0
+        ? `O app tem ${diferenca} a menos que o banco, o mesmo valor de ${c.suspeitas.map(suspeito).join(' ou ')}. Esse gasto pode ter sido lançado duas vezes.`
+        : `O app tem ${diferenca} a menos que o banco. Falta registrar alguma entrada (Entradas do mês) ou algum gasto foi lançado a mais.`;
+    }
+  });
 
   return { renderizar };
 }

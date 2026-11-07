@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import {
   adicionarEntradaFixa, editarEntradaFixa, removerEntradaFixa, definirStatusDaEntrada, situacaoDaEntradaNoMes,
   adicionarEntradaAvulsa, removerEntradaAvulsa, rendaDoMes, detalheDaRendaDoMes, entradaPrevistaNoMes,
-  transformarRendaEmEntradaFixa, entradaAtivaNoMes, MAXIMO_ENTRADAS_FIXAS,
+  transformarRendaEmEntradaFixa, entradaAtivaNoMes, MAXIMO_ENTRADAS_FIXAS, conferirComBanco,
 } from '../src/entradas.js';
 import { estimativaDiaADia, projetarMeses, premissasDaPrevisao } from '../src/fluxo.js';
 import { livreParaODiaADia, alertaDosOrcamentos, sugerirOrcamentos, aplicarSugestao } from '../src/orcamento.js';
@@ -119,7 +119,11 @@ describe('entradas fixas: situação no mês e dinheiro do mês', () => {
     const estado = adicionarEntradaAvulsa(comSalario('prevista'), { valorCentavos: 15000, data: '2026-11-06', descricao: 'Freela' }, { gerarId });
     const r = resumoDoMes(estado, MES, HOJE);
     assert.equal(r.dinheiroDoMesCentavos, 260000 + 231200 + 15000);
-    assert.deepEqual(r.entradas, { outrasCentavos: 0, fixasCentavos: 231200, avulsasCentavos: 15000, totalCentavos: 246200 });
+    assert.deepEqual(r.entradas, {
+      outrasCentavos: 0, fixasCentavos: 231200, avulsasCentavos: 15000, totalCentavos: 246200, jaEntrouCentavos: 15000,
+    });
+    // Na conta agora: o salário ainda está "previsto", então só a avulsa entrou.
+    assert.equal(r.naContaAgoraCentavos, 260000 + 15000);
   });
 });
 
@@ -260,3 +264,30 @@ describe('orçamentos', () => {
     assert.throws(() => aplicarSugestao(estado, [{ categoriaId: lazer.id, orcamentoCentavos: -1 }]), /zero ou positivo/);
   });
 });
+
+describe('conferência com o banco', () => {
+  it('O CASO REAL: salário recebido E dentro do saldo inicial → app com o salário a mais, e ele é apontado', () => {
+    const estado = comSalario('recebida'); // saldo 2.600 já tinha o salário
+    const r = resumoDoMes(estado, MES, HOJE);
+    const conferencia = conferirComBanco({
+      appCentavos: r.naContaAgoraCentavos, bancoCentavos: 260000, registroMes: estado.meses[0], entradasFixas: estado.entradasFixas,
+    });
+    assert.equal(conferencia.situacao, 'app-maior');
+    assert.equal(conferencia.diferencaCentavos, 231200);
+    assert.deepEqual(conferencia.suspeitas, [{ tipo: 'entrada-fixa', nome: 'Salário', valorCentavos: 231200 }]);
+  });
+
+  it('bate com até R$ 1,00 de diferença', () => {
+    const estado = comSalario('no-saldo');
+    assert.equal(conferirComBanco({ appCentavos: 100050, bancoCentavos: 100000, registroMes: estado.meses[0] }).situacao, 'bate');
+  });
+
+  it('app com menos: aponta o gasto com o valor da diferença (lançado duas vezes?)', () => {
+    const estado = estadoDoIcaro();
+    const gasto = criarLancamento({ valorCentavos: 4590, categoriaId: lazer.id, formaPagamento: 'Pix', data: '2026-11-05', descricao: 'Cinema' });
+    const c = conferirComBanco({ appCentavos: 100000, bancoCentavos: 104590, registroMes: estado.meses[0], gastosDoMes: [gasto] });
+    assert.equal(c.situacao, 'app-menor');
+    assert.deepEqual(c.suspeitas, [{ tipo: 'gasto', nome: 'Cinema', valorCentavos: 4590 }]);
+  });
+});
+
