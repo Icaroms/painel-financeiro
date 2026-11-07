@@ -16,7 +16,7 @@
  */
 
 /** Versão do código desta página. Mude junto com a VERSAO_CACHE do sw.js. */
-export const VERSAO_APP = 'painel-financeiro-v34';
+export const VERSAO_APP = 'painel-financeiro-v35';
 
 /**
  * De quanto em quanto tempo, no máximo, o app pergunta ao servidor se há
@@ -95,8 +95,7 @@ export function haVersaoNova(versaoDoServiceWorker, versaoDaPagina = VERSAO_APP)
  * @returns {string}
  */
 export function textoDaVersaoNova(versao) {
-  return `Há uma versão nova do app (${numeroDaVersao(versao)}). ` +
-    'Toque em Atualizar quando terminar o que está fazendo: os seus dados continuam aqui.';
+  return `Nova versão disponível (${numeroDaVersao(versao)}). Seus dados continuam aqui.`;
 }
 
 /**

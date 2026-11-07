@@ -174,7 +174,7 @@ export function lerResposta(status, corpo) {
     };
   }
   if (status === 404) {
-    return { ok: false, erro: 'Modelo não encontrado. Em Configurar, escolha o outro modelo da lista.' };
+    return { ok: false, erro: 'Modelo não encontrado. Em Ajustes → IA, escolha o outro modelo da lista.' };
   }
   if (status === 429) {
     return { ok: false, erro: 'O limite de uso do Gemini acabou por enquanto. Tente de novo mais tarde (o limite diário volta no dia seguinte).' };
@@ -198,7 +198,7 @@ export function lerResposta(status, corpo) {
  */
 export async function chamarGemini(config, mensagem, { fetch = globalThis.fetch, tempoLimiteMs = TEMPO_LIMITE_MS } = {}) {
   if (!config?.chave) {
-    return { ok: false, erro: 'Cadastre a chave do Gemini em Configurar.' };
+    return { ok: false, erro: 'Cadastre a chave do Gemini em Ajustes → IA.' };
   }
 
   const { url, opcoes } = montarPedido(config, mensagem);

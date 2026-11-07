@@ -406,7 +406,7 @@ export function iniciarEntradasMes({ obterDados, aplicarMudanca, aoMudar = () =>
 
     el.fixas.replaceChildren(...(fixas.length > 0
       ? fixas.map((e) => itemFixa(e, registro))
-      : [criar('li', { classe: 'vazio secundario', texto: 'Nenhuma entrada fixa. Cadastre o salário em Configurar → Entradas fixas.' })]));
+      : [criar('li', { classe: 'vazio secundario', texto: 'Nenhuma entrada fixa. Cadastre o salário em Ajustes → Dinheiro e entradas.' })]));
     el.avulsas.replaceChildren(...(avulsas.length > 0
       ? avulsas.map(itemAvulsa)
       : [criar('li', { classe: 'vazio secundario', texto: 'Nenhuma entrada avulsa neste mês.' })]));
