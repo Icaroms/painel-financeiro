@@ -49,6 +49,8 @@ export function ligarCamposDeDinheiro() {
     requestAnimationFrame(() => {
       const fim = campo.value.length;
       try {
+        // Só move o cursor se nada estiver selecionado: "selecionar tudo" para trocar o valor continua valendo.
+        if (campo.selectionStart !== campo.selectionEnd) return;
         campo.setSelectionRange(fim, fim);
       } catch {
         // sem seleção: nada a fazer

@@ -17,6 +17,7 @@ import { hojeLocal, mesDaData } from '../datas.js';
 import { formatarCentavos } from '../dinheiro.js';
 import { ErroValidacao } from '../erros.js';
 import { buscarMes } from '../meses.js';
+import { detalheDaRendaDoMes } from '../entradas.js';
 import { tituloDoMes } from '../painel.js';
 import { ehPrimeiroMes } from '../inicio.js';
 import { cartaoDaForma, salvarCartao, removerCartao, faturaDaCompra } from '../cartoes.js';
@@ -111,19 +112,27 @@ export function iniciarConfigurar({ obterDados, aplicarMudanca, abrirSimulador =
 
   /* ---------------- Dinheiro do mês ---------------- */
 
-  /** Atualiza a linha "Dinheiro do mês: R$ ..." enquanto a pessoa digita. */
+  /**
+   * Atualiza a linha "Dinheiro do mês: R$ ..." enquanto a pessoa digita.
+   * Soma também as entradas fixas que contam neste mês e as avulsas (11/2026).
+   */
   function atualizarResumo() {
+    const dados = obterDados();
+    const registro = dados ? buscarMes(dados, mesAtual()) : null;
+    const detalhe = registro ? detalheDaRendaDoMes(registro, dados.entradasFixas ?? []) : { fixasCentavos: 0, avulsasCentavos: 0 };
+    const demais = detalhe.fixasCentavos + detalhe.avulsasCentavos;
     let texto;
     try {
       const saldo = lerValorComSinal(el.saldoInicial.value, 'saldo');
       const renda = lerValorPositivo(el.rendaPrevista.value, 'renda');
-      texto = formatarCentavos(saldo + renda);
+      texto = formatarCentavos(saldo + renda + demais);
     } catch {
       texto = '—';
     }
     el.resumoDinheiro.replaceChildren(
-      'Dinheiro do mês (saldo + renda): ',
+      'Dinheiro do mês (saldo + entradas): ',
       criar('strong', { texto }),
+      ...(demais > 0 ? [` · inclui ${formatarCentavos(demais)} de entradas fixas e avulsas`] : []),
     );
   }
 
@@ -984,5 +993,5 @@ Ela deixa de contar a partir de ${tituloDoMes(mes).toLowerCase()}. Os meses ante
     renderizarCartoes(); // também redesenha as parcelas antigas no cartão
   }
 
-  return { renderizar };
+  return { renderizar, renderizarCategorias, atualizarResumo };
 }

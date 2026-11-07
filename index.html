@@ -150,6 +150,7 @@
       </div>
       <!-- Atalho para "Avaliar compra": leva o valor, a forma de pagamento e o nome já preenchidos -->
       <a href="#simular" class="link-simular" id="link-simular">Pensando numa compra? Avaliar antes →</a>
+      <a href="#mes" class="link-simular" id="link-entrada">Recebeu dinheiro? Registrar entrada →</a>
 
       <!-- Data do gasto: já vem como hoje; muda só para lançar um gasto esquecido do mês -->
       <label class="campo-data" id="campo-data">
@@ -189,7 +190,7 @@
       <!-- dl: lista de "termo e valor", como as linhas de um extrato -->
       <dl class="contas">
         <div class="conta-linha">
-          <dt>Dinheiro do mês <span class="secundario">saldo + renda</span></dt>
+          <dt>Dinheiro do mês <span class="secundario">saldo + entradas</span></dt>
           <dd id="mes-dinheiro"></dd>
         </div>
         <div class="conta-linha">
@@ -210,6 +211,35 @@
       <p class="aviso-saldo secundario" id="mes-aviso-saldo" hidden>
         O saldo do mês ainda não foi confirmado. <a href="#configurar">Confirmar em Configurar</a>.
       </p>
+    </section>
+
+    <!-- 11/2026: salário e outras entradas fixas neste mês, e entradas avulsas -->
+    <section class="cartao" aria-labelledby="titulo-mes-entradas" id="secao-mes-entradas">
+      <h2 id="titulo-mes-entradas">Entradas do mês</h2>
+      <p class="resumo-dinheiro" id="mes-entradas-total"></p>
+      <h3 class="subtitulo-secao">Fixas</h3>
+      <ul class="lista-fixos" id="mes-entradas-fixas"></ul>
+      <h3 class="subtitulo-secao">Avulsas</h3>
+      <ul class="lista-fixos" id="mes-entradas-avulsas"></ul>
+      <form class="form-fixo" id="form-entrada-avulsa" autocomplete="off" novalidate>
+        <label class="campo">
+          <span class="secundario">Valor que entrou</span>
+          <span class="campo-dinheiro">
+            <span aria-hidden="true">R$</span>
+            <input id="entrada-avulsa-valor" inputmode="numeric" placeholder="0,00">
+          </span>
+        </label>
+        <label class="campo">
+          <span class="secundario">Dia</span>
+          <input id="entrada-avulsa-data" type="date">
+        </label>
+        <label class="campo inteira">
+          <span class="secundario">De onde veio (opcional)</span>
+          <input id="entrada-avulsa-descricao" placeholder="Ex.: Freela do site">
+        </label>
+        <span class="erro" id="erro-entrada-avulsa"></span>
+        <div class="acoes"><button type="submit" class="botao-pequeno">Registrar entrada</button></div>
+      </form>
     </section>
 
     <!-- Fase 04, parte 4.1: destino da sobra (sugestão; o app não move dinheiro) -->
@@ -485,7 +515,7 @@
 
     <div class="resultado-simulacao" id="simular-resultado"></div>
 
-    <p class="secundario explicacao">Estimativa: os meses seguintes usam a renda deste mês, as contas fixas, as faturas já comprometidas e os orçamentos das categorias. As cores são do app; a sugestão da IA é só uma opinião sobre esses números: a decisão é sua.</p>
+    <p class="secundario explicacao">Estimativa: os meses seguintes usam as entradas fixas (salário), as contas fixas, as faturas já comprometidas e o dia a dia (a média dos meses anteriores ou, sem histórico, os orçamentos). As cores são do app; a sugestão da IA é só uma opinião sobre esses números: a decisão é sua.</p>
 
   </main>
 
@@ -517,7 +547,7 @@
         </label>
 
         <label class="campo">
-          <span class="secundario">Renda prevista no mês (salário e outras entradas)</span>
+          <span class="secundario">Outras entradas previstas neste mês (o que não se repete)</span>
           <span class="campo-dinheiro">
             <span aria-hidden="true">R$</span>
             <input id="renda-prevista" name="renda" inputmode="decimal" placeholder="0,00" aria-describedby="erro-renda">
@@ -525,9 +555,27 @@
           <span class="erro" id="erro-renda"></span>
         </label>
 
+        <p class="secundario explicacao">Salário e o que entra todo mês ficam em "Entradas fixas", logo abaixo. Se o salário já tinha caído quando você informou o saldo, marque "Já estava no saldo": ele não é contado de novo, mas os próximos meses recebem.</p>
         <p class="resumo-dinheiro" id="resumo-dinheiro"></p>
         <button type="submit" class="botao-principal" id="botao-salvar-mes">Salvar</button>
       </form>
+    </section>
+
+    <!-- 11/2026: salário e outras entradas que se repetem; a previsão dos próximos meses usa estas -->
+    <section class="cartao" aria-labelledby="titulo-entradas-fixas">
+      <h2 id="titulo-entradas-fixas">Entradas fixas</h2>
+      <p class="secundario explicacao">O que entra todo mês, como o salário. A previsão dos próximos meses (Avaliar compra, análise) usa estes valores.</p>
+      <div class="alerta" id="alerta-sem-entradas" hidden>
+        <span class="luz" aria-hidden="true"></span>
+        <p id="alerta-sem-entradas-texto"></p>
+      </div>
+      <p class="resumo-dinheiro" id="total-entradas-fixas"></p>
+      <ul class="lista-fixos" id="lista-entradas-fixas"></ul>
+      <div id="area-entrada-fixa"></div>
+      <div class="acoes-entradas">
+        <button type="button" class="botao-secundario" id="botao-nova-entrada">Adicionar entrada fixa</button>
+        <button type="button" class="botao-secundario" id="botao-transformar-renda" hidden>Usar a renda prevista como salário</button>
+      </div>
     </section>
 
     <section class="cartao" aria-labelledby="titulo-fixos">
@@ -541,7 +589,14 @@
 
     <section class="cartao" aria-labelledby="titulo-categorias">
       <h2 id="titulo-categorias">Categorias e orçamentos</h2>
-      <p class="secundario explicacao">Orçamento zero deixa a categoria sem limite: nela, vale só o saldo do mês.</p>
+      <p class="secundario explicacao">O orçamento é um limite para o dia a dia, não uma previsão de gasto. Orçamento zero deixa a categoria sem limite: nela, vale só o saldo do mês.</p>
+      <p class="resumo-dinheiro" id="livre-do-mes"></p>
+      <div class="alerta" id="alerta-orcamentos" hidden>
+        <span class="luz" aria-hidden="true"></span>
+        <p id="alerta-orcamentos-texto"></p>
+      </div>
+      <button type="button" class="botao-secundario" id="botao-sugerir-orcamentos">Sugerir valores</button>
+      <div id="area-sugestao-orcamentos"></div>
 
       <ul class="lista-categorias" id="lista-categorias"></ul>
 

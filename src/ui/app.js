@@ -51,6 +51,8 @@ import { iniciarConfigurar } from './configurar.js';
 import { iniciarMes } from './mes.js';
 import { iniciarHistorico } from './historico.js';
 import { iniciarSimulador } from './simulador.js';
+import { iniciarEntradasConfig, iniciarEntradasMes } from './entradas.js';
+import { iniciarOrcamentos } from './orcamentos.js';
 import { iniciarInvestir } from './investir.js';
 import { iniciarRadar } from './radar.js';
 import { iniciarSimuladorInvestimentos } from './simulador-investimentos.js';
@@ -718,7 +720,13 @@ async function aplicarMudanca(novos, mensagem) {
   // A aba Mês aberta (ex.: uma conta marcada como paga): o destino da sobra acompanha.
   if (!el.telaMes.hidden) destinoMes.renderizar();
   // Configurar aberta (ex.: um orçamento mudou): o custo do mês e a meta da reserva acompanham.
-  if (!el.telaConfigurar.hidden) destinoConfig.renderizar();
+  if (!el.telaConfigurar.hidden) {
+    destinoConfig.renderizar();
+    // Entradas e orçamentos (11/2026): o livre do mês, o alerta e o dinheiro do mês acompanham.
+    orcamentos.renderizar();
+    entradasConfig.renderizar();
+    configurar.atualizarResumo();
+  }
   atualizarPonto();
   atualizarFaixaExemplo();
   const gravou = await gravar(dados);
@@ -736,6 +744,23 @@ const configurar = iniciarConfigurar({
   },
 });
 const resumo = iniciarMes({ obterDados: () => dados, aplicarMudanca });
+// 11/2026: salário e outras entradas (Configurar e Mês) e orçamentos com o livre do mês.
+const entradasConfig = iniciarEntradasConfig({ obterDados: () => dados, aplicarMudanca });
+const entradasMes = iniciarEntradasMes({
+  obterDados: () => dados,
+  aplicarMudanca,
+  aoMudar: () => {
+    resumo.renderizar();
+    destinoMes.renderizar();
+  },
+});
+const orcamentos = iniciarOrcamentos({
+  obterDados: () => dados,
+  aplicarMudanca,
+  aoAplicar: () => configurar.renderizarCategorias(),
+});
+/** O Lançar pediu "Registrar entrada": ao abrir a aba Mês, o foco vai para o formulário. */
+let focarEntradaAoAbrirMes = false;
 const historico = iniciarHistorico({ obterDados: () => dados });
 /** Parte "Investir" da sobra deste mês (destino da sobra), com a renda fixa estimada. */
 function investirDoMes() {
@@ -821,6 +846,11 @@ const analiseMes = iniciarAnaliseMes({
   },
 });
 
+// Atalho do Lançar para registrar dinheiro que entrou (aba Mês, seção Entradas do mês).
+elemento('link-entrada').addEventListener('click', () => {
+  focarEntradaAoAbrirMes = true;
+});
+
 // Atalho do Lançar para o simulador: leva o valor digitado e o cartão escolhido.
 el.linkSimular.addEventListener('click', () => {
   simulador.preencher({
@@ -882,6 +912,11 @@ function mostrarVista() {
 
   if (vista === 'mes') {
     resumo.renderizar();
+    entradasMes.renderizar();
+    if (focarEntradaAoAbrirMes) {
+      focarEntradaAoAbrirMes = false;
+      requestAnimationFrame(() => entradasMes.focarNovaEntrada());
+    }
     destinoMes.renderizar();
     analiseMes.renderizar(); // mostra a última análise do mês, com a hora em que foi feita
   }
@@ -893,6 +928,8 @@ function mostrarVista() {
   }
   if (vista === 'configurar') {
     configurar.renderizar();
+    entradasConfig.renderizar();
+    orcamentos.renderizar();
     destinoConfig.renderizar();
     configuracaoIA.renderizar();
     nuvem.aoAbrirConfigurar();
