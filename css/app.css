@@ -15,35 +15,73 @@
 @font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('../fontes/barlow-semi-condensed-latin-500-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('../fontes/barlow-semi-condensed-latin-600-normal.woff2') format('woff2'); }
 
-/* ---------- Cores (tema claro) ---------- */
+/* ---------- Cores (novo layout, 11/2026) ----------
+   Claro: fundo cinza-azulado bem suave e cartões brancos.
+   Escuro: o "painel à noite" de antes.
+   O tema segue o aparelho (Automático) ou a escolha em Ajustes → Aparência,
+   guardada em data-tema no <html> ("claro" ou "escuro"). */
 :root {
-  --fundo: #DDE3E8;
-  --painel: #EEF1F4;
-  --linha: #C3CDD5;
-  --texto: #16212B;
-  --secundario: #4A5B69;
-  --verde: #1E7F55;
-  --amarelo: #9A6400;
-  --vermelho: #B8372A;
+  color-scheme: light;
+  --fundo: #F2F4F7;
+  --painel: #FFFFFF;
+  --painel-2: #F7F8FA;
+  --linha: #E1E6EB;
+  --texto: #15202B;
+  --secundario: #566876;
+  --verde: #1C7C53;
+  --amarelo: #8F5E00;
+  --vermelho: #B23A2E;
   --neutro: #8A99A6;
+  --acento: #1C7C53;
+  --sobre-acento: #FFFFFF;
+  --sombra: 0 1px 2px rgba(16, 24, 40, 0.05), 0 6px 16px rgba(16, 24, 40, 0.06);
+  --sombra-forte: 0 12px 32px rgba(16, 24, 40, 0.16);
+  --veu: rgba(15, 23, 32, 0.45);
 
   --fonte-texto: 'Barlow', 'Segoe UI', system-ui, sans-serif;
   --fonte-numero: 'Barlow Semi Condensed', 'Segoe UI', system-ui, sans-serif;
+  --raio: 20px;
+  --transicao: 180ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* ---------- Cores (tema escuro: iluminação de painel à noite) ---------- */
+/* Escuro: pelo aparelho (sem escolha de tema claro) ou escolhido em Ajustes */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --fundo: #16212B;
-    --painel: #1E2C38;
-    --linha: #2E4050;
+  :root:not([data-tema="claro"]) {
+    color-scheme: dark;
+    --fundo: #121B24;
+    --painel: #1B2733;
+    --painel-2: #22303D;
+    --linha: #2C3C4B;
     --texto: #E8E4DA;
-    --secundario: #9AA9B5;
+    --secundario: #9EADB9;
     --verde: #45C08A;
     --amarelo: #F0B43C;
     --vermelho: #F06A4F;
     --neutro: #5D6F7E;
+    --acento: #45C08A;
+    --sobre-acento: #0F1A14;
+    --sombra: none;
+    --sombra-forte: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --veu: rgba(5, 9, 13, 0.6);
   }
+}
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+  --fundo: #121B24;
+  --painel: #1B2733;
+  --painel-2: #22303D;
+  --linha: #2C3C4B;
+  --texto: #E8E4DA;
+  --secundario: #9EADB9;
+  --verde: #45C08A;
+  --amarelo: #F0B43C;
+  --vermelho: #F06A4F;
+  --neutro: #5D6F7E;
+  --acento: #45C08A;
+  --sobre-acento: #0F1A14;
+  --sombra: none;
+  --sombra-forte: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --veu: rgba(5, 9, 13, 0.6);
 }
 
 /* A cor de aviso vem do atributo data-cor, que o JavaScript troca
@@ -913,3 +951,482 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .conferencia-resultado { flex: 1 1 100%; margin: 0; padding: 8px 10px; border-left: 3px solid var(--cor, var(--linha)); background: var(--fundo); border-radius: 0 8px 8px 0; font-size: 14px; line-height: 1.4; }
 .mais-opcoes summary { cursor: pointer; font-size: 14px; font-weight: 600; }
 .mais-opcoes .opcao-check { margin-top: 6px; }
+
+/* =====================================================================
+   NOVO LAYOUT (11/2026)
+   - Barra de abas: Início, Mês, [+], Planejar, Ajustes. Em telas largas
+     (840 px ou mais) ela vira uma barra lateral (navigation rail).
+   - Uma informação principal por tela; o resto em partes, páginas e "?".
+   - Claro e escuro com os mesmos componentes; movimento suave, desligado
+     para quem pede menos movimento no sistema.
+   ===================================================================== */
+
+body { transition: background-color var(--transicao), color var(--transicao); }
+.icone { flex: none; }
+
+.tela {
+  max-width: 600px;
+  padding: calc(20px + env(safe-area-inset-top)) 16px calc(112px + env(safe-area-inset-bottom));
+}
+.tela:not([hidden]) { animation: entrar-tela 220ms ease-out; }
+@keyframes entrar-tela { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.cartao { border-color: var(--linha); border-radius: var(--raio); box-shadow: var(--sombra); }
+.cabecalho h1 { font-size: 28px; }
+
+/* Voltar (páginas de Ajustes, de Investir, Histórico e Avaliar compra) */
+.voltar {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  margin: -8px 0 0 -8px;
+  padding: 0 8px 0 2px;
+  border-radius: 12px;
+  color: var(--secundario);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.voltar .icone { width: 22px; height: 22px; }
+.voltar:hover { color: var(--texto); }
+.voltar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+
+/* Botão só com ícone: 44 px de toque */
+.botao-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--secundario);
+  cursor: pointer;
+  transition: background-color var(--transicao), color var(--transicao);
+}
+.botao-icone:hover { background: var(--painel-2); color: var(--texto); }
+.botao-icone[aria-pressed="true"] { color: var(--texto); }
+.botao-icone:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.botao-cheio { background: var(--texto); border-color: var(--texto); color: var(--fundo); font-weight: 600; }
+.chevron { margin-left: auto; color: var(--secundario); font-size: 20px; line-height: 1; }
+
+/* ---------- Início ---------- */
+.titulo-bloco { display: flex; flex-direction: column; gap: 2px; }
+.cabecalho-acoes { display: flex; align-items: center; gap: 4px; margin-right: -8px; }
+.inicio-grade { display: grid; gap: 16px; }
+.destaque { gap: 10px; padding: 20px; }
+.destaque-numero { font-family: var(--fonte-numero); font-size: 46px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+.selo-situacao {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cor) 14%, transparent);
+  color: var(--cor);
+  font-size: 14px;
+  font-weight: 600;
+}
+.selo-situacao .luz { width: 8px; height: 8px; box-shadow: none; }
+.destaque-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--linha);
+  font-size: 15px;
+}
+.destaque-rodape strong { color: var(--texto); font-family: var(--fonte-numero); font-size: 17px; }
+.link-forte, .link-discreto { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.link-forte { color: var(--texto); font-weight: 600; }
+.link-discreto { color: var(--secundario); font-size: 14px; }
+.link-forte .chevron, .link-discreto .chevron { margin-left: 0; font-size: 18px; }
+
+.aviso-inicio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--cor) 35%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--cor) 9%, var(--painel));
+}
+.aviso-inicio-icone { display: flex; color: var(--cor); }
+.aviso-inicio p { flex: 1 1 200px; margin: 0; font-size: 15px; line-height: 1.4; }
+.aviso-inicio-acoes { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.aviso-inicio-acoes .botao-pequeno { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
+
+.cartao-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.lista-simples { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.lista-simples > li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--linha); font-size: 15px; }
+.lista-simples > li:last-child { border-bottom: none; padding-bottom: 0; }
+.lista-simples .data { min-width: 44px; color: var(--secundario); font-family: var(--fonte-numero); }
+.lista-simples .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lista-simples .valor { font-family: var(--fonte-numero); font-weight: 600; white-space: nowrap; }
+.lista-simples .etiqueta-atrasada { margin-left: 6px; color: var(--vermelho); font-size: 12px; font-weight: 600; }
+.lista-simples .vazio { justify-content: center; color: var(--secundario); }
+.categoria-inicio { flex-direction: column; align-items: stretch !important; gap: 6px !important; }
+.categoria-inicio .linha { display: flex; justify-content: space-between; gap: 12px; }
+.categoria-inicio .linha span:last-child { color: var(--secundario); font-size: 14px; }
+.barra { height: 8px; border-radius: 4px; background: var(--linha); overflow: hidden; }
+.barra-uso { height: 100%; border-radius: 4px; background: var(--cor); transition: width 300ms ease-out; }
+
+/* Ocultar valores (como nos apps de banco): os números ficam borrados */
+.valor-sensivel { transition: filter var(--transicao); }
+.valores-ocultos .valor-sensivel { filter: blur(9px); user-select: none; }
+
+/* ---------- Partes de uma tela (Mês e Planejar) e escolha de tema ---------- */
+.segmentos {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--linha);
+  border-radius: 14px;
+  background: var(--painel);
+}
+.segmentos a, .segmentos-radio label span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 6px;
+  border-radius: 10px;
+  color: var(--secundario);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--transicao), color var(--transicao);
+}
+.segmentos a[aria-current="page"], .segmentos-radio input:checked + span { background: var(--texto); color: var(--fundo); font-weight: 600; }
+.segmentos a:focus-visible, .segmentos-radio input:focus-visible + span { outline: 2px solid var(--texto); outline-offset: 2px; }
+.segmentos-radio label { position: relative; display: block; }
+.segmentos-radio input { position: absolute; opacity: 0; pointer-events: none; }
+.parte { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- Menus (Ajustes, Investir, Histórico) ---------- */
+.grupo-menu { display: flex; flex-direction: column; gap: 8px; }
+.titulo-grupo { margin: 4px 4px 0; color: var(--secundario); font-family: var(--fonte-texto); font-size: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+.menu {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--linha);
+  border-radius: 18px;
+  background: var(--painel);
+  box-shadow: var(--sombra);
+}
+.item-menu {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--linha);
+  color: var(--texto);
+  text-decoration: none;
+  transition: background-color var(--transicao);
+}
+.item-menu:last-child { border-bottom: none; }
+.item-menu:hover { background: var(--painel-2); }
+.item-menu:focus-visible { outline: 2px solid var(--texto); outline-offset: -2px; }
+.item-menu > .icone { color: var(--secundario); }
+.item-menu-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item-menu-texto > span:first-child, .item-menu-texto > strong { font-size: 16px; }
+.item-menu-texto .secundario { font-size: 13px; line-height: 1.35; }
+.item-solto { border: 1px solid var(--linha); border-radius: 18px; background: var(--painel); box-shadow: var(--sombra); }
+.ponto-item { width: 9px; height: 9px; border-radius: 50%; background: var(--amarelo); }
+.acao-destaque {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: var(--raio);
+  background: var(--texto);
+  color: var(--fundo);
+  text-decoration: none;
+  box-shadow: var(--sombra);
+}
+.acao-destaque strong { font-size: 17px; }
+.acao-destaque .item-menu-texto span { font-size: 14px; opacity: 0.85; }
+.acao-destaque .chevron { color: inherit; }
+.acao-destaque-icone { display: flex; }
+.acao-destaque:focus-visible { outline: 2px solid var(--texto); outline-offset: 3px; }
+.vazio { margin: 0; padding: 8px 4px; font-size: 14px; line-height: 1.45; text-align: center; }
+.seletor-tema {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--linha);
+  border-radius: 18px;
+  background: var(--painel);
+  box-shadow: var(--sombra);
+}
+.seletor-tema legend { float: left; width: 100%; padding: 0; }
+.linha-icone { display: flex; align-items: center; gap: 14px; font-size: 16px; }
+.linha-icone .icone { color: var(--secundario); }
+
+/* ---------- Ajuda "?": o texto explicativo aparece só quando a pessoa pede ---------- */
+.titulo-com-ajuda { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.botao-ajuda {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--linha);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--secundario);
+  font-family: var(--fonte-texto);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.botao-ajuda[aria-expanded="true"] { background: var(--texto); border-color: var(--texto); color: var(--fundo); }
+.botao-ajuda:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.explicacao.ajuda { padding: 10px 12px; border-radius: 12px; background: var(--painel-2); animation: entrar-tela 160ms ease-out; }
+
+/* ---------- Barra de abas (celular) ---------- */
+.abas {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  justify-content: stretch;
+  gap: 0;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--painel) 90%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  backdrop-filter: saturate(1.4) blur(14px);
+  border-top: 1px solid var(--linha);
+  z-index: 10;
+}
+.aba {
+  max-width: none;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 56px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--secundario);
+  font-family: var(--fonte-texto);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.aba .icone { width: 56px; height: 30px; padding: 3px 16px; border-radius: 999px; transition: background-color var(--transicao); }
+.aba[aria-current="page"] { background: none; box-shadow: none; color: var(--texto); font-weight: 600; }
+.aba[aria-current="page"] .icone { background: color-mix(in srgb, var(--texto) 11%, transparent); }
+.ponto { top: 2px; right: calc(50% - 22px); }
+.aba-registrar { align-self: center; }
+.aba-mais {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: var(--acento);
+  color: var(--sobre-acento);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--acento) 35%, transparent);
+  transition: transform var(--transicao);
+}
+.aba-mais .icone { width: 28px; height: 28px; padding: 0; background: none !important; }
+.aba-registrar:active .aba-mais { transform: scale(0.94); }
+.aba-registrar[aria-expanded="true"] .aba-mais { transform: rotate(45deg); }
+.aba-registrar-rotulo { display: none; }
+
+/* Novo gasto ocupa a tela toda no celular: sem barra de abas, botão "Lançar" sempre à mão */
+.barra-topo { display: flex; align-items: center; gap: 4px; margin: -8px 0 0 -10px; }
+.barra-topo h1 { margin: 0; font-family: var(--fonte-numero); font-size: 24px; font-weight: 600; }
+.cabecalho-folha > p { margin: 0; }
+body[data-vista="lancar"] .abas { display: none; }
+body[data-vista="lancar"] #tela { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+#tela .botao-lancar { position: sticky; bottom: calc(12px + env(safe-area-inset-bottom)); box-shadow: var(--sombra-forte); z-index: 2; }
+
+/* ---------- Folha do "+" ---------- */
+.folha-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--veu);
+  animation: aparecer 180ms ease-out;
+}
+.folha {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 16px calc(24px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: var(--painel);
+  box-shadow: var(--sombra-forte);
+  animation: subir 240ms cubic-bezier(0.2, 0, 0, 1);
+}
+.folha-alca { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--linha); }
+.folha-topo { display: flex; justify-content: space-between; align-items: center; }
+.folha-topo h2 { margin: 0; font-family: var(--fonte-numero); font-size: 21px; font-weight: 600; }
+.opcao-folha {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--linha);
+  border-radius: 16px;
+  background: var(--fundo);
+  color: var(--texto);
+  text-decoration: none;
+  transition: background-color var(--transicao);
+}
+.opcao-folha:hover { background: var(--painel-2); }
+.opcao-folha:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.opcao-folha-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cor) 15%, transparent);
+  color: var(--cor);
+}
+@keyframes aparecer { from { opacity: 0; } to { opacity: 1; } }
+@keyframes subir { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes descer { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Mensagem rápida (toast), com ação opcional ("Desfazer") ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(460px, calc(100% - 32px));
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--texto);
+  color: var(--fundo);
+  box-shadow: var(--sombra-forte);
+  font-size: 15px;
+  line-height: 1.35;
+  transform: translateX(-50%);
+  animation: subir-toast 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.toast > span { flex: 1; }
+.toast-acao {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--fundo) 40%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toast-acao:focus-visible { outline: 2px solid var(--fundo); outline-offset: 2px; }
+body[data-vista="lancar"] .toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+@keyframes subir-toast { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---------- Avisos do topo (versão nova e cópia guardada): cartão flutuante ---------- */
+.avisos-topo {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 35;
+  width: min(520px, calc(100% - 24px));
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.aviso-topo {
+  pointer-events: auto;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--linha);
+  border-radius: 16px;
+  background: var(--painel);
+  box-shadow: var(--sombra-forte);
+  animation: descer 260ms cubic-bezier(0.2, 0, 0, 1);
+}
+.aviso-topo p { flex: 1; padding: 0; border: none; background: none; font-size: 15px; }
+.aviso-topo-icone { display: flex; color: var(--amarelo); }
+.aviso-versao .aviso-topo-icone { color: var(--verde); }
+.aviso-topo-botoes { display: flex; align-items: center; gap: 12px; }
+.aviso-topo .botao-texto { text-decoration: none; font-weight: 500; }
+body:has(.aviso-topo:not([hidden])) .tela { padding-top: calc(20px + env(safe-area-inset-top)); min-height: 100dvh; }
+@media (max-width: 420px) {
+  .aviso-topo { flex-wrap: wrap; }
+  .aviso-topo p { flex-basis: calc(100% - 40px); }
+  .aviso-topo-botoes { width: 100%; justify-content: flex-end; }
+}
+
+/* ---------- Telas largas (tablet, computador): barra lateral ---------- */
+@media (min-width: 840px) {
+  body { padding-left: 96px; }
+  .tela { max-width: 680px; padding-bottom: 48px; }
+  .abas {
+    top: 0;
+    right: auto;
+    width: 96px;
+    grid-template-columns: none;
+    grid-auto-rows: min-content;
+    align-content: start;
+    justify-items: center;
+    gap: 10px;
+    padding: calc(20px + env(safe-area-inset-top)) 8px 24px;
+    border-top: none;
+    border-right: 1px solid var(--linha);
+  }
+  .aba-registrar { order: -1; margin-bottom: 16px; }
+  .aba-mais { width: 56px; height: 56px; margin-top: 0; border-radius: 18px; }
+  .aba-registrar[aria-expanded="true"] .aba-mais { transform: none; }
+  .aba-registrar-rotulo { display: block; }
+  body[data-vista="lancar"] .abas { display: grid; }
+  body[data-vista="lancar"] #tela { padding-bottom: 48px; }
+  .toast, body[data-vista="lancar"] .toast { bottom: 24px; left: calc(50% + 48px); }
+  .avisos-topo { left: calc(50% + 48px); }
+  .folha-fundo { align-items: center; padding: 24px; }
+  .folha { max-width: 460px; padding-bottom: 24px; border-radius: 24px; }
+  .folha-alca { display: none; }
+}
+@media (min-width: 1180px) {
+  .tela-inicio { max-width: 1040px; }
+  .inicio-grade { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+  .inicio-grade > .destaque { grid-column: 1; grid-row: 1; }
+  .inicio-grade > .aviso-inicio { grid-column: 1; grid-row: 2; }
+  .inicio-grade > .cartao:nth-of-type(2) { grid-column: 2; grid-row: 1 / span 2; }
+  .inicio-grade > .cartao:nth-of-type(3) { grid-column: 1; grid-row: 3; }
+}
+
+/* Quem prefere menos movimento (ajuste do sistema) não vê animação. */
+@media (prefers-reduced-motion: reduce) {
+  .tela:not([hidden]), .folha, .folha-fundo, .toast, .aviso-topo, .explicacao.ajuda { animation: none; }
+  .aba-mais, .barra-uso, .valor-sensivel { transition: none; }
+}
+/* Botão "Lançar gasto" preso embaixo: fundo sólido em volta (nada aparece por trás) e desativado sem transparência */
+#tela .botao-lancar { box-shadow: 0 0 0 12px var(--fundo), var(--sombra-forte); }
+#tela .botao-lancar:disabled { opacity: 1; background: var(--painel-2); color: var(--secundario); box-shadow: 0 0 0 12px var(--fundo); }
+.aviso-inicio .botao-texto { text-decoration: none; font-size: 14px; }

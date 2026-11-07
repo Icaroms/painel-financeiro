@@ -79,10 +79,10 @@ describe('haVersaoNova', () => {
 });
 
 describe('textoDaVersaoNova', () => {
-  it('diz a versão, o botão e que os dados continuam', () => {
+  it('diz a versão e que os dados continuam (curto: o botão Atualizar fica ao lado)', () => {
     assert.equal(
       textoDaVersaoNova('painel-financeiro-v16'),
-      'Há uma versão nova do app (v16). Toque em Atualizar quando terminar o que está fazendo: os seus dados continuam aqui.',
+      'Nova versão disponível (v16). Seus dados continuam aqui.',
     );
   });
 });

@@ -99,7 +99,7 @@ export function iniciarDestinoMes({ obterDados }) {
     el.regua.style.width = `${Math.round(reserva.fracao * 100)}%`;
 
     // Explicação do que aconteceu com a parte da reserva.
-    let nota = 'Sugestão do app com as porcentagens de Configurar: nada é movido sozinho. ' +
+    let nota = 'Sugestão do app com as porcentagens de Ajustes: nada é movido sozinho. ' +
       'A reserva é a soma dos investimentos marcados como reserva na aba Investir: ao guardar dinheiro nela, atualize o valor lá.';
     if (reserva.completa && reserva.metaCentavos > 0) {
       nota = `Reserva completa: a parte dela vai para Investir. ${nota}`;

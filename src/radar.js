@@ -110,7 +110,7 @@ export function lerRadar(dados) {
     throw new ErroValidacao('radar', 'O arquivo do radar não é do Painel Financeiro.');
   }
   if (!Number.isInteger(dados.versao) || dados.versao > VERSAO_RADAR) {
-    throw new ErroValidacao('radar', 'O radar foi gerado por uma versão mais nova do app: toque em "Procurar atualização" em Configurar.');
+    throw new ErroValidacao('radar', 'O radar foi gerado por uma versão mais nova do app: toque em "Procurar atualização" em Ajustes → Sobre e atualização.');
   }
   if (Number.isNaN(Date.parse(dados.geradoEm))) {
     throw new ErroValidacao('radar', 'O arquivo do radar não diz quando foi gerado.');
