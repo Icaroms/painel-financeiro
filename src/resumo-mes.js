@@ -20,6 +20,7 @@ import { buscarMes } from './meses.js';
 import { fixosDoMes, diaDeReferencia } from './fixos.js';
 import { saidasNoMes, faturasDoMes } from './fluxo.js';
 import { categoriasAtivas } from './configuracao.js';
+import { detalheDaRendaDoMes } from './entradas.js';
 import {
   LIMITES_PADRAO,
   calcularRitmo,
@@ -88,8 +89,9 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
   const faturasPagas = somar(faturas.filter((f) => f.status === 'pago'), 'totalCentavos');
   const faturasPrevistas = somar(faturas.filter((f) => f.status === 'previsto'), 'totalCentavos');
 
-  const dinheiroDoMes = registro.saldoInicialCentavos + registro.rendaPrevistaCentavos;
-  const { saldoProjetadoCentavos } = calcularSaldoProjetado(registro, estado.fixos, saidas, 0);
+  const entradas = detalheDaRendaDoMes(registro, estado.entradasFixas ?? []);
+  const dinheiroDoMes = registro.saldoInicialCentavos + entradas.totalCentavos;
+  const { saldoProjetadoCentavos } = calcularSaldoProjetado(registro, estado.fixos, saidas, 0, estado.entradasFixas ?? []);
   const jaPagoTotal = fixosPagos + gastosAVista + faturasPagas;
 
   let corSaldo = 'verde';
@@ -128,6 +130,8 @@ export function resumoDoMes(estado, mes, hoje, limites = LIMITES_PADRAO) {
     fracaoDoMes: dia / ultimoDia,
     saldoConfirmado: registro.saldoConfirmado,
     dinheiroDoMesCentavos: dinheiroDoMes,
+    // O que entra no mês, em partes (outras entradas, entradas fixas, avulsas).
+    entradas,
     // Concretizado: o que já saiu de verdade.
     jaPago: {
       fixosCentavos: fixosPagos,

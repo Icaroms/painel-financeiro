@@ -81,7 +81,8 @@ export function mensagemDoMes(estado, hoje, limites = LIMITES_PADRAO) {
   linhas.push(`Mês: ${mesPorExtenso(mes)}. Hoje é dia ${r.dia} de ${r.diasNoMes} (${Math.round(r.fracaoDoMes * 100)}% do mês).`);
   linhas.push('');
   linhas.push('Dinheiro do mês:');
-  linhas.push(`- Dinheiro do mês (saldo inicial + renda prevista): ${reais(r.dinheiroDoMesCentavos)}` +
+  linhas.push(`- Dinheiro do mês (saldo inicial + entradas: fixas ${reais(r.entradas.fixasCentavos)}, ` +
+    `avulsas ${reais(r.entradas.avulsasCentavos)}, outras previstas ${reais(r.entradas.outrasCentavos)}): ${reais(r.dinheiroDoMesCentavos)}` +
     `${r.saldoConfirmado ? '' : ' (o saldo inicial ainda não foi confirmado pela pessoa)'}.`);
   linhas.push(`- Já pago: ${reais(r.jaPago.totalCentavos)} (contas fixas ${reais(r.jaPago.fixosCentavos)}, ` +
     `gastos à vista ${reais(r.jaPago.gastosCentavos)}, faturas ${reais(r.jaPago.faturasCentavos)}).`);

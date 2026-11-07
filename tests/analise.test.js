@@ -41,7 +41,7 @@ describe('mensagemDoMes', () => {
 
   it('dinheiro do mês: o mesmo resumo da aba Mês', () => {
     assert.match(conteudo, /Mês: novembro de 2026\. Hoje é dia 10 de 30 \(33% do mês\)\./);
-    assert.match(conteudo, /Dinheiro do mês \(saldo inicial \+ renda prevista\): R\$ 1\.500,00\./);
+    assert.match(conteudo, /Dinheiro do mês \(saldo inicial \+ entradas: fixas R\$ 0,00, avulsas R\$ 0,00, outras previstas R\$ 1\.200,00\): R\$ 1\.500,00\./);
     assert.match(conteudo, /Já pago: R\$ 200,00 \(contas fixas R\$ 0,00, gastos à vista R\$ 200,00, faturas R\$ 0,00\)\./);
     assert.match(conteudo, /Ainda previsto para sair: R\$ 539,80\./);
     assert.match(conteudo, /Deve sobrar no fim do mês: R\$ 760,20\. Folga mínima que o app usa: R\$ 200,00\./);
