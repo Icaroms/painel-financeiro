@@ -158,6 +158,7 @@ export function calcularPainel({
     });
     const resultado = avaliarGasto({
       lancamento, categoria, registroMes, fixos, lancamentos, cartoes, categorias, hoje,
+      entradasFixas: dados.entradasFixas ?? [], meses: dados.meses ?? [],
     });
     numerosVeredito = resultado.numeros;
     cor = resultado.cor;
@@ -187,7 +188,7 @@ export function calcularPainel({
     frase = problemaData ?? 'Digite um valor para ver o veredito.';
     // Saldo: o que sai da conta no mês (à vista e faturas). Orçamento: o que foi consumido.
     const saidas = saidasNoMes(lancamentos, cartoes, registroMes.mes);
-    saldoProjetado = calcularSaldoProjetado(registroMes, fixos, saidas, 0).saldoProjetadoCentavos;
+    saldoProjetado = calcularSaldoProjetado(registroMes, fixos, saidas, 0, dados.entradasFixas ?? []).saldoProjetadoCentavos;
     margem = temOrcamento ? calcularMargemCategoria(categoria, doMes, 0) : null;
   }
 

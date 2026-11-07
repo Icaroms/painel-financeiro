@@ -8,7 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 
-/** Configuração do app: formas de pagamento, cartões e destino da sobra. */
+/** Configuração do app: formas de pagamento, cartões, destino da sobra e entradas fixas (extras). */
 class ConfiguracaoIntegracaoTest extends TesteDeDados {
 
     private static final String CAMINHO = "/api/configuracao";
@@ -21,6 +21,8 @@ class ConfiguracaoIntegracaoTest extends TesteDeDados {
                  "destinoSobra": {"porcentagens": {"reserva": %d, "investir": 20, "alivio": 10}, "metaMeses": 6},
                  "ultimoBackupEm": "2026-10-12T22:00:00.000Z",
                  "atualizadoEm": "%s",
+                 "entradasFixas": [{"id": "e1", "nome": "Salário", "valorCentavos": 231200, "dia": 5,
+                                    "mesInicial": "2026-11", "mesFinal": null}],
                  "tema": "escuro"}
                 """.formatted(formaDoCartao, T1, T1, reserva, atualizadoEm);
     }
@@ -40,6 +42,9 @@ class ConfiguracaoIntegracaoTest extends TesteDeDados {
         assertThat(resposta.read("$.cartoes[0].limiteCentavos", Long.class)).isEqualTo(500000L);
         assertThat(resposta.read("$.destinoSobra.porcentagens.reserva", Integer.class)).isEqualTo(70);
         assertThat(resposta.read("$.tema", String.class)).isEqualTo("escuro");
+        // Entradas fixas do app (11/2026): ficam nos extras e voltam iguais.
+        assertThat(resposta.read("$.entradasFixas[0].nome", String.class)).isEqualTo("Salário");
+        assertThat(resposta.read("$.entradasFixas[0].valorCentavos", Long.class)).isEqualTo(231200L);
         assertThat(resposta.read("$.recebidoEm", String.class)).isNotBlank();
     }
 

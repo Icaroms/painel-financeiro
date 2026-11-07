@@ -17,12 +17,14 @@ class MesesIntegracaoTest extends TesteDeDados {
                  "saldoConfirmado": false,
                  "ajustesFixos": {"fixo-dentista": 25000},
                  "statusFixos": {"fixo-dentista": "%s"},
-                 "statusFaturas": {"Nubank": "pago"}}
+                 "statusFaturas": {"Nubank": "pago"},
+                 "statusEntradas": {"salario": "no-saldo"},
+                 "entradasAvulsas": [{"id": "a1", "valorCentavos": 5000, "data": "2026-10-03", "descricao": "Pix"}]}
                 """.formatted(id, T1, T1, mes, status);
     }
 
     @Test
-    @DisplayName("Mês volta igual: saldo negativo, ajustes, situações e statusFaturas (extra)")
+    @DisplayName("Mês volta igual: saldo negativo, ajustes, situações, statusFaturas e entradas (extras)")
     void mesVoltaIgual() throws Exception {
         String conta = novaConta();
         String id = novoId();
@@ -36,6 +38,9 @@ class MesesIntegracaoTest extends TesteDeDados {
         assertThat(resposta.read("$.ajustesFixos['fixo-dentista']", Long.class)).isEqualTo(25000L);
         assertThat(resposta.read("$.statusFixos['fixo-dentista']", String.class)).isEqualTo("pago");
         assertThat(resposta.read("$.statusFaturas.Nubank", String.class)).isEqualTo("pago");
+        // Entradas do mês (11/2026): também ficam nos extras.
+        assertThat(resposta.read("$.statusEntradas.salario", String.class)).isEqualTo("no-saldo");
+        assertThat(resposta.read("$.entradasAvulsas[0].valorCentavos", Long.class)).isEqualTo(5000L);
     }
 
     @Test

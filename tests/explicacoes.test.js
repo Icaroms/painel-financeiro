@@ -169,6 +169,20 @@ describe('mensagemDaAvaliacao (sugestão da IA para a compra)', () => {
     semDefeitos(conteudo);
   });
 
+  it('leva o que a previsão supõe e os avisos da tela', () => {
+    const resultado = simularCompra(dados(), { formaPagamento: 'Pix', aVistaCentavos: 30000, hoje: HOJE });
+    const { conteudo } = mensagemDaAvaliacao(resultado, {
+      formaPagamento: 'Pix', aVistaCentavos: 30000, hoje: HOJE,
+      premissas: { entrada: { centavos: 0, fonte: 'renda-do-mes' }, diaADia: { centavos: 50000, fonte: 'orcamentos', meses: 0 }, contasCentavos: 62469 },
+      avisos: ['Os próximos meses estão sendo previstos SEM salário.'],
+    });
+    assert.match(conteudo, /entra R\$ 0,00 \(renda prevista deste mês\)/);
+    assert.match(conteudo, /R\$ 500,00 de dia a dia \(soma dos orçamentos/);
+    assert.match(conteudo, /Aviso do app sobre a previsão: Os próximos meses estão sendo previstos SEM salário\./);
+    assert.match(INSTRUCOES_AVALIACAO, /comece por ele/);
+    semDefeitos(conteudo);
+  });
+
   it('no cartão com parcelas: todas as opções e pedido para comparar', () => {
     const cartao = dados().cartoes[0].formaPagamento;
     const resultado = simularCompra(dados(), {

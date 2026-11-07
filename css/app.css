@@ -875,3 +875,22 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 .item-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid var(--linha); }
 .item-backup:first-child { border-top: none; }
 .item-backup > div:first-child { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+
+/* 11/2026: entradas de dinheiro (Configurar e Mês) e sugestão de orçamentos */
+.valor-entrada { color: var(--verde); }
+.fixo-fora .valor-entrada { color: var(--secundario); }
+.acoes-entradas { display: flex; flex-wrap: wrap; gap: 8px; }
+.linha-situacao { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 6px; }
+.linha-situacao .campo { flex: 1 1 160px; }
+.linha-situacao .botao-pequeno { min-height: 44px; }
+#form-entrada-avulsa { margin-top: 4px; }
+.lista-fixos .vazio { padding: 8px 0; font-size: 14px; }
+.quadro-sugestao { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--linha); border-radius: 12px; background: var(--fundo); }
+.quadro-sugestao > p { margin: 0; font-size: 14px; line-height: 1.4; }
+.quadro-sugestao > .botao-pequeno { align-self: flex-end; }
+/* Avaliar compra: o que a previsão supõe e os avisos */
+.premissas { display: flex; flex-direction: column; gap: 6px; }
+.premissas p { margin: 0; font-size: 14px; line-height: 1.4; }
+.premissas .aviso-previsao { padding: 8px 10px; border-left: 3px solid var(--amarelo, var(--vermelho)); background: var(--fundo); border-radius: 0 8px 8px 0; }
+.premissas .aviso-previsao.grave { border-left-color: var(--vermelho); }
+.premissas .aviso-previsao a { color: var(--texto); font-weight: 600; }

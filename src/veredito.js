@@ -29,6 +29,7 @@ import { mesDaData, diaDaData, diasNoMes, tituloDoMes } from './datas.js';
 import { formatarCentavos } from './dinheiro.js';
 import { fixoAtivoNoMes, valorDoFixoNoMes, contaComoConsumo } from './modelo.js';
 import { saidasDoLancamento, saidasNoMes, projetarMeses, mesesAteAUltimaSaida } from './fluxo.js';
+import { rendaDoMes } from './entradas.js';
 
 /**
  * Limites escolhidos para o MVP. Ficam num objeto só para poderem
@@ -107,16 +108,21 @@ export function calcularRitmo(orcamentoCentavos, gastoDepoisCentavos, data, tole
 /**
  * Regra 3: saldo projetado para o fim do mês, já contando o novo gasto.
  *
- * saldo projetado = saldo inicial + renda prevista − fixos − lançamentos − novo gasto
+ * saldo projetado = saldo inicial + entradas do mês − fixos − lançamentos − novo gasto
+ *
+ * Entradas do mês (11/2026): outras entradas previstas + entradas fixas que
+ * contam no mês (salário...) + entradas avulsas (src/entradas.js). O nome do
+ * campo devolvido continua "rendaPrevistaCentavos" para as telas antigas.
  *
  * @param {object}   registroMes      Mês (saldo inicial, renda prevista e ajustes).
  * @param {object[]} fixos            Todos os fixos cadastrados.
  * @param {object[]} lancamentosDoMes Lançamentos válidos do mês (sem o novo).
  * @param {number}   novoValorCentavos
+ * @param {object[]} [entradasFixas]  Entradas fixas cadastradas (dados.entradasFixas).
  * @returns {{ rendaPrevistaCentavos: number, totalFixosCentavos: number, totalLancamentosCentavos: number, saldoProjetadoCentavos: number }}
  */
-export function calcularSaldoProjetado(registroMes, fixos, lancamentosDoMes, novoValorCentavos) {
-  const rendaPrevistaCentavos = registroMes.rendaPrevistaCentavos;
+export function calcularSaldoProjetado(registroMes, fixos, lancamentosDoMes, novoValorCentavos, entradasFixas = []) {
+  const rendaPrevistaCentavos = rendaDoMes(registroMes, entradasFixas);
 
   const totalFixosCentavos = fixos
     .filter((f) => fixoAtivoNoMes(f, registroMes.mes))
@@ -183,7 +189,10 @@ export function lancamentosValidosDoMes(lancamentos, mes) {
  * }}
  */
 export function avaliarGasto(
-  { lancamento, categoria, registroMes, fixos, lancamentos, cartoes = [], categorias = [], hoje = lancamento.data },
+  {
+    lancamento, categoria, registroMes, fixos, lancamentos, cartoes = [], categorias = [], hoje = lancamento.data,
+    entradasFixas = [], meses = [],
+  },
   limites = LIMITES_PADRAO,
 ) {
   if (lancamento.categoriaId !== categoria.id) {
@@ -208,14 +217,14 @@ export function avaliarGasto(
     .filter((s) => s.mes === registroMes.mes)
     .reduce((soma, s) => soma + s.valorCentavos, 0);
   const saldo = calcularSaldoProjetado(
-    registroMes, fixos, saidasNoMes(outros, cartoes, registroMes.mes), saidaNoMesAtual,
+    registroMes, fixos, saidasNoMes(outros, cartoes, registroMes.mes), saidaNoMesAtual, entradasFixas,
   );
 
   // No cartão: o pior mês entre os meses das parcelas, já contando a compra.
   let mesDoSaldo = registroMes.mes;
   let saldoJulgado = saldo.saldoProjetadoCentavos;
   if (noCartao) {
-    const visao = { registroMes, fixos, categorias, cartoes };
+    const visao = { registroMes, fixos, categorias, cartoes, entradasFixas, meses };
     const aFrente = mesesAteAUltimaSaida(saidasNovas, registroMes.mes);
     const comCompra = projetarMeses({ ...visao, lancamentos: [...outros, lancamento] }, aFrente);
     const mesesDaCompra = new Set(saidasNovas.map((s) => s.mes));

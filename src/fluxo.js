@@ -22,9 +22,10 @@
  */
 
 import { mesDaData, somarMeses, mesesEntre, diasNoMes } from './datas.js';
-import { fixoAtivoNoMes, valorDoFixoNoMes } from './modelo.js';
+import { fixoAtivoNoMes, valorDoFixoNoMes, contaComoConsumo } from './modelo.js';
 import { faturaDaCompra, vencimentoNoMes } from './cartoes.js';
 import { calcularSaldoProjetado } from './veredito.js';
+import { entradaPrevistaNoMes } from './entradas.js';
 
 /**
  * Saídas de um lançamento: uma para gasto à vista, uma por parcela no cartão.
@@ -268,39 +269,102 @@ export function contasFixasNasFaturas({ cartao, fixos, registroMes, meses = [], 
   return contas;
 }
 
+/** Quantos meses anteriores entram na média do dia a dia. */
+export const MESES_DA_MEDIA = 3;
+
+/**
+ * Quanto se espera gastar no dia a dia por mês (11/2026).
+ *
+ * O orçamento é um LIMITE, não uma previsão. Então:
+ * - com meses anteriores registrados: a média do que foi consumido neles
+ *   (até os 3 mais recentes), sem compras parceladas (as parcelas delas já
+ *   entram nas faturas) e sem contas fixas convertidas em compra;
+ * - sem histórico ainda: a soma dos orçamentos das categorias (o teto).
+ *
+ * @param {object} visao { registroMes, categorias, lancamentos, meses }
+ * @returns {{ centavos: number, fonte: 'media'|'orcamentos', meses: number }}
+ */
+export function estimativaDiaADia({ registroMes, categorias = [], lancamentos = [], meses = [] }) {
+  const anteriores = (meses ?? [])
+    .map((m) => m.mes)
+    .filter((m) => m < registroMes.mes)
+    .sort()
+    .slice(-MESES_DA_MEDIA);
+
+  if (anteriores.length === 0) {
+    const orcamentos = categorias
+      .filter((c) => c.excluidoEm === null)
+      .reduce((soma, c) => soma + c.orcamentoCentavos, 0);
+    return { centavos: orcamentos, fonte: 'orcamentos', meses: 0 };
+  }
+
+  const dosMeses = new Set(anteriores);
+  const total = lancamentos
+    .filter((l) => contaComoConsumo(l) && (l.parcelas ?? 1) <= 1 && dosMeses.has(mesDaData(l.data)))
+    .reduce((soma, l) => soma + l.valorCentavos, 0);
+  return { centavos: Math.round(total / anteriores.length), fonte: 'media', meses: anteriores.length };
+}
+
 /**
  * Projeção da sobra do mês atual e dos meses seguintes. É uma ESTIMATIVA:
  *
- * - mês atual: a sobra de verdade (saldo + renda − contas fixas − saídas do mês);
- * - mês seguinte: começa com a sobra do anterior, recebe a mesma renda e
+ * - mês atual: a sobra de verdade (saldo + entradas − contas fixas − saídas do mês);
+ * - mês seguinte: começa com a sobra do anterior, recebe as entradas fixas
+ *   (salário...; sem nenhuma cadastrada, a renda deste mês, como antes) e
  *   desconta as contas fixas ativas (valor padrão), as faturas já
- *   comprometidas e a soma dos orçamentos das categorias (o que se espera
- *   gastar no dia a dia).
+ *   comprometidas e o dia a dia estimado (média real ou, sem histórico,
+ *   os orçamentos; veja estimativaDiaADia).
  *
- * @param {object} visao  { registroMes, fixos, categorias, lancamentos, cartoes }
+ * Cada mês seguinte traz também as partes da conta, para a tela explicar.
+ *
+ * @param {object} visao  { registroMes, fixos, categorias, lancamentos, cartoes, entradasFixas, meses }
  * @param {number} mesesAFrente Quantos meses depois do atual (0 = só o atual).
- * @returns {{ mes: string, sobraCentavos: number }[]}
+ * @returns {{ mes: string, sobraCentavos: number, entradasCentavos?: number, contasCentavos?: number,
+ *   faturasCentavos?: number, diaADiaCentavos?: number }[]}
  */
-export function projetarMeses({ registroMes, fixos, categorias, lancamentos, cartoes = [] }, mesesAFrente) {
+export function projetarMeses(visao, mesesAFrente) {
+  const { registroMes, fixos, lancamentos, cartoes = [], entradasFixas = [] } = visao;
   const atual = registroMes.mes;
   const saidasAtual = saidasNoMes(lancamentos, cartoes, atual);
-  let sobra = calcularSaldoProjetado(registroMes, fixos, saidasAtual, 0).saldoProjetadoCentavos;
+  let sobra = calcularSaldoProjetado(registroMes, fixos, saidasAtual, 0, entradasFixas).saldoProjetadoCentavos;
   const projecao = [{ mes: atual, sobraCentavos: sobra }];
 
-  const orcamentos = categorias
-    .filter((c) => c.excluidoEm === null)
-    .reduce((soma, c) => soma + c.orcamentoCentavos, 0);
+  const diaADia = estimativaDiaADia(visao).centavos;
 
   for (let i = 1; i <= mesesAFrente; i += 1) {
     const mes = somarMeses(atual, i);
+    const entradas = entradaPrevistaNoMes(registroMes, entradasFixas, mes).centavos;
     const contas = fixos
       .filter((f) => fixoAtivoNoMes(f, mes))
       .reduce((soma, f) => soma + f.valorCentavos, 0);
     const faturas = saidasNoMes(lancamentos, cartoes, mes).reduce((soma, s) => soma + s.valorCentavos, 0);
-    sobra = sobra + registroMes.rendaPrevistaCentavos - contas - faturas - orcamentos;
-    projecao.push({ mes, sobraCentavos: sobra });
+    sobra = sobra + entradas - contas - faturas - diaADia;
+    projecao.push({
+      mes, sobraCentavos: sobra, entradasCentavos: entradas, contasCentavos: contas, faturasCentavos: faturas, diaADiaCentavos: diaADia,
+    });
   }
   return projecao;
+}
+
+/**
+ * O que a previsão dos meses seguintes supõe, para a tela e a IA explicarem.
+ *
+ * @param {object} visao A mesma de projetarMeses.
+ * @returns {{
+ *   entrada: { centavos: number, fonte: 'entradas-fixas'|'renda-do-mes' },
+ *   diaADia: { centavos: number, fonte: 'media'|'orcamentos', meses: number },
+ *   contasCentavos: number
+ * }} Valores do mês seguinte ao atual.
+ */
+export function premissasDaPrevisao(visao) {
+  const proximo = somarMeses(visao.registroMes.mes, 1);
+  return {
+    entrada: entradaPrevistaNoMes(visao.registroMes, visao.entradasFixas ?? [], proximo),
+    diaADia: estimativaDiaADia(visao),
+    contasCentavos: (visao.fixos ?? [])
+      .filter((f) => fixoAtivoNoMes(f, proximo))
+      .reduce((soma, f) => soma + f.valorCentavos, 0),
+  };
 }
 
 /**

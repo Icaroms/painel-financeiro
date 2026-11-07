@@ -56,6 +56,8 @@ export function dadosDoMes(estado, mes) {
     lancamentos: estado.lancamentos,
     formasPagamento: estado.formasPagamento,
     cartoes: estado.cartoes ?? [],
+    // Salário e outras entradas fixas (11/2026): o dinheiro do mês e a previsão usam.
+    entradasFixas: estado.entradasFixas ?? [],
     // Todos os meses: o limite do cartão olha se uma conta fixa foi dispensada em meses anteriores.
     meses: estado.meses,
   };
@@ -77,7 +79,7 @@ export function sobraDoMes(estado, mes) {
 
   // Conta o que SAI da conta no mês: gastos à vista e as faturas que vencem nele.
   const saidas = saidasNoMes(estado.lancamentos, estado.cartoes ?? [], mes);
-  return calcularSaldoProjetado(registroMes, estado.fixos, saidas, 0).saldoProjetadoCentavos;
+  return calcularSaldoProjetado(registroMes, estado.fixos, saidas, 0, estado.entradasFixas ?? []).saldoProjetadoCentavos;
 }
 
 /**
@@ -86,7 +88,9 @@ export function sobraDoMes(estado, mes) {
  * - Se o mês já existe, devolve o estado sem mudanças.
  * - Se não existe, cria o mês a partir do mês ANTERIOR mais recente:
  *   - saldo inicial SUGERIDO = o que sobrou daquele mês;
- *   - renda prevista = a mesma daquele mês;
+ *   - renda prevista ("outras entradas") = a mesma daquele mês, SÓ se não houver
+ *     entradas fixas cadastradas (dados antigos, em que a renda era o salário);
+ *     com entradas fixas, o salário já vem delas e as outras entradas não se repetem;
  *   - saldoConfirmado = false, para a tela pedir a confirmação.
  *   Os ajustes de fixo não passam para o mês novo: eles valem só no mês deles.
  *
@@ -128,7 +132,7 @@ export function virarMes(estado, mesNovo, opcoes = {}) {
     {
       mes: mesNovo,
       saldoInicialCentavos: sobraDoMes(estado, mesBase),
-      rendaPrevistaCentavos: base.rendaPrevistaCentavos,
+      rendaPrevistaCentavos: (estado.entradasFixas ?? []).length > 0 ? 0 : base.rendaPrevistaCentavos,
       saldoConfirmado: false,
     },
     opcoes,
