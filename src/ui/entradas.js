@@ -123,21 +123,34 @@ export function iniciarEntradasConfig({ obterDados, aplicarMudanca }) {
     inputDia.value = entrada ? String(entrada.dia) : '';
 
     // Situação NESTE mês: só no cadastro (depois, muda na aba Mês).
-    const select = criar('select', { 'aria-label': 'Situação neste mês' });
+    // Pergunta simples (sim/não); o caso "já estava no saldo" fica em "mais opções".
+    const nomeMes = tituloDoMes(mesAtual()).replace(/ de \d{4}$/, '').toLowerCase();
+    const select = criar('select', { 'aria-label': `Já caiu na conta em ${nomeMes}?` });
     const opcoes = [
-      ['prevista', 'Ainda vai cair'],
-      ['no-saldo', 'Já caiu e já está no saldo do início do mês'],
-      ['recebida', 'Já caiu depois do saldo do início do mês'],
+      ['recebida', `Sim, já caiu em ${nomeMes}`],
+      ['prevista', `Ainda vai cair em ${nomeMes}`],
     ];
     for (const [valorOpcao, texto] of opcoes) select.append(criar('option', { value: valorOpcao, texto }));
-    const campoSituacao = campo(`Em ${tituloDoMes(mesAtual()).toLowerCase()}`, select, 'inteira');
-    campoSituacao.hidden = modo === 'editar';
-    // Sugestão: o dia já passou → provavelmente já está no saldo.
+    const campoSituacao = campo(`Já caiu na conta em ${nomeMes}?`, select, 'inteira');
+    const maisOpcoes = criar('details', { classe: 'mais-opcoes inteira' });
+    const checkNoSaldo = criar('input', { type: 'checkbox' });
+    const rotuloNoSaldo = criar('label', { classe: 'opcao-check' });
+    rotuloNoSaldo.append(checkNoSaldo, criar('span', {
+      texto: ' O saldo do início do mês que informei já tinha este dinheiro (não contar de novo neste mês)',
+    }));
+    maisOpcoes.append(criar('summary', { texto: 'Mais opções' }), rotuloNoSaldo);
+    const ajuda = criar('p', {
+      classe: 'dica secundario inteira',
+      texto: `Vale o mês em que o dinheiro CAI na conta: o salário de outubro pago em 5/11 é uma entrada de novembro.`,
+    });
+    for (const parte of [campoSituacao, maisOpcoes, ajuda]) parte.hidden = modo === 'editar';
+    // Sugestão pelo dia: já passou → "já caiu".
     const sugerirSituacao = () => {
       const dia = Number(inputDia.value);
-      if (Number.isInteger(dia) && dia >= 1 && dia <= 31) select.value = dia <= hojeDia ? 'no-saldo' : 'prevista';
+      if (Number.isInteger(dia) && dia >= 1 && dia <= 31) select.value = dia <= hojeDia ? 'recebida' : 'prevista';
     };
     inputDia.addEventListener('input', sugerirSituacao);
+    const situacaoEscolhida = () => (checkNoSaldo.checked ? 'no-saldo' : select.value);
 
     const erro = criar('span', { classe: 'erro' });
     const acoes = criar('div', { classe: 'acoes' });
@@ -158,13 +171,13 @@ export function iniciarEntradasConfig({ obterDados, aplicarMudanca }) {
         let novos;
         let mensagem;
         if (modo === 'transformar') {
-          novos = transformarRendaEmEntradaFixa(obterDados(), mes, { nome: inputNome.value, dia, statusNoMes: select.value });
+          novos = transformarRendaEmEntradaFixa(obterDados(), mes, { nome: inputNome.value, dia, statusNoMes: situacaoEscolhida() });
           mensagem = 'A renda prevista virou entrada fixa.';
         } else {
           const dados = { nome: inputNome.value, valorCentavos: lerValorPositivo(valor.input.value, 'valorCentavos'), dia };
           novos = modo === 'editar'
             ? editarEntradaFixa(obterDados(), entrada.id, dados)
-            : adicionarEntradaFixa(obterDados(), dados, mes, { statusNoMes: select.value });
+            : adicionarEntradaFixa(obterDados(), dados, mes, { statusNoMes: situacaoEscolhida() });
           mensagem = modo === 'editar' ? 'Entrada fixa salva.' : `"${dados.nome.trim()}" adicionada.`;
         }
         aberto = null;
@@ -180,6 +193,8 @@ export function iniciarEntradasConfig({ obterDados, aplicarMudanca }) {
       valor.rotulo,
       campo('Dia em que cai', inputDia),
       campoSituacao,
+      ajuda,
+      maisOpcoes,
       erro,
       acoes,
     );
@@ -319,7 +334,7 @@ export function iniciarEntradasMes({ obterDados, aplicarMudanca, aoMudar = () =>
     const explicacao = {
       prevista: `Cai por volta do dia ${situacao.dia}. Conta no dinheiro do mês.`,
       recebida: 'Já caiu. Conta no dinheiro do mês com o valor recebido.',
-      'no-saldo': 'Já estava no saldo do início do mês: não é contada de novo.',
+      'no-saldo': 'Já estava no saldo do início do mês que você informou: não é contada de novo.',
       'nao-veio': 'Não entra neste mês.',
     }[situacao.status];
     li.append(topo, criar('p', { classe: 'fixo-detalhe secundario', texto: explicacao }));
