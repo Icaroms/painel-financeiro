@@ -73,9 +73,11 @@ const SELO = { verde: 'Cabe', amarelo: 'Atenção', vermelho: 'Passou' };
  * @param {() => object} [opcoes.obterConfigIA] Configuração da IA (botão "Explicar esta opção").
  * @returns {{ renderizar: () => void, preencher: (inicial: object) => void }}
  */
-export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
+export function iniciarSimulador({ obterDados, obterConfigIA = () => null, guardarDesejo = null }) {
   const el = {
     descricao: elemento('simular-descricao'),
+    guardar: elemento('simular-guardar'),
+    guardarErro: elemento('simular-guardar-erro'),
     cartao: elemento('simular-cartao'),
     parcelamento: elemento('simular-parcelamento'),
     soAVista: elemento('simular-so-avista'),
@@ -402,11 +404,49 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
     el.iaConteudo.replaceChildren(...(ligada ? blocoAvaliar() : []));
   }
 
+  /* ---------------- Guardar na lista de desejos (11/2026) ---------------- */
+
+  /** Preço válido do formulário (centavos), ou null. */
+  function precoDoFormulario() {
+    try {
+      const centavos = reaisParaCentavos(el.aVista.value);
+      return centavos > 0 ? centavos : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function atualizarBotaoGuardar() {
+    el.guardar.hidden = guardarDesejo === null || el.cartao.value === '' || precoDoFormulario() === null;
+  }
+
+  el.guardar.addEventListener('click', async () => {
+    el.guardarErro.textContent = '';
+    const ehCartao = (obterDados()?.cartoes ?? []).some((c) => c.formaPagamento === el.cartao.value);
+    const primeira = el.opcoes.querySelector('select');
+    try {
+      await guardarDesejo({
+        nome: el.descricao.value,
+        formaPagamento: el.cartao.value,
+        parcelas: ehCartao && primeira ? Number(primeira.value) : 1,
+        preco: { valorCentavos: precoDoFormulario(), data: hojeLocal() },
+      });
+    } catch (falha) {
+      if (!(falha instanceof ErroValidacao)) throw falha;
+      el.guardarErro.textContent = falha.campo === 'nome' && el.descricao.value.trim() === ''
+        ? 'Escreva o que é (ex.: Tablet) para guardar na lista.'
+        : falha.message;
+      if (el.descricao.value.trim() === '') el.descricao.focus();
+    }
+  });
+
   /** Recalcula e redesenha o resultado (a cada tecla). */
   function calcular() {
     el.erro.textContent = '';
+    el.guardarErro.textContent = '';
     el.resultado.replaceChildren();
     ultima = null;
+    atualizarBotaoGuardar();
 
     const dados = obterDados();
     const ehCartao = (dados?.cartoes ?? []).some((c) => c.formaPagamento === el.cartao.value);
@@ -511,6 +551,8 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
 
     if (inicial?.valorTexto) el.aVista.value = inicial.valorTexto;
     if (inicial && 'descricao' in inicial) el.descricao.value = inicial.descricao ?? '';
+    // Vindo da lista de desejos: as parcelas guardadas na 1ª opção.
+    const parcelasIniciais = inicial?.parcelas ?? null;
 
     // Botão Voltar: para a tela de onde a pessoa veio (Lançar ou Configurar).
     if (inicial?.origem) {
@@ -531,6 +573,9 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
     }
 
     if (el.opcoes.children.length === 0) el.opcoes.append(linhaDeOpcao(10));
+    if (parcelasIniciais !== null && parcelasIniciais > 1) {
+      el.opcoes.replaceChildren(linhaDeOpcao(parcelasIniciais));
+    }
     atualizarBotaoAdicionar();
     calcular();
   }
