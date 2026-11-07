@@ -202,7 +202,9 @@ describe('converterFixo', () => {
       depois = converter(depois, nome).estado;
     }
     assert.equal(sobraDoMes(depois, MES), sobraDoMes(antes, MES));
-    assert.deepEqual(projetarMeses(dadosDoMes(depois, MES), 10), projetarMeses(dadosDoMes(antes, MES), 10));
+    // A conta sai das contas fixas e entra nas faturas: as partes mudam, a sobra de cada mês não.
+    const sobras = (estado) => projetarMeses(dadosDoMes(estado, MES), 10).map(({ mes, sobraCentavos }) => ({ mes, sobraCentavos }));
+    assert.deepEqual(sobras(depois), sobras(antes));
   });
 
   it('conta que começou neste mês: a conta fixa é excluída', () => {
