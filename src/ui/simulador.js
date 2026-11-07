@@ -23,6 +23,7 @@ import { ErroValidacao } from '../erros.js';
 import { MAXIMO_PARCELAS_COMPRA } from '../modelo.js';
 import { dadosDoMes } from '../meses.js';
 import { simularCompra, MAXIMO_OPCOES, MESES_DE_ESPERA_MAXIMOS } from '../simulador.js';
+import { projetarMeses, premissasDaPrevisao } from '../fluxo.js';
 import { mensagemDaOpcaoSimulada, mensagemDaAvaliacao } from '../explicacoes.js';
 import { resumoDoMes } from '../resumo-mes.js';
 import { blocosDaResposta } from '../analise.js';
@@ -205,11 +206,12 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
   /** Tabela mês a mês: parcela e sobra prevista, sem e com a compra. */
   function tabelaMesAMes(meses) {
     const detalhes = criar('details', { classe: 'mes-a-mes' });
-    detalhes.append(criar('summary', { texto: 'Ver mês a mês' }));
+    detalhes.append(criar('summary', { texto: 'Ver mês a mês (saldo acumulado)' }));
 
     const tabela = criar('table', { classe: 'tabela-meses' });
     const cabecalho = criar('tr');
-    for (const titulo of ['Mês', 'Parcela', 'Sobra sem', 'Sobra com']) cabecalho.append(criar('th', { texto: titulo, scope: 'col' }));
+    // "Saldo": o que deve haver na conta no fim do mês, somando os meses anteriores.
+    for (const titulo of ['Mês', 'Parcela', 'Saldo sem', 'Saldo com']) cabecalho.append(criar('th', { texto: titulo, scope: 'col' }));
     tabela.append(criar('thead'));
     tabela.tHead.append(cabecalho);
 
@@ -278,8 +280,8 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
 
     // Mês mais apertado (o pior entre os meses com parcela); à vista fora do cartão, o mês da compra.
     const estimativa = opcao.estimativa ? ' (estimativa)' : '';
-    const rotuloMes = opcao.limite === null ? 'Sobra do mês' : 'Mês mais apertado';
-    linha(`${rotuloMes}: ${mesPorExtenso(opcao.piorMes.mes)}, com ${formatarCentavos(opcao.piorMes.sobraCentavos)} de sobra${estimativa}`,
+    const rotuloMes = opcao.limite === null ? 'Fim do mês' : 'Mês mais apertado';
+    linha(`${rotuloMes}: ${mesPorExtenso(opcao.piorMes.mes)}, saldo previsto de ${formatarCentavos(opcao.piorMes.sobraCentavos)}${estimativa}`,
       opcao.piorMes.sobraCentavos < 0 ? 'linha-alerta' : undefined);
 
     ficha.append(topo, linhas, quadroQuandoComprar(opcao.melhorMomento), tabelaMesAMes(opcao.meses));
@@ -292,6 +294,66 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
     });
     if (explicar) ficha.append(explicar);
     return ficha;
+  }
+
+  /* ---------------- O que a previsão supõe (11/2026) ---------------- */
+
+  /**
+   * Avisos sobre a previsão: sem salário, dia a dia pelos orçamentos e
+   * saldo negativo mesmo SEM a compra.
+   *
+   * @returns {{ texto: string, grave: boolean, link?: boolean }[]}
+   */
+  function avisosDaPrevisao(visao, premissas) {
+    const avisos = [];
+    if (premissas.entrada.fonte === 'renda-do-mes') {
+      avisos.push(premissas.entrada.centavos === 0
+        ? {
+          grave: true, link: true,
+          texto: 'Os próximos meses estão sendo previstos SEM salário: não há entrada fixa cadastrada e a renda prevista deste mês é R$ 0,00.',
+        }
+        : {
+          grave: false, link: true,
+          texto: `Sem entradas fixas, os próximos meses usam a renda deste mês (${formatarCentavos(premissas.entrada.centavos)}) como salário.`,
+        });
+    }
+    if (premissas.diaADia.fonte === 'orcamentos') {
+      avisos.push({
+        grave: false,
+        texto: `Ainda não há meses anteriores para tirar a média: o dia a dia é a soma dos orçamentos (${formatarCentavos(premissas.diaADia.centavos)}). ` +
+          'Orçamento é limite, não gasto certo: se eles estão altos, a previsão fica pessimista.',
+      });
+    }
+    const negativo = projetarMeses(visao, MESES_DE_ESPERA_MAXIMOS).find((m) => m.sobraCentavos < 0);
+    if (negativo) {
+      avisos.push({
+        grave: true,
+        texto: `Mesmo SEM esta compra, a previsão fica negativa em ${mesPorExtenso(negativo.mes)} (${formatarCentavos(negativo.sobraCentavos)}). ` +
+          'Confira as entradas fixas e os orçamentos antes de decidir.',
+      });
+    }
+    return avisos;
+  }
+
+  /** Quadro "Como o app prevê": a conta de cada mês seguinte e os avisos. */
+  function quadroPremissas(premissas, avisos) {
+    const quadro = criar('section', { classe: 'cartao premissas', 'aria-label': 'Como o app prevê os próximos meses' });
+    const fonteEntrada = premissas.entrada.fonte === 'entradas-fixas' ? 'entradas fixas' : 'renda deste mês';
+    const fonteDiaADia = premissas.diaADia.fonte === 'media'
+      ? `média de ${premissas.diaADia.meses} ${premissas.diaADia.meses === 1 ? 'mês' : 'meses'}`
+      : 'soma dos orçamentos';
+    quadro.append(criar('p', {
+      texto: `Como o app prevê cada mês seguinte: + ${formatarCentavos(premissas.entrada.centavos)} (${fonteEntrada}) ` +
+        `− ${formatarCentavos(premissas.contasCentavos)} (contas fixas) − ${formatarCentavos(premissas.diaADia.centavos)} ` +
+        `(dia a dia, ${fonteDiaADia}) − faturas já comprometidas. O saldo passa de um mês para o outro: um mês negativo ` +
+        'puxa os seguintes.',
+    }));
+    for (const aviso of avisos) {
+      const p = criar('p', { classe: `aviso-previsao${aviso.grave ? ' grave' : ''}`, texto: `${aviso.texto} ` });
+      if (aviso.link) p.append(criar('a', { href: '#configurar', texto: 'Cadastrar o salário em Configurar →' }));
+      quadro.append(p);
+    }
+    return quadro;
   }
 
   /* ---------------- Sugestão da IA (compra inteira) ---------------- */
@@ -372,7 +434,12 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
       const visao = dadosDoMes(dados, mesDaData(hoje));
       const resultado = simularCompra(visao, lerEntrada(aVistaCentavos, ehCartao));
       const formaPagamento = el.cartao.value;
-      el.resultado.replaceChildren(...resultado.opcoes.map((o) => fichaDaOpcao(o, formaPagamento, aVistaCentavos)));
+      const premissas = premissasDaPrevisao(visao);
+      const avisos = avisosDaPrevisao(visao, premissas);
+      el.resultado.replaceChildren(
+        quadroPremissas(premissas, avisos),
+        ...resultado.opcoes.map((o) => fichaDaOpcao(o, formaPagamento, aVistaCentavos)),
+      );
       const descricao = el.descricao.value;
       ultima = {
         // Montada só no clique, com os números deste momento.
@@ -383,7 +450,9 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
           } catch {
             mes = null; // sem resumo (ex.: mês ainda sem registro): a IA usa só as opções
           }
-          return mensagemDaAvaliacao(resultado, { formaPagamento, aVistaCentavos, hoje, descricao, mes });
+          return mensagemDaAvaliacao(resultado, {
+            formaPagamento, aVistaCentavos, hoje, descricao, mes, premissas, avisos: avisos.map((a) => a.texto),
+          });
         },
       };
       atualizarQuadroIA(true);

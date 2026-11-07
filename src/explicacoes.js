@@ -213,6 +213,7 @@ export const INSTRUCOES_AVALIACAO = [
   '3. Pode dizer qual opção e qual momento parecem melhores, sempre explicando com os números ' +
     '(juros, sobra do mês mais apertado, limite do cartão, quando o app diz que cabe).',
   '4. Se nenhuma opção cabe agora, diga isso com clareza e mostre o que os números indicam (esperar o mês que o app indica, um valor menor).',
+  '   Se houver "Aviso do app sobre a previsão", comece por ele: a previsão pode estar errada (ex.: sem salário cadastrado) e a pessoa deve corrigir antes de decidir.',
   '5. A decisão é da pessoa: escreva como sugestão ("a opção que parece melhor é...", "dá para..."), nunca como ordem.',
   '6. Não recomende investimentos, empréstimos nem produtos financeiros.',
   '7. Seja breve: no máximo 160 palavras, tom direto e gentil, sem emojis.',
@@ -237,11 +238,13 @@ export const INSTRUCOES_AVALIACAO = [
  * @param {string} contexto.hoje "AAAA-MM-DD".
  * @param {string} [contexto.descricao] O que é (ex.: "Tablet").
  * @param {object} [contexto.mes] Resumo do mês atual: { deveSobrarCentavos, dinheiroDoMesCentavos }.
+ * @param {object} [contexto.premissas] O que a previsão supõe (premissasDaPrevisao, src/fluxo.js).
+ * @param {string[]} [contexto.avisos] Avisos da tela sobre a previsão (ex.: sem salário cadastrado).
  * @param {object} [limites]
  * @returns {{ instrucoes: string, conteudo: string }}
  */
 export function mensagemDaAvaliacao(resultado, {
-  formaPagamento, aVistaCentavos, hoje, descricao = '', mes = null,
+  formaPagamento, aVistaCentavos, hoje, descricao = '', mes = null, premissas = null, avisos = [],
 }, limites = LIMITES_PADRAO) {
   const linhas = [];
   const oQue = descricao.trim() !== '' ? `"${descricao.trim()}"` : 'uma compra';
@@ -254,6 +257,16 @@ export function mensagemDaAvaliacao(resultado, {
     linhas.push(`Mês atual sem esta compra: dinheiro do mês ${reais(mes.dinheiroDoMesCentavos)}; ` +
       `deve sobrar ${reais(mes.deveSobrarCentavos)} no fim do mês.`);
   }
+  if (premissas) {
+    const fonteEntrada = premissas.entrada.fonte === 'entradas-fixas' ? 'entradas fixas cadastradas' : 'renda prevista deste mês';
+    const fonteDiaADia = premissas.diaADia.fonte === 'media'
+      ? `média real de ${premissas.diaADia.meses} mês(es) anterior(es)`
+      : 'soma dos orçamentos das categorias, pois ainda não há histórico (orçamento é limite, não gasto certo)';
+    linhas.push(`Como o app prevê cada mês seguinte: entra ${reais(premissas.entrada.centavos)} (${fonteEntrada}); ` +
+      `saem ${reais(premissas.contasCentavos)} de contas fixas, ${reais(premissas.diaADia.centavos)} de dia a dia (${fonteDiaADia}) ` +
+      'e as faturas já comprometidas. Os valores de "saldo" são acumulados: um mês negativo puxa os seguintes.');
+  }
+  for (const aviso of avisos) linhas.push(`Aviso do app sobre a previsão: ${aviso}`);
 
   resultado.opcoes.forEach((opcao, i) => {
     linhas.push('');
