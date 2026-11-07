@@ -1,15 +1,18 @@
 /**
- * Vista "Simular compra" (Fase 02, parte 2.5).
+ * Vista "Avaliar compra" (Fase 02, parte 2.5; à vista e sugestão da IA desde 11/2026).
  *
- * A pessoa escolhe o cartão, digita o preço à vista e até 4 opções de
- * parcelamento (parcelas e total parcelado). A cada tecla, o app mostra
- * uma ficha por opção: juros, limite, pior mês, melhor momento e o mês a mês.
+ * A pessoa diz o que é (opcional), o preço à vista e como vai pagar:
+ * - num cartão, pode somar até 4 opções de parcelamento (parcelas e total);
+ * - no Pix, débito ou dinheiro, a compra é à vista (sai da conta no dia).
+ * A cada tecla, o app mostra uma ficha por opção: juros, limite, pior mês,
+ * melhor momento e o mês a mês. Com a IA ligada, o botão "Avaliar com IA"
+ * compara as opções e sugere a melhor e o melhor momento.
  *
  * É uma CONSULTA: nada é gravado. Como em toda a pasta src/ui, aqui só
  * fica a tela; os números vêm de src/simulador.js (testado no Node).
  *
  * Quem usa este módulo (src/ui/app.js) entrega obterDados() e pode chamar
- * preencher({ formaPagamento, valorTexto, origem }) antes de abrir a vista,
+ * preencher({ formaPagamento, valorTexto, descricao, origem }) antes de abrir a vista,
  * para trazer o valor e o cartão da tela de onde a pessoa veio (Lançar ou
  * Configurar). "origem" é o endereço do botão Voltar (ex.: "#configurar").
  */
@@ -20,8 +23,12 @@ import { ErroValidacao } from '../erros.js';
 import { MAXIMO_PARCELAS_COMPRA } from '../modelo.js';
 import { dadosDoMes } from '../meses.js';
 import { simularCompra, MAXIMO_OPCOES, MESES_DE_ESPERA_MAXIMOS } from '../simulador.js';
-import { mensagemDaOpcaoSimulada } from '../explicacoes.js';
+import { mensagemDaOpcaoSimulada, mensagemDaAvaliacao } from '../explicacoes.js';
+import { resumoDoMes } from '../resumo-mes.js';
+import { blocosDaResposta } from '../analise.js';
+import { chamarGemini, iaDisponivel } from '../ia.js';
 import { blocoExplicar } from './explicar.js';
+import { elementosDosBlocos } from './blocos-ia.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
 function elemento(id) {
@@ -58,7 +65,7 @@ const porcentagem = (taxa) => `${(taxa * 100).toFixed(1).replace('.', ',')}%`;
 const SELO = { verde: 'Cabe', amarelo: 'Atenção', vermelho: 'Passou' };
 
 /**
- * Liga a vista Simular compra.
+ * Liga a vista Avaliar compra.
  *
  * @param {object} opcoes
  * @param {() => object} opcoes.obterDados
@@ -67,8 +74,13 @@ const SELO = { verde: 'Cabe', amarelo: 'Atenção', vermelho: 'Passou' };
  */
 export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
   const el = {
-    semCartao: elemento('simular-sem-cartao'),
+    descricao: elemento('simular-descricao'),
     cartao: elemento('simular-cartao'),
+    parcelamento: elemento('simular-parcelamento'),
+    soAVista: elemento('simular-so-avista'),
+    ia: elemento('simular-ia'),
+    iaDesligada: elemento('simular-ia-desligada'),
+    iaConteudo: elemento('simular-ia-conteudo'),
     comprarEm: elemento('simular-comprar-em'),
     voltar: elemento('simular-voltar'),
     aVista: elemento('simular-avista'),
@@ -92,7 +104,7 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
 
     const caixa = criar('span', { classe: 'campo-dinheiro' });
     const total = criar('input', {
-      inputmode: 'decimal', placeholder: 'sem juros', autocomplete: 'off', 'aria-label': 'Total parcelado',
+      inputmode: 'numeric', placeholder: 'sem juros', autocomplete: 'off', 'aria-label': 'Total parcelado',
     });
     caixa.append(criar('span', { texto: 'R$', 'aria-hidden': 'true' }), total);
 
@@ -132,8 +144,9 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
    *
    * @returns {object|null} Entrada para simularCompra, ou null sem preço à vista.
    */
-  function lerEntrada(aVistaCentavos) {
-    const opcoes = [...el.opcoes.children].map((li) => {
+  function lerEntrada(aVistaCentavos, ehCartao) {
+    // Fora do cartão não há parcelamento: só a opção à vista.
+    const opcoes = !ehCartao ? [] : [...el.opcoes.children].map((li) => {
       const parcelas = Number(li.querySelector('select').value);
       const texto = li.querySelector('input').value.trim();
       // Total vazio = sem juros: o mesmo preço à vista, dividido nas parcelas.
@@ -223,9 +236,8 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
   function fichaDaOpcao(opcao, formaPagamento, aVistaCentavos) {
     const ficha = criar('section', { classe: 'cartao opcao-simulada', 'data-cor': opcao.cor });
 
-    const titulo = opcao.parcelas === 1
-      ? 'À vista no cartão'
-      : `${opcao.parcelas}x de ${formatarCentavos(opcao.valorParcelaCentavos)}`;
+    let titulo = `${opcao.parcelas}x de ${formatarCentavos(opcao.valorParcelaCentavos)}`;
+    if (opcao.parcelas === 1) titulo = opcao.limite === null ? `À vista no ${formaPagamento}` : 'À vista no cartão';
     const topo = criar('div', { classe: 'opcao-topo' });
     topo.append(criar('h2', { texto: titulo }), criar('span', { classe: 'selo-opcao', texto: SELO[opcao.cor] }));
 
@@ -241,7 +253,9 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
     const primeira = opcao.primeiraParcelaCentavos !== opcao.valorParcelaCentavos
       ? ` (a 1ª é ${formatarCentavos(opcao.primeiraParcelaCentavos)})`
       : '';
-    linha(`Total ${formatarCentavos(opcao.totalCentavos)} · 1ª parcela paga em ${dataCurta(opcao.primeiroVencimento)}${primeira}`);
+    linha(opcao.limite === null
+      ? `Total ${formatarCentavos(opcao.totalCentavos)} · sai da conta em ${dataCurta(opcao.primeiroVencimento)}`
+      : `Total ${formatarCentavos(opcao.totalCentavos)} · 1ª parcela paga em ${dataCurta(opcao.primeiroVencimento)}${primeira}`);
 
     // Juros.
     if (opcao.parcelas > 1) {
@@ -250,19 +264,22 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
         : 'Sem juros');
     }
 
-    // Limite.
-    const { limiteCentavos, disponivelDepoisCentavos, estimativa: limiteEstimado } = opcao.limite;
-    const sufixoLimite = limiteEstimado ? ' (estimativa)' : '';
-    if (disponivelDepoisCentavos < 0) {
-      linha(`Passa do limite do ${formaPagamento} em ${formatarCentavos(-disponivelDepoisCentavos)}${sufixoLimite}`, 'linha-alerta');
-    } else {
-      linha(`Limite do ${formaPagamento} depois: ${formatarCentavos(disponivelDepoisCentavos)} de ` +
-        `${formatarCentavos(limiteCentavos)}${sufixoLimite}`);
+    // Limite (só no cartão).
+    if (opcao.limite !== null) {
+      const { limiteCentavos, disponivelDepoisCentavos, estimativa: limiteEstimado } = opcao.limite;
+      const sufixoLimite = limiteEstimado ? ' (estimativa)' : '';
+      if (disponivelDepoisCentavos < 0) {
+        linha(`Passa do limite do ${formaPagamento} em ${formatarCentavos(-disponivelDepoisCentavos)}${sufixoLimite}`, 'linha-alerta');
+      } else {
+        linha(`Limite do ${formaPagamento} depois: ${formatarCentavos(disponivelDepoisCentavos)} de ` +
+          `${formatarCentavos(limiteCentavos)}${sufixoLimite}`);
+      }
     }
 
-    // Mês mais apertado (o pior entre os meses com parcela).
+    // Mês mais apertado (o pior entre os meses com parcela); à vista fora do cartão, o mês da compra.
     const estimativa = opcao.estimativa ? ' (estimativa)' : '';
-    linha(`Mês mais apertado: ${mesPorExtenso(opcao.piorMes.mes)}, com ${formatarCentavos(opcao.piorMes.sobraCentavos)} de sobra${estimativa}`,
+    const rotuloMes = opcao.limite === null ? 'Sobra do mês' : 'Mês mais apertado';
+    linha(`${rotuloMes}: ${mesPorExtenso(opcao.piorMes.mes)}, com ${formatarCentavos(opcao.piorMes.sobraCentavos)} de sobra${estimativa}`,
       opcao.piorMes.sobraCentavos < 0 ? 'linha-alerta' : undefined);
 
     ficha.append(topo, linhas, quadroQuandoComprar(opcao.melhorMomento), tabelaMesAMes(opcao.meses));
@@ -277,27 +294,101 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
     return ficha;
   }
 
+  /* ---------------- Sugestão da IA (compra inteira) ---------------- */
+
+  /** Última simulação válida (a IA avalia exatamente o que está na tela). */
+  let ultima = null;
+
+  /** Botão "Avaliar com IA" e a resposta em blocos (Sugestão, Por quê, Cuidados). */
+  function blocoAvaliar() {
+    const botao = criar('button', { classe: 'botao-pequeno botao-ia', type: 'button', texto: 'Avaliar com IA' });
+    const resposta = criar('div', { classe: 'ia-resposta', 'aria-live': 'polite', hidden: '' });
+    botao.addEventListener('click', async () => {
+      if (ultima === null) return;
+      botao.disabled = true;
+      resposta.hidden = false;
+      resposta.dataset.estado = 'carregando';
+      resposta.replaceChildren(criar('p', { texto: 'Avaliando…' }));
+
+      const resultado = await chamarGemini(obterConfigIA(), ultima.mensagem());
+      botao.disabled = false;
+      botao.textContent = 'Avaliar de novo';
+      if (resultado.ok) {
+        resposta.dataset.estado = 'ok';
+        resposta.replaceChildren(
+          ...elementosDosBlocos(blocosDaResposta(resultado.texto)),
+          criar('p', { classe: 'ia-selo', texto: 'Texto gerado por IA. Confira os números nas fichas abaixo.' }),
+        );
+      } else {
+        resposta.dataset.estado = 'erro';
+        resposta.replaceChildren(criar('p', { texto: resultado.erro }));
+      }
+    });
+    return [botao, resposta];
+  }
+
+  /** Mostra o quadro da IA: o botão (IA ligada) ou como ligar (IA desligada). */
+  function atualizarQuadroIA(temResultado) {
+    el.ia.hidden = !temResultado;
+    if (!temResultado) {
+      el.iaConteudo.replaceChildren();
+      return;
+    }
+    const ligada = iaDisponivel(obterConfigIA());
+    el.iaDesligada.hidden = ligada;
+    // Recria o botão a cada mudança: uma resposta antiga não vale para números novos.
+    el.iaConteudo.replaceChildren(...(ligada ? blocoAvaliar() : []));
+  }
+
   /** Recalcula e redesenha o resultado (a cada tecla). */
   function calcular() {
     el.erro.textContent = '';
     el.resultado.replaceChildren();
+    ultima = null;
 
     const dados = obterDados();
-    if (!dados || el.cartao.value === '') return;
+    const ehCartao = (dados?.cartoes ?? []).some((c) => c.formaPagamento === el.cartao.value);
+    el.parcelamento.hidden = !ehCartao;
+    el.soAVista.hidden = ehCartao || el.cartao.value === '';
+    if (!dados || el.cartao.value === '') {
+      atualizarQuadroIA(false);
+      return;
+    }
 
     let aVistaCentavos;
     try {
       aVistaCentavos = reaisParaCentavos(el.aVista.value);
     } catch {
+      atualizarQuadroIA(false);
       return; // ainda digitando: sem resultado, sem erro
     }
-    if (aVistaCentavos <= 0) return;
+    if (aVistaCentavos <= 0) {
+      atualizarQuadroIA(false);
+      return;
+    }
 
     try {
-      const visao = dadosDoMes(dados, mesDaData(hojeLocal()));
-      const { opcoes } = simularCompra(visao, lerEntrada(aVistaCentavos));
-      el.resultado.replaceChildren(...opcoes.map((o) => fichaDaOpcao(o, el.cartao.value, aVistaCentavos)));
+      const hoje = hojeLocal();
+      const visao = dadosDoMes(dados, mesDaData(hoje));
+      const resultado = simularCompra(visao, lerEntrada(aVistaCentavos, ehCartao));
+      const formaPagamento = el.cartao.value;
+      el.resultado.replaceChildren(...resultado.opcoes.map((o) => fichaDaOpcao(o, formaPagamento, aVistaCentavos)));
+      const descricao = el.descricao.value;
+      ultima = {
+        // Montada só no clique, com os números deste momento.
+        mensagem: () => {
+          let mes = null;
+          try {
+            mes = resumoDoMes(dados, mesDaData(hoje), hoje);
+          } catch {
+            mes = null; // sem resumo (ex.: mês ainda sem registro): a IA usa só as opções
+          }
+          return mensagemDaAvaliacao(resultado, { formaPagamento, aVistaCentavos, hoje, descricao, mes });
+        },
+      };
+      atualizarQuadroIA(true);
     } catch (falha) {
+      atualizarQuadroIA(false);
       // Erros de digitação (ex.: total parcelado "12,3,4") viram mensagem; outros são defeito.
       if (!(falha instanceof ErroValidacao)) throw falha;
       el.erro.textContent = falha.campo === 'valor'
@@ -307,6 +398,10 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
   }
 
   el.cartao.addEventListener('change', calcular);
+  // O nome não muda os números: só a sugestão da IA, que lê o nome no clique.
+  el.descricao.addEventListener('input', () => {
+    if (ultima !== null) atualizarQuadroIA(true);
+  });
   el.comprarEm.addEventListener('change', calcular);
   el.aVista.addEventListener('input', calcular);
   el.opcoes.addEventListener('input', calcular);
@@ -320,22 +415,33 @@ export function iniciarSimulador({ obterDados, obterConfigIA = () => null }) {
   /**
    * Guarda o valor, o cartão e a tela de origem para preencher o simulador.
    *
-   * @param {{ formaPagamento?: string, valorTexto?: string, origem?: string }} dadosIniciais
+   * @param {{ formaPagamento?: string, valorTexto?: string, descricao?: string, origem?: string }} dadosIniciais
    */
   function preencher(dadosIniciais) {
     inicial = dadosIniciais;
   }
 
-  /** Monta a lista de cartões e recalcula. Chamado ao abrir a vista. */
+  /** Monta a lista de formas de pagamento e recalcula. Chamado ao abrir a vista. */
   function renderizar() {
-    const cartoes = obterDados()?.cartoes ?? [];
+    const dados = obterDados();
+    const cartoes = (dados?.cartoes ?? []).map((c) => c.formaPagamento);
+    // Cartões primeiro (podem parcelar); depois Pix, débito, dinheiro... (à vista).
+    const outras = (dados?.formasPagamento ?? []).filter((f) => !cartoes.includes(f));
     const escolhido = inicial?.formaPagamento ?? el.cartao.value;
 
-    el.semCartao.hidden = cartoes.length > 0;
-    el.cartao.replaceChildren(...cartoes.map((c) => criar('option', { value: c.formaPagamento, texto: c.formaPagamento })));
-    if (cartoes.some((c) => c.formaPagamento === escolhido)) el.cartao.value = escolhido;
+    const grupo = (rotulo, formas) => {
+      const g = criar('optgroup', { label: rotulo });
+      g.append(...formas.map((f) => criar('option', { value: f, texto: f })));
+      return g;
+    };
+    const grupos = [];
+    if (cartoes.length > 0) grupos.push(grupo('Cartão (à vista ou parcelado)', cartoes));
+    if (outras.length > 0) grupos.push(grupo('À vista (sai da conta)', outras));
+    el.cartao.replaceChildren(...grupos);
+    if ([...cartoes, ...outras].includes(escolhido)) el.cartao.value = escolhido;
 
     if (inicial?.valorTexto) el.aVista.value = inicial.valorTexto;
+    if (inicial && 'descricao' in inicial) el.descricao.value = inicial.descricao ?? '';
 
     // Botão Voltar: para a tela de onde a pessoa veio (Lançar ou Configurar).
     if (inicial?.origem) {

@@ -60,6 +60,10 @@ import {
   VERSAO_APP, numeroDaVersao, textoDoAvisoDaCopia, haVersaoNova, textoDaVersaoNova, deveVerificarVersao,
   RESULTADOS_DA_PROCURA, textoDaProcura,
 } from '../versao-app.js';
+import { ligarCamposDeDinheiro } from './campo-dinheiro.js';
+
+// Digitação "de banco" em todos os campos de valor (os números entram pelos centavos).
+ligarCamposDeDinheiro();
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -99,6 +103,7 @@ const el = {
   rodapeTexto: elemento('rodape-texto'),
   linhaCartao: elemento('linha-cartao'),
   linkSimular: elemento('link-simular'),
+  descricao: elemento('descricao'),
   parcelas: elemento('parcelas'),
   infoCartao: elemento('info-cartao'),
   campoData: elemento('campo-data'),
@@ -432,11 +437,15 @@ function atualizar() {
     hoje,
     data: el.dataGasto.value,
     parcelas: Number(el.parcelas.value) || 1,
+    descricao: el.descricao.value,
   });
 
   // Compra no cartão: escolha das parcelas, quando a fatura é paga e o limite.
   el.linhaCartao.hidden = !painel.ehCartao;
-  el.linkSimular.hidden = !painel.ehCartao;
+  // Atalho para "Avaliar compra": sempre visível; com valor, fala "desta compra".
+  el.linkSimular.textContent = painel.lancamento === null
+    ? 'Pensando numa compra? Avaliar antes →'
+    : 'Avaliar esta compra (parcelas, melhor mês e IA) →';
   const linhaLimite = document.createElement('span');
   let classeLimite = 'linha-limite';
   if (painel.limiteEstourado) classeLimite += ' estourado';
@@ -497,6 +506,7 @@ el.formulario.addEventListener('submit', async (evento) => {
   const categoria = dados.categorias.find((c) => c.id === painel.lancamento.categoriaId);
   const parcelasTexto = painel.lancamento.parcelas > 1 ? ` em ${painel.lancamento.parcelas}x` : '';
   el.valor.value = '';
+  el.descricao.value = '';
   el.parcelas.value = '1'; // a próxima compra volta a ser à vista
   atualizar();
   el.valor.focus();
@@ -504,9 +514,10 @@ el.formulario.addEventListener('submit', async (evento) => {
   // A data escolhida continua escolhida: facilita lançar vários gastos
   // esquecidos do mesmo dia. A borda âmbar avisa que não é hoje.
   const doDia = painel.dataAnterior ? `, ${painel.dataTexto.replace('Gasto do dia', 'no dia')}` : '';
+  const nome = painel.lancamento.descricao ? ` (${painel.lancamento.descricao})` : '';
   const gravou = await gravar(dados);
   el.rodapeTexto.textContent = gravou
-    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)}${parcelasTexto} em ${categoria.nome}${doDia}.`
+    ? `Lançado: ${formatarCentavos(painel.lancamento.valorCentavos)}${parcelasTexto} em ${categoria.nome}${nome}${doDia}.`
     : avisoSemGravacao();
 });
 
@@ -717,7 +728,7 @@ async function aplicarMudanca(novos, mensagem) {
 const configurar = iniciarConfigurar({
   obterDados: () => dados,
   aplicarMudanca,
-  // Botão "Simular compra" de cada cartão: abre o simulador com aquele cartão.
+  // Botão "Avaliar compra" de cada cartão: abre o simulador com aquele cartão.
   // (O simulador é criado logo abaixo; o clique só acontece depois.)
   abrirSimulador: (formaPagamento) => {
     simulador.preencher({ formaPagamento, origem: '#configurar' });
@@ -815,6 +826,7 @@ el.linkSimular.addEventListener('click', () => {
   simulador.preencher({
     formaPagamento: el.formulario.elements.pagamento.value,
     valorTexto: el.valor.value,
+    descricao: el.descricao.value,
     origem: '#lancar',
   });
 });
@@ -983,6 +995,7 @@ function trocarDados(novos, { manterSincronizacao = false } = {}) {
   ultimaAnalise = null;
   apagarAnaliseMes().catch(() => {});
   el.valor.value = '';
+  el.descricao.value = '';
   montarChips();
   atualizar();
   atualizarPonto();

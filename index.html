@@ -120,9 +120,15 @@
         <label for="valor" class="secundario">Valor</label>
         <div class="valor-linha">
           <span class="valor-moeda" aria-hidden="true">R$</span>
-          <input id="valor" name="valor" inputmode="decimal" placeholder="0,00" enterkeyhint="done">
+          <input id="valor" name="valor" inputmode="numeric" placeholder="0,00" enterkeyhint="done">
         </div>
       </div>
+
+      <!-- Nome do gasto: opcional, aparece no histórico (ex.: "Almoço com a equipe") -->
+      <label class="campo campo-descricao">
+        <span class="secundario">O que foi (opcional)</span>
+        <input id="descricao" name="descricao" maxlength="80" placeholder="Ex.: Almoço com a equipe" autocomplete="off" enterkeyhint="done">
+      </label>
 
       <fieldset class="grupo">
         <legend class="secundario">Categoria</legend>
@@ -142,8 +148,8 @@
         </label>
         <p class="secundario info-cartao" id="info-cartao"></p>
       </div>
-      <!-- Atalho para o simulador (Fase 02, parte 2.5), com o valor e o cartão já preenchidos -->
-      <a href="#simular" class="link-simular" id="link-simular" hidden>Simular parcelamento e melhor mês →</a>
+      <!-- Atalho para "Avaliar compra": leva o valor, a forma de pagamento e o nome já preenchidos -->
+      <a href="#simular" class="link-simular" id="link-simular">Pensando numa compra? Avaliar antes →</a>
 
       <!-- Data do gasto: já vem como hoje; muda só para lançar um gasto esquecido do mês -->
       <label class="campo-data" id="campo-data">
@@ -426,46 +432,60 @@
 
   </main>
 
-  <!-- Vista "Simular compra" (Fase 02, parte 2.5): uma consulta, nada é gravado -->
+  <!-- Vista "Avaliar compra" (Fase 02, parte 2.5; à vista e IA desde 11/2026): uma consulta, nada é gravado -->
   <main class="tela tela-simular" id="tela-simular" hidden>
 
     <header class="cabecalho">
       <div class="cabecalho-linha">
-        <h1>Simular compra</h1>
+        <h1>Avaliar compra</h1>
         <a href="#lancar" class="botao-pequeno link-voltar" id="simular-voltar">‹ Lançar</a>
       </div>
-      <p class="secundario">Só uma consulta: nada é gravado.</p>
+      <p class="secundario">À vista ou parcelado, agora ou mais tarde. Só uma consulta: nada é gravado.</p>
     </header>
 
     <section class="cartao" aria-labelledby="titulo-simular-compra">
       <h2 id="titulo-simular-compra">Compra</h2>
-      <p class="secundario explicacao" id="simular-sem-cartao" hidden>Cadastre um cartão em Configurar para simular uma compra.</p>
       <label class="campo">
-        <span class="secundario">Cartão</span>
-        <select id="simular-cartao"></select>
+        <span class="secundario">O que é (opcional)</span>
+        <input id="simular-descricao" maxlength="80" placeholder="Ex.: Tablet" autocomplete="off">
       </label>
       <label class="campo">
         <span class="secundario">Preço à vista</span>
         <span class="campo-dinheiro">
           <span aria-hidden="true">R$</span>
-          <input id="simular-avista" inputmode="decimal" placeholder="0,00" autocomplete="off">
+          <input id="simular-avista" inputmode="numeric" placeholder="0,00" autocomplete="off">
         </span>
+      </label>
+      <label class="campo">
+        <span class="secundario">Como pagar</span>
+        <select id="simular-cartao"></select>
       </label>
       <!-- "E se eu comprar em...?": agora ou um dos próximos 12 meses -->
       <label class="campo">
         <span class="secundario">Comprar em</span>
         <select id="simular-comprar-em"></select>
       </label>
-      <h3 class="subtitulo-secao">Opções de parcelamento</h3>
-      <p class="secundario explicacao">Como a loja oferece: o número de parcelas e o total parcelado. Total vazio = sem juros (o mesmo preço à vista).</p>
-      <ul class="lista-opcoes" id="simular-opcoes"></ul>
-      <button type="button" class="botao-secundario" id="simular-adicionar">Adicionar opção</button>
+      <!-- Parcelamento: só no cartão -->
+      <div id="simular-parcelamento">
+        <h3 class="subtitulo-secao">Opções de parcelamento</h3>
+        <p class="secundario explicacao">Como a loja oferece: o número de parcelas e o total parcelado. Total vazio = sem juros (o mesmo preço à vista).</p>
+        <ul class="lista-opcoes" id="simular-opcoes"></ul>
+        <button type="button" class="botao-secundario" id="simular-adicionar">Adicionar opção</button>
+      </div>
+      <p class="secundario explicacao" id="simular-so-avista" hidden>Fora do cartão a compra é à vista: o dinheiro sai da conta no dia. Para ver parcelas, escolha um cartão.</p>
       <span class="erro" id="simular-erro"></span>
+    </section>
+
+    <!-- Sugestão da IA para a compra inteira (melhor opção e momento) -->
+    <section class="cartao ia-avaliacao" id="simular-ia" aria-labelledby="titulo-simular-ia" hidden>
+      <h2 id="titulo-simular-ia">Sugestão da IA</h2>
+      <p class="secundario explicacao" id="simular-ia-desligada" hidden>Ligue a IA em Configurar para receber uma sugestão: se é o momento certo, à vista ou em quantas vezes.</p>
+      <div id="simular-ia-conteudo"></div>
     </section>
 
     <div class="resultado-simulacao" id="simular-resultado"></div>
 
-    <p class="secundario explicacao">Estimativa: os meses seguintes usam a renda deste mês, as contas fixas, as faturas já comprometidas e os orçamentos das categorias. O simulador mostra números; ele não recomenda comprar.</p>
+    <p class="secundario explicacao">Estimativa: os meses seguintes usam a renda deste mês, as contas fixas, as faturas já comprometidas e os orçamentos das categorias. As cores são do app; a sugestão da IA é só uma opinião sobre esses números: a decisão é sua.</p>
 
   </main>
 
@@ -491,7 +511,7 @@
           <span class="secundario">Saldo na conta no início do mês</span>
           <span class="campo-dinheiro">
             <span aria-hidden="true">R$</span>
-            <input id="saldo-inicial" name="saldo" inputmode="decimal" placeholder="0,00" aria-describedby="erro-saldo">
+            <input id="saldo-inicial" name="saldo" inputmode="decimal" placeholder="0,00" aria-describedby="erro-saldo" data-sinal>
           </span>
           <span class="erro" id="erro-saldo"></span>
         </label>
