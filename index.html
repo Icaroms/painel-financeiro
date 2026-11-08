@@ -711,6 +711,7 @@
       <h2 class="titulo-grupo" id="g-ajustes-app">App</h2>
       <nav class="menu">
       <a href="#ajustes/ia" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg><span class="item-menu-texto"><span>IA (Gemini)</span><span class="secundario" id="ajuste-resumo-ia"></span></span><span class="chevron" aria-hidden="true">›</span></a>
+      <a href="#ajustes/lembretes" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="item-menu-texto"><span>Lembretes de vencimento</span><span class="secundario" id="ajuste-resumo-lembretes"></span></span><span class="chevron" aria-hidden="true">›</span></a>
       <a href="#ajustes/conta" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 0 1-.6-10 6 6 0 0 1 11.4 1.5A4.5 4.5 0 0 1 17.5 18z"/></svg><span class="item-menu-texto"><span>Conta, nuvem e backup</span><span class="secundario" id="ajuste-resumo-conta"></span></span><span class="ponto-item" id="ajuste-ponto-conta" hidden></span><span class="chevron" aria-hidden="true">›</span></a>
       <a href="#ajustes/app" class="item-menu"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="item-menu-texto"><span>Sobre e atualização</span><span class="secundario" id="ajuste-resumo-app"></span></span><span class="chevron" aria-hidden="true">›</span></a>
       </nav>
@@ -981,6 +982,18 @@
 
     <!-- Versão que está rodando neste aparelho (vem do service worker): para comparar celular e PC -->
     <!-- Versão do código desta página e o botão que pergunta ao servidor se há publicação nova -->
+    <!-- 11/2026: lembretes de vencimento neste aparelho (src/ui/lembretes.js) -->
+    <section class="cartao" aria-labelledby="titulo-lembretes" data-pagina="lembretes">
+      <h2 id="titulo-lembretes">Lembretes de vencimento</h2>
+      <p class="secundario explicacao">O app avisa as contas e faturas que vencem hoje e amanhã, e as que passaram do vencimento sem serem marcadas como pagas. Um aviso por conta, por dia, em cada aparelho. Por enquanto o aviso aparece quando você abre o app (e a cada 30 minutos com ele aberto); com o app fechado, depois que o servidor estiver hospedado.</p>
+      <label class="opcao-check">
+        <input type="checkbox" id="lembretes-ligados">
+        <span><strong>Avisar contas que vencem</strong><span class="secundario"> — notificação no aparelho.</span></span>
+      </label>
+      <p class="secundario" id="lembretes-situacao" aria-live="polite"></p>
+      <button type="button" class="botao-secundario" id="lembretes-testar" hidden>Mandar um aviso de teste</button>
+    </section>
+
     <div class="cartao versao-app-bloco" data-pagina="app">
       <h2>Sobre e atualização</h2>
       <p class="secundario">Painel Financeiro: seu controle de gastos, com os dados guardados neste aparelho (e na sua conta, se conectada).</p>

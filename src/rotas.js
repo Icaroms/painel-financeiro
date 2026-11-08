@@ -10,7 +10,7 @@
  *   #investir/<parte>          → uma parte de Investir: carteira | simulador | radar | receita
  *   #simular                   → Avaliar compra
  *   #ajustes                   → menu de Ajustes
- *   #ajustes/<parte>           → uma página de Ajustes (o antigo Configurar, em partes)
+ *   #ajustes/<parte>           → uma página de Ajustes (o antigo Configurar, em partes; lembretes desde 11/2026)
  *
  * Endereços antigos continuam funcionando: #configurar vira #ajustes e
  * #investir vira #planejar/investir. Endereço desconhecido: Início.
@@ -28,7 +28,7 @@ export const PARTES_DE_PLANEJAR = Object.freeze(['compras', 'calendario', 'inves
 export const PAGINAS_DE_INVESTIR = Object.freeze(['carteira', 'simulador', 'radar', 'receita']);
 
 /** Páginas de Ajustes, na ordem do menu. */
-export const PAGINAS_DE_AJUSTES = Object.freeze(['dinheiro', 'contas', 'categorias', 'pagamentos', 'sobra', 'ia', 'conta', 'app']);
+export const PAGINAS_DE_AJUSTES = Object.freeze(['dinheiro', 'contas', 'categorias', 'pagamentos', 'sobra', 'ia', 'lembretes', 'conta', 'app']);
 
 /**
  * Lê o endereço.

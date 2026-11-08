@@ -49,6 +49,7 @@ import { lerRota } from '../rotas.js';
 import { resumosDosAjustes } from '../resumo-ajustes.js';
 import { excluirLancamento } from '../resumo-mes.js';
 import { iniciarInicio } from './inicio-tela.js';
+import { iniciarLembretes } from './lembretes.js';
 import { iniciarCalendario } from './calendario.js';
 import { iniciarGraficosMes } from './graficos-mes.js';
 import { iniciarTema, iniciarOcultarValores, iniciarFolha, criarToast, ligarAjudas } from './interface.js';
@@ -912,6 +913,8 @@ iniciarFolha({
 /* Início, Ajustes, tema e ajuda                                       */
 /* ------------------------------------------------------------------ */
 
+// Lembretes de vencimento (Ajustes → Lembretes): notificação no aparelho.
+const lembretes = iniciarLembretes({ obterDados: () => dados });
 const inicio = iniciarInicio({ obterDados: () => dados, backupAtrasado: () => situacaoDoBackup(dados).atrasado });
 // Gráficos do Mês e calendário de 90 dias (Planejar), 11/2026.
 const graficosMes = iniciarGraficosMes({ obterDados: () => dados });
@@ -927,6 +930,7 @@ function renderizarAjustes() {
   const backup = situacaoDoBackup(dados);
   const { textos, pontos } = resumosDosAjustes(dados, hojeLocal(), {
     iaLigada: iaDisponivel(configIA), backupTexto: backup.texto, backupAtrasado: backup.atrasado, versao: numeroDaVersao(VERSAO_APP),
+    lembretesLigados: lembretes.ligados(),
   });
   for (const [pagina, texto] of Object.entries(textos)) {
     const linha = document.getElementById(`ajuste-resumo-${pagina}`);
@@ -940,7 +944,8 @@ function renderizarAjustes() {
 /** Títulos das páginas de Ajustes e de Investir. */
 const TITULOS_DE_AJUSTES = {
   dinheiro: 'Dinheiro e entradas', contas: 'Contas fixas', categorias: 'Categorias e orçamentos',
-  pagamentos: 'Cartões e pagamentos', sobra: 'Destino da sobra', ia: 'IA (Gemini)', conta: 'Conta, nuvem e backup',
+  pagamentos: 'Cartões e pagamentos', sobra: 'Destino da sobra', ia: 'IA (Gemini)', lembretes: 'Lembretes de vencimento',
+  conta: 'Conta, nuvem e backup',
   app: 'Sobre e atualização',
 };
 const TITULOS_DE_INVESTIR = {
@@ -1067,6 +1072,7 @@ function mostrarVista() {
     orcamentos.renderizar();
     destinoConfig.renderizar();
     configuracaoIA.renderizar();
+    lembretes.renderizar();
     nuvem.aoAbrirConfigurar();
   }
   if (vista === 'simular') simulador.renderizar();
@@ -1245,6 +1251,8 @@ pedirArmazenamentoPersistente();
 // Conta da nuvem: lê a sessão guardada e sincroniza logo depois de abrir.
 await nuvem.carregar();
 nuvem.agendar(1000);
+// Ao abrir: avisa o que vence hoje e amanhã (se os lembretes estiverem ligados neste aparelho).
+lembretes.verificar();
 
 /**
  * Mostra ou esconde uma faixa do topo (cópia guardada ou versão nova).
