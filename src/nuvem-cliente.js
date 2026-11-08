@@ -1,8 +1,8 @@
 /**
  * Conversa com o servidor do Painel Financeiro (Fase 05, parte 5.3).
  *
- * Login, renovação do token, sincronização, saída, backups na nuvem (5.4)
- * e "apagar os dados da conta" (5.4). A sessão (tokens)
+ * Login, renovação do token, sincronização, saída, backups na nuvem (5.4),
+ * "apagar os dados da conta" (5.4) e a IA pelo servidor (5.5). A sessão (tokens)
  * fica guardada no aparelho por quem usa este módulo (src/ui/nuvem.js),
  * fora do backup; a senha nunca é guardada.
  *
@@ -132,6 +132,19 @@ export function criarClienteNuvem({ endereco, obterSessao, salvarSessao, buscar 
     return new ErroNuvem('servidor', `Erro do servidor (${status}). Tente de novo em instantes.`);
   }
 
+  /**
+   * Erros da IA do servidor: 429 (limite do dia), 502/504 (o Gemini falhou
+   * ou demorou) e 503 (sem chave no servidor) trazem uma explicação em
+   * "detail", que vai direto para a tela.
+   */
+  function erroDaIa(resposta) {
+    const detalhe = resposta.json?.detail;
+    if (detalhe && [429, 502, 503, 504].includes(resposta.status)) {
+      return new ErroNuvem(resposta.status === 429 ? 'limite' : 'servidor', detalhe);
+    }
+    return erroDoServidor(resposta);
+  }
+
   async function renovar() {
     const sessao = obterSessao();
     if (!sessao?.tokenRenovacao) throw new ErroNuvem('sessao', 'Entre na sua conta para sincronizar.');
@@ -214,6 +227,20 @@ export function criarClienteNuvem({ endereco, obterSessao, salvarSessao, buscar 
     async zerarDados() {
       const resposta = await comToken('/api/conta/dados', { metodo: 'DELETE' });
       if (resposta.status !== 200) throw erroDoServidor(resposta);
+      return resposta.json;
+    },
+
+    /** GET /api/ia (5.5): { disponivel, modelos, usadosHoje, limiteDiario }. */
+    async situacaoIa() {
+      const resposta = await comToken('/api/ia', { metodo: 'GET' });
+      if (resposta.status !== 200) throw erroDaIa(resposta);
+      return resposta.json;
+    },
+
+    /** POST /api/ia/gerar (5.5): { instrucoes, conteudo, modelo } → { texto, usadosHoje, limiteDiario }. */
+    async gerarComIa({ instrucoes, conteudo, modelo }) {
+      const resposta = await comToken('/api/ia/gerar', { corpo: { instrucoes, conteudo, modelo } });
+      if (resposta.status !== 200) throw erroDaIa(resposta);
       return resposta.json;
     },
 

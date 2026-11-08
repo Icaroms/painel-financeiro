@@ -30,7 +30,8 @@ class LimiteTentativasLoginTest {
                 new PainelProperties.Cors(List.of("http://localhost:8080")),
                 new PainelProperties.Login(3, Duration.ofMinutes(10)),
                 null,
-                new PainelProperties.Backups(10, DataSize.ofMegabytes(5)));
+                new PainelProperties.Backups(10, DataSize.ofMegabytes(5)),
+                new PainelProperties.Ia("", "http://localhost", List.of("modelo"), 50, 30000, Duration.ofSeconds(30)));
         limite = new LimiteTentativasLogin(propriedades, relogio);
     }
 

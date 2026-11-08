@@ -96,7 +96,7 @@ function mensagemDe(erro, padrao) {
  *
  * @param {object} opcoes Ver o comentário do topo.
  * @returns {object} { carregar, renderizar, aoAbrirConfigurar, agendar, sincronizar,
- *   dadosTrocados, conectado, zerarNaNuvem }
+ *   dadosTrocados, conectado, zerarNaNuvem, situacaoIa, gerarComIa }
  */
 export function iniciarNuvem({
   obterDados, podeSincronizar, aplicarDaNuvem, substituirPelaNuvem, restaurarBackup, backupFeito,
@@ -634,5 +634,9 @@ export function iniciarNuvem({
     conectado,
     /** Apaga os dados da conta no servidor (lança ErroNuvem se não conseguir). */
     zerarNaNuvem: () => zerarNaNuvem(),
+    /** IA do servidor (5.5): situação da conta (lança ErroNuvem se não conseguir). */
+    situacaoIa: () => cliente().situacaoIa(),
+    /** IA do servidor (5.5): pede uma resposta (lança ErroNuvem se não conseguir). */
+    gerarComIa: (pedido) => cliente().gerarComIa(pedido),
   };
 }

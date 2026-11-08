@@ -21,6 +21,7 @@ const contar = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
  * @param {string} hoje "AAAA-MM-DD".
  * @param {object} [extras]
  * @param {boolean} [extras.iaLigada]
+ * @param {boolean} [extras.iaServidor] A IA vem do servidor da conta (5.5).
  * @param {string} [extras.backupTexto] Ex.: "Último backup: há 3 dias".
  * @param {boolean} [extras.backupAtrasado] O lembrete de backup venceu.
  * @param {boolean} [extras.lembretesLigados] Lembretes de vencimento ligados neste aparelho.
@@ -29,7 +30,7 @@ const contar = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
  *   textos: resumo de cada página; pontos: páginas que pedem atenção.
  */
 export function resumosDosAjustes(estado, hoje, {
-  iaLigada = false, backupTexto = '', backupAtrasado = false, versao = '', lembretesLigados = false,
+  iaLigada = false, iaServidor = false, backupTexto = '', backupAtrasado = false, versao = '', lembretesLigados = false,
 } = {}) {
   const mes = mesDaData(hoje);
   const registro = buscarMes(estado, mes);
@@ -49,7 +50,7 @@ export function resumosDosAjustes(estado, hoje, {
     categorias: `${contar(categorias.length, 'categoria', 'categorias')} · livre ${formatarCentavos(livre.livreCentavos)}`,
     pagamentos: (estado.formasPagamento ?? []).join(', ') || 'Nenhuma forma de pagamento',
     sobra: sobra ? `Reserva ${sobra.reserva}% · Investir ${sobra.investir}% · Alívio ${sobra.alivio}%` : 'Como dividir o que sobra',
-    ia: iaLigada ? 'Ligada' : 'Desligada',
+    ia: iaLigada ? `Ligada${iaServidor ? ' · pelo servidor da conta' : ''}` : 'Desligada',
     lembretes: `${lembretesLigados ? 'Ligados' : 'Desligados'}` +
       (vencendo > 0 ? ` · ${contar(vencendo, 'conta vence', 'contas vencem')} hoje ou amanhã` : ''),
     conta: backupTexto || 'Conta, sincronização e backup',
