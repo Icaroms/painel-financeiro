@@ -34,6 +34,9 @@
   --neutro: #8A99A6;
   --acento: #1C7C53;
   --sobre-acento: #FFFFFF;
+  /* Gráficos: azul para dados; vermelho só para valor negativo (sempre com texto) */
+  --dado: #2A78D6;
+  --dado-negativo: #B23A2E;
   --sombra: 0 1px 2px rgba(16, 24, 40, 0.05), 0 6px 16px rgba(16, 24, 40, 0.06);
   --sombra-forte: 0 12px 32px rgba(16, 24, 40, 0.16);
   --veu: rgba(15, 23, 32, 0.45);
@@ -60,6 +63,8 @@
     --neutro: #5D6F7E;
     --acento: #45C08A;
     --sobre-acento: #0F1A14;
+    --dado: #3987E5;
+    --dado-negativo: #E0533A;
     --sombra: none;
     --sombra-forte: 0 12px 32px rgba(0, 0, 0, 0.5);
     --veu: rgba(5, 9, 13, 0.6);
@@ -79,6 +84,8 @@
   --neutro: #5D6F7E;
   --acento: #45C08A;
   --sobre-acento: #0F1A14;
+  --dado: #3987E5;
+  --dado-negativo: #E0533A;
   --sombra: none;
   --sombra-forte: 0 12px 32px rgba(0, 0, 0, 0.5);
   --veu: rgba(5, 9, 13, 0.6);
@@ -1430,3 +1437,109 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: calc(20px + env(safe-ar
 #tela .botao-lancar { box-shadow: 0 0 0 12px var(--fundo), var(--sombra-forte); }
 #tela .botao-lancar:disabled { opacity: 1; background: var(--painel-2); color: var(--secundario); box-shadow: 0 0 0 12px var(--fundo); }
 .aviso-inicio .botao-texto { text-decoration: none; font-size: 14px; }
+
+/* =====================================================================
+   GRÁFICOS E CALENDÁRIO (11/2026)
+   ===================================================================== */
+.grafico { display: flex; flex-direction: column; gap: 10px; }
+.grafico-leitura { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; min-height: 24px; margin: 0; font-size: 14px; }
+.grafico-leitura strong { font-family: var(--fonte-numero); font-size: 20px; font-weight: 600; }
+.grafico-leitura strong.negativo { color: var(--dado-negativo); }
+.grafico-colunas {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  height: 172px;
+}
+/* Linha do zero: a única linha de grade, discreta */
+.grafico-colunas::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(22px + (100% - 22px) * var(--zero) / 100);
+  border-top: 1px solid var(--linha);
+  pointer-events: none;
+}
+.grafico-coluna {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--secundario);
+  font: inherit;
+  cursor: pointer;
+}
+.grafico-coluna:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.grafico-trilho { position: relative; flex: 1; border-radius: 6px; transition: background-color var(--transicao); }
+.grafico-coluna[aria-pressed="true"] .grafico-trilho { background: color-mix(in srgb, var(--texto) 6%, transparent); }
+.grafico-barra { position: absolute; left: 18%; right: 18%; border-radius: 4px 4px 0 0; background: var(--dado); }
+.grafico-barra.negativa { border-radius: 0 0 4px 4px; background: var(--dado-negativo); }
+/* Mês ainda em andamento: listras (não depende só da cor) */
+.grafico-barra.parcial { background: repeating-linear-gradient(135deg, var(--dado) 0 6px, color-mix(in srgb, var(--dado) 55%, var(--painel)) 6px 10px); }
+.grafico-rotulo { height: 16px; font-size: 12px; line-height: 16px; text-align: center; }
+.grafico-coluna[aria-pressed="true"] .grafico-rotulo { color: var(--texto); font-weight: 600; }
+.grafico-tabela summary { cursor: pointer; color: var(--secundario); font-size: 14px; }
+.grafico-tabela table { margin-top: 8px; }
+
+.grafico-ranking { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.grafico-ranking li { display: flex; flex-direction: column; gap: 6px; }
+.grafico-ranking-linha { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+.grafico-ranking-linha .secundario { font-size: 14px; white-space: nowrap; }
+.grafico-ranking-trilho { height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--linha) 70%, transparent); overflow: hidden; }
+.grafico-ranking-barra { height: 100%; border-radius: 0 4px 4px 0; background: var(--dado); }
+
+/* Calendário */
+.calendario-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -6px -8px 0; }
+.calendario-topo h2 { flex: 1; text-align: center; }
+.botao-icone:disabled { opacity: 0.35; cursor: default; background: none; }
+.calendario-totais { margin: 0; text-align: center; font-size: 14px; }
+.calendario-totais strong { color: var(--texto); font-family: var(--fonte-numero); font-size: 16px; }
+.calendario-grade { display: flex; flex-direction: column; gap: 4px; }
+.calendario-semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.calendario-semana > span { color: var(--secundario); font-size: 12px; font-weight: 600; text-align: center; }
+.calendario-celula {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  min-height: 48px;
+  padding: 6px 0 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--painel-2);
+  color: var(--texto);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--transicao), border-color var(--transicao);
+}
+.calendario-celula.passado { background: transparent; color: var(--secundario); }
+.calendario-celula.hoje { border-color: var(--texto); }
+.calendario-celula[aria-pressed="true"] { background: var(--texto); color: var(--fundo); }
+.calendario-celula:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.calendario-numero { font-family: var(--fonte-numero); font-size: 15px; font-weight: 600; line-height: 1; }
+.calendario-marcas { display: flex; gap: 2px; min-height: 14px; }
+.marca-fluxo { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; font-size: 12px; font-weight: 700; line-height: 1; color: #FFFFFF; }
+.marca-fluxo.saida { background: var(--dado-negativo); }
+.marca-fluxo.entrada { background: var(--verde); }
+:root[data-tema="escuro"] .marca-fluxo { color: #0F1A14; }
+@media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]) .marca-fluxo { color: #0F1A14; } }
+.calendario-legenda { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; font-size: 13px; }
+.calendario-dia { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--linha); }
+.calendario-dia-titulo { margin: 0; font-size: 15px; font-weight: 600; }
+.calendario-dia-titulo::first-letter { text-transform: uppercase; }
+.situacao-item { color: var(--secundario); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.situacao-item.atrasado { color: var(--vermelho); }
+.situacao-item.pago, .situacao-item.recebida { color: var(--verde); }
+.calendario-dia .nome { display: flex; align-items: center; gap: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .grafico-trilho, .calendario-celula { transition: none; }
+}

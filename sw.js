@@ -27,7 +27,7 @@
  * - ao mudar, a cópia antiga dos arquivos é apagada;
  * - uma página aberta com versão menor mostra o aviso "Há uma versão nova".
  */
-const VERSAO_CACHE = 'painel-financeiro-v35';
+const VERSAO_CACHE = 'painel-financeiro-v36';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -51,6 +51,7 @@ const ARQUIVOS = [
   './src/analise.js',
   './src/backup.js',
   './src/backup-nuvem.js',
+  './src/calendario.js',
   './src/carteira.js',
   './src/cartoes.js',
   './src/configuracao.js',
@@ -66,6 +67,7 @@ const ARQUIVOS = [
   './src/explicacoes.js',
   './src/fixos.js',
   './src/fluxo.js',
+  './src/graficos.js',
   './src/historico.js',
   './src/investimentos-ia.js',
   './src/ia.js',
@@ -98,10 +100,13 @@ const ARQUIVOS = [
   './src/ui/configurar-ia.js',
   './src/ui/configurar.js',
   './src/ui/destino.js',
+  './src/ui/calendario.js',
   './src/ui/campo-dinheiro.js',
   './src/ui/desejos.js',
   './src/ui/entradas.js',
   './src/ui/explicar.js',
+  './src/ui/graficos-mes.js',
+  './src/ui/graficos.js',
   './src/ui/inicio-tela.js',
   './src/ui/interface.js',
   './src/ui/historico.js',

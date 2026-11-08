@@ -33,6 +33,7 @@ describe('lerRota', () => {
   it('Planejar, Investir e Avaliar compra ficam na aba Planejar; #investir antigo abre a parte Investir', () => {
     assert.deepEqual(lerRota('#planejar'), { vista: 'planejar', parte: 'compras', aba: 'planejar' });
     assert.deepEqual(lerRota('#planejar/investir'), { vista: 'planejar', parte: 'investir', aba: 'planejar' });
+    assert.deepEqual(lerRota('#planejar/calendario'), { vista: 'planejar', parte: 'calendario', aba: 'planejar' });
     assert.deepEqual(lerRota('#investir'), { vista: 'planejar', parte: 'investir', aba: 'planejar' });
     assert.deepEqual(lerRota('#investir/radar'), { vista: 'investir', parte: 'radar', aba: 'planejar' });
     assert.deepEqual(lerRota('#simular'), { vista: 'simular', parte: null, aba: 'planejar' });
