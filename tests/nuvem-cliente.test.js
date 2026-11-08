@@ -193,4 +193,35 @@ describe('criarClienteNuvem', () => {
     assert.equal(resposta.zeradosEm, '2026-10-14T12:00:00Z');
     assert.equal(`${pedidos[0].metodo} ${pedidos[0].caminho}`, 'DELETE /api/conta/dados');
   });
+
+  it('IA do servidor (5.5): GET /api/ia e POST /api/ia/gerar com o token', async () => {
+    const { cliente, pedidos } = montar([
+      () => respostaHttp(200, { disponivel: true, modelos: ['gemini-3.5-flash-lite'], usadosHoje: 2, limiteDiario: 50 }),
+      () => respostaHttp(200, { texto: 'Pode comprar.', usadosHoje: 3, limiteDiario: 50 }),
+    ], tokens('1'));
+
+    assert.equal((await cliente.situacaoIa()).usadosHoje, 2);
+    const resposta = await cliente.gerarComIa({ instrucoes: 'i', conteudo: 'c', modelo: 'gemini-3.5-flash-lite' });
+
+    assert.equal(resposta.texto, 'Pode comprar.');
+    assert.equal(`${pedidos[0].metodo} ${pedidos[0].caminho}`, 'GET /api/ia');
+    assert.equal(`${pedidos[1].metodo} ${pedidos[1].caminho}`, 'POST /api/ia/gerar');
+    assert.deepEqual(pedidos[1].corpo, { instrucoes: 'i', conteudo: 'c', modelo: 'gemini-3.5-flash-lite' });
+    assert.equal(pedidos[1].token, 'acesso-1');
+  });
+
+  it('IA do servidor: limite do dia (429), sem chave (503) e Gemini fora (502) trazem a explicação do servidor', async () => {
+    const { cliente } = montar([
+      () => respostaHttp(429, { detail: 'Você já usou os 50 pedidos de IA de hoje. O limite volta amanhã.' }),
+      () => respostaHttp(503, { detail: 'A IA do servidor não está configurada. Use a chave do próprio aparelho em Ajustes → IA.' }),
+      () => respostaHttp(502, { detail: 'O Gemini está com problemas agora. Tente de novo em alguns minutos.' }),
+      () => respostaHttp(500, { detail: 'Algo deu errado no servidor.' }),
+    ], tokens('1'));
+    const pedido = { instrucoes: 'i', conteudo: 'c' };
+
+    await assert.rejects(cliente.gerarComIa(pedido), (e) => e.tipo === 'limite' && /50 pedidos/.test(e.message));
+    await assert.rejects(cliente.gerarComIa(pedido), (e) => e.tipo === 'servidor' && /chave do próprio aparelho/.test(e.message));
+    await assert.rejects(cliente.gerarComIa(pedido), (e) => e.tipo === 'servidor' && /Gemini está com problemas/.test(e.message));
+    await assert.rejects(cliente.gerarComIa(pedido), (e) => e.tipo === 'servidor' && /\(500\)/.test(e.message));
+  });
 });

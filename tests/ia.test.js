@@ -22,7 +22,11 @@ import {
   lerResposta,
   chamarGemini,
   testarConexao,
+  criarIaDoServidor,
+  textoDaSituacaoDoServidor,
+  usaServidor,
 } from '../src/ia.js';
+import { ErroNuvem } from '../src/nuvem-cliente.js';
 
 const CHAVE = 'AIzaSyFICTICIA-1234567890abcdefXYZ9';
 const CONFIG = { chave: CHAVE, modelo: MODELO_PADRAO, ligada: true };
@@ -43,12 +47,12 @@ function fetchFalso(status, corpo) {
 
 describe('configuração da IA', () => {
   it('padrão: sem chave, Flash-Lite e desligada', () => {
-    assert.deepEqual(configuracaoVazia(), { chave: '', modelo: 'gemini-3.5-flash-lite', ligada: false });
+    assert.deepEqual(configuracaoVazia(), { chave: '', modelo: 'gemini-3.5-flash-lite', ligada: false, origem: 'aparelho' });
     assert.equal(MODELOS[0].id, MODELO_PADRAO);
   });
 
   it('chave válida: tira os espaços das pontas e liga por padrão', () => {
-    assert.deepEqual(criarConfiguracaoIA({ chave: `  ${CHAVE}  ` }), { chave: CHAVE, modelo: MODELO_PADRAO, ligada: true });
+    assert.deepEqual(criarConfiguracaoIA({ chave: `  ${CHAVE}  ` }), { chave: CHAVE, modelo: MODELO_PADRAO, ligada: true, origem: 'aparelho' });
     assert.equal(criarConfiguracaoIA({ chave: CHAVE, modelo: 'gemini-3.8-flash', ligada: false }).modelo, 'gemini-3.8-flash');
   });
 
@@ -183,3 +187,91 @@ describe('testarConexao', () => {
     assert.match(resultado.mensagem, /limite de uso/);
   });
 });
+
+describe('IA pelo servidor (Fase 05, parte 5.5)', () => {
+  /** IA do servidor com um "nuvem" falso. */
+  function servidorFalso({ conectado = true, gerar, situacao } = {}) {
+    const pedidos = [];
+    const ia = criarIaDoServidor({
+      conectado: () => conectado,
+      gerar: async (pedido) => { pedidos.push(pedido); return gerar(pedido); },
+      situacao: async () => situacao(),
+    });
+    return { ia, pedidos };
+  }
+  const NO_SERVIDOR = { chave: '', modelo: 'gemini-3.8-flash', ligada: true, origem: 'servidor' };
+
+  it('configuração: com o servidor, a chave do aparelho é opcional (e continua validada se vier)', () => {
+    assert.deepEqual(criarConfiguracaoIA({ chave: '', origem: 'servidor' }), { chave: '', modelo: MODELO_PADRAO, ligada: true, origem: 'servidor' });
+    assert.equal(criarConfiguracaoIA({ chave: CHAVE, origem: 'servidor' }).chave, CHAVE, 'a chave salva fica guardada');
+    assert.throws(() => criarConfiguracaoIA({ chave: 'curta', origem: 'servidor' }), /incompleta/);
+    assert.throws(() => criarConfiguracaoIA({ chave: CHAVE, origem: 'nuvem' }), /de onde vem a IA/);
+  });
+
+  it('configuração antiga (sem "origem") continua sendo do aparelho', () => {
+    assert.equal(usaServidor(CONFIG), false);
+    assert.equal(iaDisponivel(CONFIG), true);
+  });
+
+  it('iaDisponivel: no servidor, precisa da conta conectada (não da chave)', () => {
+    const { ia } = servidorFalso();
+    assert.equal(iaDisponivel({ ...NO_SERVIDOR, servidor: ia }), true);
+    assert.equal(iaDisponivel({ ...NO_SERVIDOR, ligada: false, servidor: ia }), false);
+    assert.equal(iaDisponivel({ ...NO_SERVIDOR, servidor: servidorFalso({ conectado: false }).ia }), false);
+    assert.equal(iaDisponivel(NO_SERVIDOR), false, 'sem a IA do servidor entregue pela tela');
+  });
+
+  it('chamarGemini: com o servidor, manda o mesmo pedido (e o modelo) e não usa o fetch', async () => {
+    const { ia, pedidos } = servidorFalso({ gerar: () => ({ texto: '  Pode comprar.  ', usadosHoje: 4, limiteDiario: 50 }) });
+    const naoUsar = async () => { throw new Error('não devia chamar o Google'); };
+
+    const resultado = await chamarGemini({ ...NO_SERVIDOR, servidor: ia }, MENSAGEM, { fetch: naoUsar });
+
+    assert.deepEqual(resultado, { ok: true, texto: 'Pode comprar.', usadosHoje: 4, limiteDiario: 50 });
+    assert.deepEqual(pedidos, [{ ...MENSAGEM, modelo: 'gemini-3.8-flash' }]);
+  });
+
+  it('erros do servidor viram mensagens claras (nunca lança)', async () => {
+    const falhas = [
+      [new ErroNuvem('limite', 'Você já usou os 50 pedidos de IA de hoje. O limite volta amanhã.'), /50 pedidos/],
+      [new ErroNuvem('rede', 'Sem conexão com o servidor. O que mudar fica guardado e vai depois.'), /Confira a internet/],
+      [new ErroNuvem('sessao', 'A sessão terminou.'), /Entre de novo em Ajustes → Conta/],
+    ];
+    for (const [falha, esperado] of falhas) {
+      const { ia } = servidorFalso({ gerar: () => { throw falha; } });
+      const r = await chamarGemini({ ...NO_SERVIDOR, servidor: ia }, MENSAGEM);
+      assert.equal(r.ok, false);
+      assert.match(r.erro, esperado);
+    }
+    const vazio = await chamarGemini({ ...NO_SERVIDOR, servidor: servidorFalso({ gerar: () => ({ texto: ' ' }) }).ia }, MENSAGEM);
+    assert.match(vazio.erro, /respondeu vazio/);
+  });
+
+  it('sem conta conectada: pede para entrar, sem chamar o servidor', async () => {
+    const { ia, pedidos } = servidorFalso({ conectado: false, gerar: () => ({ texto: 'x' }) });
+    const r = await chamarGemini({ ...NO_SERVIDOR, servidor: ia }, MENSAGEM);
+    assert.match(r.erro, /entre na sua conta em Ajustes → Conta/);
+    assert.equal(pedidos.length, 0);
+    assert.match((await chamarGemini(NO_SERVIDOR, MENSAGEM)).erro, /Ajustes → Conta/);
+  });
+
+  it('testarConexao pelo servidor mostra o uso do dia', async () => {
+    const { ia } = servidorFalso({ gerar: () => ({ texto: 'OK', usadosHoje: 1, limiteDiario: 50 }) });
+    const r = await testarConexao({ ...NO_SERVIDOR, servidor: ia });
+    assert.deepEqual(r, { ok: true, mensagem: 'Conexão OK: o Flash respondeu pelo servidor (usados hoje: 1 de 50).' });
+  });
+
+  it('situação: texto para Ajustes → IA', async () => {
+    const ligada = servidorFalso({ situacao: () => ({ disponivel: true, usadosHoje: 3, limiteDiario: 50 }) }).ia;
+    assert.deepEqual(textoDaSituacaoDoServidor(await ligada.situacao()),
+      { texto: 'IA do servidor disponível · usados hoje: 3 de 50', ok: true });
+
+    const semChave = servidorFalso({ situacao: () => ({ disponivel: false, usadosHoje: 0, limiteDiario: 50 }) }).ia;
+    assert.match(textoDaSituacaoDoServidor(await semChave.situacao()).texto, /não tem a chave do Gemini/);
+
+    const desconectado = servidorFalso({ conectado: false }).ia;
+    assert.deepEqual(textoDaSituacaoDoServidor(await desconectado.situacao()),
+      { texto: 'Para usar a IA do servidor, entre na sua conta em Ajustes → Conta.', ok: false });
+  });
+});
+

@@ -867,6 +867,14 @@ body:has(.aviso-topo:not([hidden])) .tela { padding-top: 16px; min-height: auto;
 /* ---------- IA (Gemini) na vista Configurar (parte 3.1) ---------- */
 .acoes-ia { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .ia-teste { margin: 0; font-size: 14px; }
+/* IA pelo servidor (5.5): escolha da origem e situação da conta */
+.campo-origem { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 6px; }
+.campo-origem legend { padding: 0; margin-bottom: 6px; font-size: 14px; }
+.ia-campos-chave { display: grid; gap: 12px; }
+.ia-campos-chave[hidden] { display: none; }
+.ia-servidor { margin: 0; font-size: 14px; padding: 10px 12px; border-radius: 12px; background: var(--painel-2); }
+.ia-servidor[data-cor="verde"] { color: var(--verde); font-weight: 600; }
+.ia-servidor[data-cor="vermelho"] { color: var(--vermelho); }
 .ia-teste[data-cor="verde"] { color: var(--verde); font-weight: 600; }
 .ia-teste[data-cor="vermelho"] { color: var(--vermelho); font-weight: 600; }
 

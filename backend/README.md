@@ -56,6 +56,8 @@ curl -X POST http://localhost:8081/api/auth/login -H "Content-Type: application/
 | GET | `/api/backups` | sim | Lista dos backups (sem o conteúdo), com o máximo guardado e o tamanho máximo aceito |
 | GET / DELETE | `/api/backups/{id}` | sim | Baixa o pacote de um backup (para restaurar) / apaga um backup (204) |
 | DELETE | `/api/conta/dados` | sim | Apaga os dados do app na conta (a conta e os backups continuam). Na próxima sincronização, os outros aparelhos recebem `zerados: true` e perguntam o que fazer |
+| GET | `/api/ia` | sim | IA do servidor: se está ligada (`disponivel`), os modelos aceitos e o uso do dia (`usadosHoje` de `limiteDiario`) |
+| POST | `/api/ia/gerar` | sim | `{ instrucoes, conteudo, modelo? }` → `{ texto, usadosHoje, limiteDiario }`. 503 sem chave configurada; 429 com `Retry-After` quando o limite do dia acaba; 502/504 se o Gemini falhar ou demorar |
 
 Listas: `categorias`, `fixos`, `lancamentos`, `meses` e `investimentos`.
 
@@ -92,6 +94,9 @@ Segredos **nunca** vão para o código, para arquivos do projeto ou para o chat.
 | `PAINEL_FORWARD_HEADERS` | não | `framework` quando estiver atrás do proxy da hospedagem |
 | `PAINEL_SWAGGER` | não | `false` (deixe desligado em produção) |
 | `PORT` | não | `8081` (a hospedagem costuma definir) |
+| `PAINEL_GEMINI_CHAVE` | não | chave da API do Gemini. Sem ela, a IA do servidor fica desligada e o app usa a chave do aparelho |
+| `PAINEL_GEMINI_MODELOS` | não | `gemini-3.5-flash-lite,gemini-3.8-flash` (o primeiro é o padrão) |
+| `PAINEL_IA_LIMITE_DIARIO` | não | `50` pedidos por conta por dia (o dia vira à meia-noite de Brasília) |
 
 Para gerar um segredo do JWT no PowerShell:
 
@@ -114,6 +119,7 @@ Trocar o `PAINEL_JWT_SEGREDO` desconecta todos os aparelhos. Faça isso se houve
 - **CORS:** só as origens configuradas podem chamar a API pelo navegador.
 - **Cabeçalhos:** `X-Content-Type-Options`, `X-Frame-Options: DENY` e `Referrer-Policy: no-referrer`.
 - **Erros:** respostas sem pilha de erro e sem SQL.
+- **IA:** a chave do Gemini fica só na variável de ambiente e vai no cabeçalho `x-goog-api-key` (nunca no endereço, em log ou em resposta). O servidor não guarda o pedido nem a resposta; só conta quantos pedidos cada conta fez no dia (tabela `uso_ia`).
 
 ## Estrutura
 
@@ -127,6 +133,7 @@ backend/
     │   ├── saude/     GET /api/saude
     │   ├── usuario/   conta (entidade, repositório, criação inicial)
     │   ├── auth/      login, token, limite de tentativas
+    │   ├── ia/        IA pelo servidor (Gemini) e limite diário
     │   ├── dados/     listas do app (comum, categoria, fixo, lancamento, mes,
     │   │              investimento, configuracao)
     │   ├── sincronizacao/  POST /api/sync

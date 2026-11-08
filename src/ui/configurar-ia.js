@@ -8,18 +8,25 @@
  * Como em toda a pasta src/ui, aqui só fica a TELA. A validação, o
  * pedido e a leitura da resposta ficam em src/ia.js (testado no Node).
  *
+ * Fase 05, parte 5.5: a pessoa escolhe de onde vem a IA. Com "Servidor da
+ * conta", não precisa de chave no aparelho: a tela mostra se o servidor
+ * tem a IA ligada e quantos pedidos a conta já usou hoje.
+ *
  * Quem usa este módulo (src/ui/app.js) entrega:
- * - obterConfigIA(): a configuração atual;
+ * - obterConfigIA(): a configuração atual (com a IA do servidor em "servidor");
  * - salvarConfigIA(config | null): grava (null apaga) e devolve true se gravou.
  */
 
 import { ErroValidacao } from '../erros.js';
 import {
   MODELOS,
+  ORIGENS,
   criarConfiguracaoIA,
   mascararChave,
   nomeDoModelo,
   testarConexao,
+  textoDaSituacaoDoServidor,
+  usaServidor,
 } from '../ia.js';
 
 /** Busca um elemento pelo id e avisa claramente se ele não existir. */
@@ -48,7 +55,43 @@ export function iniciarConfigIA({ obterConfigIA, salvarConfigIA }) {
     apagar: elemento('ia-apagar'),
     testar: elemento('ia-testar'),
     teste: elemento('ia-teste'),
+    origens: [...elemento('form-ia').querySelectorAll('input[name="ia-origem"]')],
+    camposChave: elemento('ia-campos-chave'),
+    servidor: elemento('ia-servidor'),
   };
+
+  /** Origem marcada no formulário. */
+  const origemMarcada = () => el.origens.find((r) => r.checked)?.value ?? ORIGENS.APARELHO;
+
+  /** Pedido de situação em andamento: uma resposta antiga não sobrescreve a nova. */
+  let consulta = 0;
+
+  /** Mostra os campos da origem marcada e, no servidor, a situação da conta. */
+  async function mostrarOrigem() {
+    const servidor = origemMarcada() === ORIGENS.SERVIDOR;
+    el.camposChave.hidden = servidor;
+    el.servidor.hidden = !servidor;
+    const rotulo = el.ligada.nextElementSibling;
+    rotulo.querySelector('strong').textContent = servidor ? 'Usar a IA do servidor' : 'Usar a IA neste aparelho';
+    rotulo.querySelector('.secundario').textContent = servidor
+      ? ' — desmarque para esconder os botões da IA.'
+      : ' — desmarque para esconder os botões da IA sem apagar a chave.';
+    if (!servidor) return;
+    const minha = ++consulta;
+    el.servidor.textContent = 'Consultando o servidor…';
+    delete el.servidor.dataset.cor;
+    const situacao = await obterConfigIA().servidor.situacao();
+    if (minha !== consulta) return;
+    const { texto, ok } = textoDaSituacaoDoServidor(situacao);
+    el.servidor.textContent = texto;
+    el.servidor.dataset.cor = ok ? 'verde' : 'vermelho';
+  }
+
+  el.origens.forEach((r) => r.addEventListener('change', () => {
+    mostrarErro('');
+    mostrarTeste('');
+    mostrarOrigem();
+  }));
 
   // Lista de modelos (fixa: vem de src/ia.js).
   el.modelo.replaceChildren(...MODELOS.map((m) => {
@@ -78,25 +121,32 @@ export function iniciarConfigIA({ obterConfigIA, salvarConfigIA }) {
   function renderizar() {
     const config = obterConfigIA();
     const temChave = Boolean(config.chave);
+    const servidor = usaServidor(config);
+    const modelo = nomeDoModelo(config.modelo).split(' (')[0];
 
     el.situacao.replaceChildren();
-    if (temChave) {
+    if (servidor) {
+      el.situacao.textContent = `IA do servidor da conta · ${modelo} · ${config.ligada ? 'ligada' : 'desligada'}`;
+    } else if (temChave) {
       const forte = document.createElement('strong');
       forte.textContent = mascararChave(config.chave);
       el.situacao.append(
         'Chave salva: ', forte,
-        ` · ${nomeDoModelo(config.modelo).split(' (')[0]} · ${config.ligada ? 'ligada' : 'desligada'}`,
+        ` · ${modelo} · ${config.ligada ? 'ligada' : 'desligada'}`,
       );
     } else {
-      el.situacao.textContent = 'Nenhuma chave cadastrada: os botões da IA ficam escondidos.';
+      el.situacao.textContent = 'IA não configurada: os botões da IA ficam escondidos.';
     }
+
+    el.origens.forEach((r) => { r.checked = r.value === (config.origem ?? ORIGENS.APARELHO); });
 
     el.chave.value = '';
     el.chave.placeholder = temChave ? 'Deixe vazio para manter a chave salva' : 'Cole aqui a chave';
     el.modelo.value = config.modelo;
-    el.ligada.checked = temChave ? config.ligada : true;
+    el.ligada.checked = temChave || servidor ? config.ligada : true;
     el.apagar.hidden = !temChave;
     mostrarErro('');
+    mostrarOrigem();
   }
 
   /** Configuração a partir do formulário (a chave digitada ou a salva). */
@@ -105,6 +155,7 @@ export function iniciarConfigIA({ obterConfigIA, salvarConfigIA }) {
       chave: el.chave.value.trim() || obterConfigIA().chave,
       modelo: el.modelo.value,
       ligada: el.ligada.checked,
+      origem: origemMarcada(),
     });
   }
 
@@ -136,21 +187,33 @@ export function iniciarConfigIA({ obterConfigIA, salvarConfigIA }) {
       return;
     }
     el.testar.disabled = true;
-    mostrarTeste('Testando a conexão com o Gemini…');
-    const resultado = await testarConexao(config);
+    mostrarTeste(usaServidor(config) ? 'Testando a IA pelo servidor…' : 'Testando a conexão com o Gemini…');
+    // A IA do servidor não é gravada na configuração: vem de quem usa este módulo.
+    const resultado = await testarConexao({ ...config, servidor: obterConfigIA().servidor });
     el.testar.disabled = false;
+    if (usaServidor(config)) mostrarOrigem(); // o teste conta no limite do dia
     // O teste não grava nada: se a chave foi digitada agora, ainda falta Salvar.
-    const lembrete = resultado.ok && el.chave.value.trim() !== '' ? ' Agora clique em Salvar.' : '';
+    const mudou = el.chave.value.trim() !== '' || config.origem !== (obterConfigIA().origem ?? ORIGENS.APARELHO);
+    const lembrete = resultado.ok && mudou ? ' Agora clique em Salvar.' : '';
     mostrarTeste(`${resultado.mensagem}${lembrete}`, resultado.ok ? 'verde' : 'vermelho');
   });
 
   el.apagar.addEventListener('click', async () => {
-    if (!window.confirm('Apagar a chave do Gemini deste aparelho?\n\nOs botões da IA somem até você cadastrar outra.')) return;
-    const gravou = await salvarConfigIA(null);
+    const servidor = usaServidor(obterConfigIA());
+    const aviso = servidor
+      ? 'Apagar a chave do Gemini deste aparelho?\n\nA IA do servidor continua funcionando.'
+      : 'Apagar a chave do Gemini deste aparelho?\n\nOs botões da IA somem até você cadastrar outra.';
+    if (!window.confirm(aviso)) return;
+    const gravou = await salvarConfigIA(servidor ? { ...semServidor(obterConfigIA()), chave: '' } : null);
     renderizar();
     mostrarTeste(gravou ? 'Chave apagada deste aparelho.' : 'Não foi possível apagar neste aparelho.',
       gravou ? 'verde' : 'vermelho');
   });
 
   return { renderizar };
+}
+
+/** A configuração gravada, sem a IA do servidor (que vem de fora e não é gravada). */
+function semServidor({ servidor, ...gravada }) {
+  return gravada;
 }

@@ -5,6 +5,9 @@ import com.icaroms.painel.backup.BackupGrandeDemaisException;
 import com.icaroms.painel.dados.comum.ConflitoDeVersaoException;
 import com.icaroms.painel.dados.comum.DadosInvalidosException;
 import com.icaroms.painel.dados.comum.RegistroNaoEncontradoException;
+import com.icaroms.painel.ia.FalhaGeminiException;
+import com.icaroms.painel.ia.IaIndisponivelException;
+import com.icaroms.painel.ia.LimiteIaException;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -124,6 +127,30 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(segundos))
                 .body(problema(HttpStatus.TOO_MANY_REQUESTS, "Muitas tentativas", erro.getMessage()));
+    }
+
+    /** IA do servidor sem chave configurada (parte 5.5). */
+    @ExceptionHandler(IaIndisponivelException.class)
+    public ResponseEntity<ProblemDetail> iaIndisponivel(IaIndisponivelException erro) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(problema(HttpStatus.SERVICE_UNAVAILABLE, "IA indisponível", erro.getMessage()));
+    }
+
+    /** Limite diário de pedidos de IA da conta. */
+    @ExceptionHandler(LimiteIaException.class)
+    public ResponseEntity<ProblemDetail> limiteIa(LimiteIaException erro) {
+        ProblemDetail problema = problema(HttpStatus.TOO_MANY_REQUESTS, "Limite de IA do dia", erro.getMessage());
+        problema.setProperty("limiteDiario", erro.getLimiteDiario());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(Math.max(1, erro.getEsperar().toSeconds())))
+                .body(problema);
+    }
+
+    /** O Gemini falhou ou demorou: 502 (ou 504), com uma mensagem para a pessoa. */
+    @ExceptionHandler(FalhaGeminiException.class)
+    public ResponseEntity<ProblemDetail> falhaGemini(FalhaGeminiException erro) {
+        HttpStatus status = erro.isDemorou() ? HttpStatus.GATEWAY_TIMEOUT : HttpStatus.BAD_GATEWAY;
+        return ResponseEntity.status(status).body(problema(status, "Falha na IA", erro.getMessage()));
     }
 
     /** Qualquer erro não previsto: registra no log e responde sem detalhes. */

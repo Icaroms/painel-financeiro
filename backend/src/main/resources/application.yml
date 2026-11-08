@@ -60,6 +60,16 @@ painel:
     # (o mesmo limite do arquivo de backup no app).
     maximo: 10
     tamanho-maximo: 5MB
+  # IA pelo servidor (parte 5.5). Sem PAINEL_GEMINI_CHAVE, fica desligada.
+  ia:
+    chave: ${PAINEL_GEMINI_CHAVE:}
+    url: ${PAINEL_GEMINI_URL:https://generativelanguage.googleapis.com/v1beta/models}
+    # Os mesmos modelos que o app oferece; o primeiro é o padrão.
+    modelos: ${PAINEL_GEMINI_MODELOS:gemini-3.5-flash-lite,gemini-3.8-flash}
+    # Pedidos por conta por dia: protege a cota gratuita do Gemini.
+    limite-diario: ${PAINEL_IA_LIMITE_DIARIO:50}
+    tamanho-maximo: 30000
+    tempo-limite: 30s
   usuario-inicial:
     email: ${PAINEL_USUARIO_EMAIL:}
     senha: ${PAINEL_USUARIO_SENHA:}

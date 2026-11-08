@@ -44,7 +44,7 @@ import {
 } from './banco.js';
 import { iniciarNuvem } from './nuvem.js';
 import { iniciarConfigIA } from './configurar-ia.js';
-import { configuracaoVazia, iaDisponivel } from '../ia.js';
+import { configuracaoVazia, iaDisponivel, criarIaDoServidor, usaServidor } from '../ia.js';
 import { lerRota } from '../rotas.js';
 import { resumosDosAjustes } from '../resumo-ajustes.js';
 import { excluirLancamento } from '../resumo-mes.js';
@@ -496,7 +496,7 @@ function atualizar() {
   // IA (Fase 03): "Explicar com IA" aparece com um valor válido e a IA ligada.
   // A cada mudança na tela o bloco é refeito: uma explicação antiga nunca fica na tela.
   const explicar = painel.lancamento === null ? null : blocoExplicar({
-    obterConfigIA: () => configIA,
+    obterConfigIA: configIAEmUso,
     montarMensagem: () => mensagemDaCompra(painel, { hoje }),
   });
   el.iaLancar.replaceChildren(...(explicar ? [explicar] : []));
@@ -803,7 +803,7 @@ const investir = iniciarInvestir({
   aplicarMudanca,
   // Parte 4.6: indicadores com o histórico das taxas e o botão da IA.
   obterRadar: () => radarGuardado,
-  obterConfigIA: () => configIA,
+  obterConfigIA: configIAEmUso,
 });
 const radar = iniciarRadar({
   lerGuardado: lerRadarGuardado,
@@ -818,7 +818,7 @@ const radar = iniciarRadar({
     }
   },
   obterDados: dadosEstimados,
-  obterConfigIA: () => configIA,
+  obterConfigIA: configIAEmUso,
   // Filtro "cabe no Investir deste mês" do radar: a parte Investir do destino da sobra.
   obterInvestirCentavos: investirDoMes,
 });
@@ -829,7 +829,7 @@ const simuladorInvestimentos = iniciarSimuladorInvestimentos({
 });
 const simulador = iniciarSimulador({
   obterDados: () => dados,
-  obterConfigIA: () => configIA,
+  obterConfigIA: configIAEmUso,
   // 11/2026: "Guardar na lista de desejos" (erros de validação voltam para a tela do simulador).
   guardarDesejo: async (desejo) => {
     await aplicarMudanca(adicionarDesejo(dados, desejo), '');
@@ -842,7 +842,7 @@ const simulador = iniciarSimulador({
 const desejos = iniciarDesejos({
   obterDados: () => dados,
   aplicarMudanca,
-  obterConfigIA: () => configIA,
+  obterConfigIA: configIAEmUso,
   abrirNaAvaliacao: (desejo, menorCentavos) => {
     simulador.preencher({
       formaPagamento: desejo.formaPagamento,
@@ -863,8 +863,24 @@ const destinoConfig = iniciarDestinoConfig({ obterDados: () => dados, obterDados
 /* IA (Fase 03): configuração guardada à parte, fora do backup        */
 /* ------------------------------------------------------------------ */
 
-/** Configuração da IA deste aparelho (chave, modelo, ligada). */
+/** Configuração da IA deste aparelho (origem, chave, modelo, ligada). */
 let configIA = configuracaoVazia();
+
+/**
+ * IA do servidor (Fase 05, parte 5.5): usa a conta conectada em Ajustes →
+ * Conta. "nuvem" é criada mais abaixo; estas funções só rodam quando a
+ * origem gravada é o servidor, e ela só é lida depois (no fim do arquivo).
+ */
+const iaDoServidor = criarIaDoServidor({
+  conectado: () => nuvem.conectado(),
+  gerar: (pedido) => nuvem.gerarComIa(pedido),
+  situacao: () => nuvem.situacaoIa(),
+});
+
+/** A configuração que as telas usam: a gravada + a IA do servidor (que não é gravada). */
+function configIAEmUso() {
+  return { ...configIA, servidor: iaDoServidor };
+}
 
 /**
  * Grava a configuração da IA (null apaga).
@@ -881,13 +897,13 @@ async function salvarConfigIA(config) {
   }
 }
 
-const configuracaoIA = iniciarConfigIA({ obterConfigIA: () => configIA, salvarConfigIA });
+const configuracaoIA = iniciarConfigIA({ obterConfigIA: configIAEmUso, salvarConfigIA });
 /** Última análise do mês (lida do aparelho no início; fora do backup). */
 let ultimaAnalise = null;
 
 const analiseMes = iniciarAnaliseMes({
   obterDados: () => dados,
-  obterConfigIA: () => configIA,
+  obterConfigIA: configIAEmUso,
   obterUltimaAnalise: () => ultimaAnalise,
   // Guardar é um extra: se falhar, a análise continua na tela.
   guardarAnalise: async (analise) => {
@@ -929,7 +945,7 @@ function renderizarAjustes() {
   if (!dados) return;
   const backup = situacaoDoBackup(dados);
   const { textos, pontos } = resumosDosAjustes(dados, hojeLocal(), {
-    iaLigada: iaDisponivel(configIA), backupTexto: backup.texto, backupAtrasado: backup.atrasado, versao: numeroDaVersao(VERSAO_APP),
+    iaLigada: iaDisponivel(configIAEmUso()), iaServidor: usaServidor(configIA), backupTexto: backup.texto, backupAtrasado: backup.atrasado, versao: numeroDaVersao(VERSAO_APP),
     lembretesLigados: lembretes.ligados(),
   });
   for (const [pagina, texto] of Object.entries(textos)) {
@@ -1251,6 +1267,8 @@ pedirArmazenamentoPersistente();
 // Conta da nuvem: lê a sessão guardada e sincroniza logo depois de abrir.
 await nuvem.carregar();
 nuvem.agendar(1000);
+// A IA do servidor depende da conta: com a sessão lida, a tela aberta é refeita (mostra os botões da IA).
+if (usaServidor(configIA) && carregado.dados !== null) mostrarVista();
 // Ao abrir: avisa o que vence hoje e amanhã (se os lembretes estiverem ligados neste aparelho).
 lembretes.verificar();
 
