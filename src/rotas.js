@@ -6,7 +6,7 @@
  *   #lancar, #gasto            → Novo gasto (o antigo Lançar)
  *   #mes, #mes/<parte>         → Mês: resumo | entradas | contas | gastos
  *   #historico                 → Histórico completo (aberto pela parte Gastos do Mês)
- *   #planejar, #planejar/investir → Planejar: compras | investir
+ *   #planejar, #planejar/<parte> → Planejar: compras | calendario | investir
  *   #investir/<parte>          → uma parte de Investir: carteira | simulador | radar | receita
  *   #simular                   → Avaliar compra
  *   #ajustes                   → menu de Ajustes
@@ -22,7 +22,7 @@
 export const PARTES_DO_MES = Object.freeze(['resumo', 'entradas', 'contas', 'gastos']);
 
 /** Partes de Planejar. */
-export const PARTES_DE_PLANEJAR = Object.freeze(['compras', 'investir']);
+export const PARTES_DE_PLANEJAR = Object.freeze(['compras', 'calendario', 'investir']);
 
 /** Páginas de Investir. */
 export const PAGINAS_DE_INVESTIR = Object.freeze(['carteira', 'simulador', 'radar', 'receita']);
