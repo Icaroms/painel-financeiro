@@ -49,6 +49,8 @@ import { lerRota } from '../rotas.js';
 import { resumosDosAjustes } from '../resumo-ajustes.js';
 import { excluirLancamento } from '../resumo-mes.js';
 import { iniciarInicio } from './inicio-tela.js';
+import { iniciarCalendario } from './calendario.js';
+import { iniciarGraficosMes } from './graficos-mes.js';
 import { iniciarTema, iniciarOcultarValores, iniciarFolha, criarToast, ligarAjudas } from './interface.js';
 import { mensagemDaCompra } from '../explicacoes.js';
 import { blocoExplicar } from './explicar.js';
@@ -744,6 +746,7 @@ async function aplicarMudanca(novos, mensagem) {
   // Configurar aberta (ex.: um orçamento mudou): o custo do mês e a meta da reserva acompanham.
   if (!el.telaInicio.hidden) inicio.renderizar();
   if (!el.telaAjustes.hidden) renderizarAjustes();
+  redesenharGraficosAbertos();
   if (!el.telaConfigurar.hidden) {
     destinoConfig.renderizar();
     // Entradas e orçamentos (11/2026): o livre do mês, o alerta e o dinheiro do mês acompanham.
@@ -910,6 +913,9 @@ iniciarFolha({
 /* ------------------------------------------------------------------ */
 
 const inicio = iniciarInicio({ obterDados: () => dados, backupAtrasado: () => situacaoDoBackup(dados).atrasado });
+// Gráficos do Mês e calendário de 90 dias (Planejar), 11/2026.
+const graficosMes = iniciarGraficosMes({ obterDados: () => dados });
+const calendario = iniciarCalendario({ obterDados: () => dados });
 iniciarTema(el.telaAjustes);
 iniciarOcultarValores(el.botaoOcultar);
 // Os textos explicativos fixos viram ajuda "?" ao lado do título.
@@ -940,6 +946,13 @@ const TITULOS_DE_AJUSTES = {
 const TITULOS_DE_INVESTIR = {
   carteira: 'Carteira', simulador: 'Simulador de investimentos', radar: 'Radar de opções', receita: 'Imposto de renda',
 };
+
+/** Gráficos e calendário acompanham os dados quando a parte deles está aberta. */
+function redesenharGraficosAbertos() {
+  const { vista, parte } = lerRota(location.hash);
+  if (vista === 'mes' && parte === 'resumo' && !el.telaMes.hidden) graficosMes.renderizar();
+  if (vista === 'planejar' && parte === 'calendario' && !el.telaPlanejar.hidden) calendario.renderizar();
+}
 
 /** Linha de resumo da carteira no menu Investir (Planejar). */
 function renderizarResumoDaCarteira() {
@@ -1025,6 +1038,7 @@ function mostrarVista() {
   if (vista === 'inicio') inicio.renderizar();
   if (vista === 'mes') {
     resumo.renderizar();
+    if (parte === 'resumo') graficosMes.renderizar();
     entradasMes.renderizar();
     if (focarEntradaAoAbrirMes) {
       focarEntradaAoAbrirMes = false;
@@ -1036,6 +1050,7 @@ function mostrarVista() {
   if (vista === 'historico') historico.renderizar();
   if (vista === 'planejar') {
     desejos.renderizar();
+    if (parte === 'calendario') calendario.renderizar();
     renderizarResumoDaCarteira();
   }
   if (vista === 'investir') {
@@ -1078,6 +1093,7 @@ function redesenharVistaAberta() {
   if (!el.telaInicio.hidden) inicio.renderizar();
   if (!el.telaAjustes.hidden) renderizarAjustes();
   if (!el.telaPlanejar.hidden) desejos.renderizar();
+  redesenharGraficosAbertos();
   if (!el.telaMes.hidden) {
     resumo.renderizar();
     destinoMes.renderizar();

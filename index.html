@@ -116,7 +116,7 @@
       <section class="cartao" aria-labelledby="titulo-inicio-saidas">
         <div class="cartao-topo">
           <h2 id="titulo-inicio-saidas">Próximas saídas</h2>
-          <a href="#mes/contas" class="link-discreto">Ver todas <span class="chevron" aria-hidden="true">›</span></a>
+          <a href="#planejar/calendario" class="link-discreto">Calendário <span class="chevron" aria-hidden="true">›</span></a>
         </div>
         <ul class="lista-simples" id="inicio-saidas"></ul>
       </section>
@@ -294,6 +294,19 @@
     </section>
 
 
+    <!-- 11/2026: gráficos do mês -->
+    <section class="cartao" aria-labelledby="titulo-mes-para-onde">
+      <h2 id="titulo-mes-para-onde">Para onde foi o dinheiro</h2>
+      <p class="secundario explicacao">Gastos deste mês por categoria, do maior para o menor, com a fatia de cada uma no total. Compras parceladas contam inteiras no mês em que foram feitas.</p>
+      <div id="grafico-categorias"></div>
+    </section>
+
+    <section class="cartao" aria-labelledby="titulo-mes-por-mes">
+      <h2 id="titulo-mes-por-mes">Gastos por mês</h2>
+      <p class="secundario explicacao">Os últimos meses registrados. O mês atual vai só até hoje. Toque numa barra para ver o valor.</p>
+      <div id="grafico-meses"></div>
+    </section>
+
     <!-- Fase 04, parte 4.1: destino da sobra (sugestão; o app não move dinheiro) -->
     <section class="cartao" aria-labelledby="titulo-mes-destino">
       <h2 id="titulo-mes-destino">Destino da sobra</h2>
@@ -426,6 +439,7 @@
 
     <nav class="segmentos" aria-label="Partes de Planejar">
       <a href="#planejar" data-parte="compras">Compras</a>
+      <a href="#planejar/calendario" data-parte="calendario">Calendário</a>
       <a href="#planejar/investir" data-parte="investir">Investir</a>
     </nav>
 
@@ -442,6 +456,26 @@
       <ul class="lista-desejos" id="lista-desejos"></ul>
     </section>
     <p class="vazio secundario" id="desejos-vazio" hidden>Nenhum produto na lista de desejos. Em “Avaliar uma compra”, use “Guardar na lista de desejos” para acompanhar o preço de algo que você quer.</p>
+    </div>
+
+    <div class="parte" data-parte="calendario">
+    <section class="cartao" aria-labelledby="titulo-saldo-previsto">
+      <h2 id="titulo-saldo-previsto">Saldo previsto</h2>
+      <p class="secundario explicacao">Quanto deve sobrar no fim de cada mês, somando os meses anteriores (o mesmo cálculo do Avaliar compra). Toque numa barra para ver o valor.</p>
+      <div id="calendario-saldo"></div>
+    </section>
+
+    <section class="cartao calendario" aria-labelledby="calendario-titulo">
+      <div class="calendario-topo">
+        <button type="button" class="botao-icone" id="calendario-anterior" aria-label="Mês anterior"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <h2 id="calendario-titulo"></h2>
+        <button type="button" class="botao-icone" id="calendario-seguinte" aria-label="Próximo mês"><svg class="icone" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
+      </div>
+      <p class="calendario-totais secundario" id="calendario-totais"></p>
+      <div class="calendario-grade" id="calendario-grade"></div>
+      <p class="calendario-legenda secundario"><span class="marca-fluxo saida" aria-hidden="true">−</span> sai <span class="marca-fluxo entrada" aria-hidden="true">+</span> entra · os próximos 90 dias</p>
+      <div class="calendario-dia" id="calendario-dia" aria-live="polite"></div>
+    </section>
     </div>
 
     <div class="parte" data-parte="investir">
