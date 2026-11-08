@@ -27,7 +27,7 @@
  * - ao mudar, a cópia antiga dos arquivos é apagada;
  * - uma página aberta com versão menor mostra o aviso "Há uma versão nova".
  */
-const VERSAO_CACHE = 'painel-financeiro-v36';
+const VERSAO_CACHE = 'painel-financeiro-v37';
 
 /** Tempo máximo esperando a internet antes de usar a cópia guardada. */
 const ESPERA_REDE_MS = 3000;
@@ -72,6 +72,7 @@ const ARQUIVOS = [
   './src/investimentos-ia.js',
   './src/ia.js',
   './src/inicio.js',
+  './src/lembretes.js',
   './src/lembrete-backup.js',
   './src/meses.js',
   './src/modelo.js',
@@ -111,6 +112,7 @@ const ARQUIVOS = [
   './src/ui/interface.js',
   './src/ui/historico.js',
   './src/ui/investir.js',
+  './src/ui/lembretes.js',
   './src/ui/mes.js',
   './src/ui/nuvem.js',
   './src/ui/orcamentos.js',
@@ -247,5 +249,22 @@ self.addEventListener('fetch', (evento) => {
       return copia;
     }
     return resposta;
+  })());
+});
+
+// Lembretes de vencimento (11/2026): tocar na notificação abre o app no
+// calendário (ou traz para a frente a janela que já está aberta).
+self.addEventListener('notificationclick', (evento) => {
+  evento.notification.close();
+  const destino = new URL(evento.notification.data?.endereco ?? './#planejar/calendario', self.registration.scope).href;
+  evento.waitUntil((async () => {
+    const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const aberta = janelas.find((janela) => janela.url.startsWith(self.registration.scope));
+    if (aberta) {
+      await aberta.focus();
+      if ('navigate' in aberta) await aberta.navigate(destino);
+      return;
+    }
+    await self.clients.openWindow(destino);
   })());
 });
