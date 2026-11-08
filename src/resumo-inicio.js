@@ -21,6 +21,9 @@ import { buscarMes } from './meses.js';
 import { entradasFixasDe } from './entradas.js';
 import { alertaDosOrcamentos } from './orcamento.js';
 import { LIMITES_PADRAO } from './veredito.js';
+import { itensDoCalendario } from './calendario.js';
+import { lembretesDeVencimento } from './lembretes.js';
+import { formatarCentavos } from './dinheiro.js';
 
 /** Texto de cada situação do saldo (a cor vem junto, nunca sozinha). */
 export const SITUACAO_DO_SALDO = Object.freeze({
@@ -80,6 +83,16 @@ export function resumoDoInicio(estado, hoje, { backupAtrasado = false } = {}, li
         : `${atrasadas.length} contas passaram do vencimento e não foram marcadas como pagas.`,
     });
   }
+  const vencendo = lembretesDeVencimento(estado, hoje).filter((l) => l.quando !== 'atrasado');
+  if (vencendo.length > 0) {
+    const primeiro = vencendo[0];
+    avisos.push({
+      id: 'vencendo', cor: 'amarelo', link: '#planejar/calendario', rotulo: 'Ver',
+      texto: vencendo.length === 1
+        ? `${primeiro.titulo} (${formatarCentavos(primeiro.valorCentavos)}).`
+        : `${vencendo.length} contas vencem hoje ou amanhã: ${vencendo.map((l) => l.nome).join(', ')}.`,
+    });
+  }
   if (alertaDosOrcamentos(estado, mes, limites)) {
     avisos.push({
       id: 'orcamentos', cor: 'amarelo', link: '#ajustes/categorias', rotulo: 'Ajustar',
@@ -93,21 +106,11 @@ export function resumoDoInicio(estado, hoje, { backupAtrasado = false } = {}, li
     });
   }
 
-  // Próximas saídas: contas fixas e faturas ainda previstas, da mais próxima à mais distante.
-  const doDia = (d) => `${mes}-${String(d).padStart(2, '0')}`;
-  const proximas = [
-    ...r.fixos
-      .filter((f) => f.status === 'previsto')
-      .map((f) => ({ data: doDia(f.diaEfetivo), nome: f.fixo.nome, valorCentavos: f.valorCentavos, atrasada: f.atrasado, tipo: 'conta' })),
-    ...r.faturas
-      .filter((f) => f.status === 'previsto')
-      .map((f) => ({
-        data: f.vencimento, nome: `Fatura ${f.formaPagamento}`, valorCentavos: f.totalNoBancoCentavos ?? f.totalCentavos,
-        atrasada: f.atrasada === true, tipo: 'fatura',
-      })),
-  ]
-    .filter((s) => s.valorCentavos > 0)
-    .sort((a, b) => a.data.localeCompare(b.data) || a.nome.localeCompare(b.nome))
+  // Próximas saídas: as do calendário (src/calendario.js) que ainda não foram pagas, da mais próxima
+  // à mais distante. Conta fixa no cartão aparece no dia dela, e a fatura só com as compras (sem contar duas vezes).
+  const proximas = itensDoCalendario(estado, mes, hoje).itens
+    .filter((i) => i.tipo === 'saida' && i.situacao !== 'pago' && i.valorCentavos > 0)
+    .map((i) => ({ data: i.data, nome: i.nome, valorCentavos: i.valorCentavos, atrasada: i.situacao === 'atrasado', tipo: i.origem }))
     .slice(0, QUANTAS_SAIDAS);
 
   // Categorias com orçamento: as que mais encheram primeiro.
